@@ -3,13 +3,17 @@
 # Main Task Entry Point for proxy Role
 # ==============================================================================
 
-- name: Install HAProxy Packages
+- name: Install HAProxy and SSL Prerequisites
   ansible.builtin.include_tasks: packages.yml
   tags: [proxy, packages]
 
 - name: Configure UFW Firewall for Proxy Ports
   ansible.builtin.include_tasks: firewall.yml
   tags: [proxy, firewall]
+
+- name: Manage SSL Certificates & acme.sh on Proxies
+  ansible.builtin.include_tasks: certs.yml
+  tags: [proxy, ssl, certs]
 
 - name: Deploy HAProxy Configuration & Manage Service
   ansible.builtin.include_tasks: config.yml

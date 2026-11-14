@@ -1,18 +1,11 @@
 ---
 # ==============================================================================
-# Firewall Rules for Webserver (Ports 80 and 443)
+# Firewall Rules for Webserver (Port 80)
 # ==============================================================================
 
 - name: Allow HTTP (port 80) through UFW
   community.general.ufw:
     rule: allow
     port: "80"
-    proto: tcp
-  tags: [webserver, firewall, ufw]
-
-- name: Allow HTTPS (port 443) through UFW
-  community.general.ufw:
-    rule: allow
-    port: "443"
     proto: tcp
   tags: [webserver, firewall, ufw]

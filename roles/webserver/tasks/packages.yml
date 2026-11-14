@@ -3,14 +3,8 @@
 # Webserver Package Installation
 # ==============================================================================
 
-- name: Install Nginx, SSL support utilities, and ACME prerequisites
+- name: Install Nginx
   ansible.builtin.apt:
-    name:
-      - nginx
-      - ssl-cert
-      - curl
-      - socat
-      - cron
-      - openssl
+    name: nginx
     state: present
   tags: [webserver, packages]

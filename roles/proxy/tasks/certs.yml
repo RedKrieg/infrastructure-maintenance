@@ -1,0 +1,90 @@
+---
+# ==============================================================================
+# SSL Certificate Management & acme.sh Setup on Proxies
+# ==============================================================================
+
+- name: Ensure HAProxy certificates directory exists
+  ansible.builtin.file:
+    path: "{{ haproxy_certs_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [proxy, ssl, certs]
+
+- name: Build list of external FQDNs from webservers group
+  ansible.builtin.set_fact:
+    target_fqdns: "{{ groups['webservers'] | default([]) | map('extract', hostvars, 'external_fqdn') | select('defined') | unique | list }}"
+  tags: [proxy, ssl, certs]
+
+- name: Check existing certificates in HAProxy certs directory
+  ansible.builtin.stat:
+    path: "{{ haproxy_certs_dir }}/{{ item }}.pem"
+  register: cert_stats
+  loop: "{{ target_fqdns }}"
+  tags: [proxy, ssl, certs]
+
+- name: Generate bootstrap self-signed SSL certificate bundles for each FQDN
+  ansible.builtin.shell:
+    cmd: >
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048
+      -keyout /tmp/{{ item.item }}.key
+      -out /tmp/{{ item.item }}.crt
+      -subj "/CN={{ item.item }}" &&
+      cat /tmp/{{ item.item }}.crt /tmp/{{ item.item }}.key > {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
+      chmod 600 {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
+      rm -f /tmp/{{ item.item }}.key /tmp/{{ item.item }}.crt
+  when: not item.stat.exists
+  loop: "{{ cert_stats.results }}"
+  tags: [proxy, ssl, certs]
+
+- name: Check if acme.sh is installed on proxy
+  ansible.builtin.stat:
+    path: "{{ acme_sh_install_dir }}/acme.sh"
+  register: acme_sh_stat
+  tags: [proxy, acme, ssl]
+
+- name: Install acme.sh client on proxy
+  ansible.builtin.shell:
+    cmd: "curl -sSL https://get.acme.sh | sh -s email={{ acme_email }}"
+  when: not acme_sh_stat.stat.exists
+  args:
+    creates: "{{ acme_sh_install_dir }}/acme.sh"
+  tags: [proxy, acme, ssl]
+
+- name: Configure acme.sh default CA to Let's Encrypt
+  ansible.builtin.command:
+    cmd: "{{ acme_sh_install_dir }}/acme.sh --set-default-ca --server {{ acme_default_ca }}"
+  changed_when: false
+  when: acme_sh_stat.stat.exists or not acme_sh_stat.stat.exists
+  tags: [proxy, acme, ssl]
+
+# --- Optional Real Certificate Issuance ---
+- name: Issue and install Let's Encrypt certificates using acme.sh standalone mode
+  when: acme_issue_certs | bool
+  tags: [proxy, acme, ssl]
+  block:
+    - name: Request certificates via acme.sh standalone mode
+      ansible.builtin.command:
+        cmd: >
+          {{ acme_sh_install_dir }}/acme.sh --issue
+          -d {{ item }}
+          --standalone
+          --httpport {{ acme_standalone_port }}
+          --keylength ec-256
+          {% if acme_use_staging | bool %}--staging{% endif %}
+      loop: "{{ target_fqdns }}"
+      register: acme_issue_result
+      failed_when: false
+      changed_when: "'Cert success' in acme_issue_result.stdout"
+
+    - name: Install and bundle certificates for HAProxy
+      ansible.builtin.shell:
+        cmd: >
+          {{ acme_sh_install_dir }}/acme.sh --install-cert -d {{ item }}
+          --fullchain-file /tmp/{{ item }}_fullchain.crt
+          --key-file /tmp/{{ item }}_key.key
+          --reloadcmd "cat /tmp/{{ item }}_fullchain.crt /tmp/{{ item }}_key.key > {{ haproxy_certs_dir }}/{{ item }}.pem && chmod 600 {{ haproxy_certs_dir }}/{{ item }}.pem && rm -f /tmp/{{ item }}_* && systemctl reload haproxy"
+      loop: "{{ target_fqdns }}"
+      when: acme_issue_result is defined
+      changed_when: false

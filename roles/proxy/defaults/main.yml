@@ -11,6 +11,17 @@ haproxy_timeout_connect: "5000ms"
 haproxy_timeout_client: "50000ms"
 haproxy_timeout_server: "50000ms"
 
+# SSL & Certificates Configuration (SSL is decoded/terminated on the proxy)
+haproxy_certs_dir: "/etc/haproxy/certs"
+acme_sh_install_dir: "/root/.acme.sh"
+acme_email: "admin@example.com"
+acme_default_ca: "letsencrypt"
+acme_standalone_port: 8888
+# When false, uses self-signed bootstrap SSL certificates for the domains.
+# Set to true when domains resolve via public DNS to your HAProxy frontends.
+acme_issue_certs: false
+acme_use_staging: false
+
 # Stats listener configuration
 haproxy_enable_stats: true
 haproxy_stats_port: 8404
@@ -22,67 +33,3 @@ haproxy_stats_password: "adminpassword"
 # Frontend binding ports
 haproxy_bind_http_port: 80
 haproxy_bind_https_port: 443
-
-# List of endpoints with frontend ports/paths mapped to targets
-# Example endpoint structure:
-proxy_endpoints:
-  - name: "app1_service"
-    frontend_port: 80
-    ssl: true
-    hosts:
-      - "app1.example.com"
-    paths:
-      - "/app1"
-      - "/api"
-    balance: "roundrobin"
-    targets:
-      - name: "web-01"
-        ip: "10.0.1.11"
-        port: 80
-        ssl_port: 443
-        check: true
-      - name: "web-02"
-        ip: "10.0.1.12"
-        port: 80
-        ssl_port: 443
-        check: true
-      - name: "web-03"
-        ip: "10.0.1.13"
-        port: 80
-        ssl_port: 443
-        check: true
-
-  - name: "app2_service"
-    frontend_port: 80
-    ssl: true
-    hosts:
-      - "app2.example.com"
-    paths:
-      - "/"
-    balance: "roundrobin"
-    targets:
-      - name: "web-02"
-        ip: "10.0.1.12"
-        port: 80
-        ssl_port: 443
-        check: true
-      - name: "web-03"
-        ip: "10.0.1.13"
-        port: 80
-        ssl_port: 443
-        check: true
-
-  - name: "demo_service"
-    frontend_port: 80
-    ssl: true
-    hosts:
-      - "demo.example.com"
-    paths:
-      - "/demo"
-    balance: "leastconn"
-    targets:
-      - name: "web-01"
-        ip: "10.0.1.11"
-        port: 80
-        ssl_port: 443
-        check: true

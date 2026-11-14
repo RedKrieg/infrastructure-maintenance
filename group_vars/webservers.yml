@@ -1,43 +1,9 @@
 ---
 # ==============================================================================
-# Group Variables for Backend Webservers (Nginx, 404 Catch-All, acme.sh)
+# Group Variables for Backend Webservers
+# Each webserver's FQDN is defined individually in inventory.ini via external_fqdn
 # ==============================================================================
 
-# Trusted frontend HAProxy proxy IPs on 10/8 subnet for Real IP extraction
-haproxy_frontend_ips:
-  - "10.0.1.10"
-  - "10.0.1.20"
+# Subnet for trusted HAProxy frontends
+haproxy_trusted_subnets:
   - "10.0.0.0/8"
-
-# ACME.sh / Let's Encrypt settings
-acme_email: "admin@example.com"
-acme_default_ca: "letsencrypt"
-# Set to true when domain resolves via public DNS to your HAProxy frontends
-acme_issue_certs: false
-acme_use_staging: false
-
-# Enabled virtual hosts on the webservers
-# Any request for domains or paths NOT explicitly configured here receives a generic 404.
-webserver_sites:
-  - name: "app1"
-    domain: "app1.example.com"
-    aliases:
-      - "www.app1.example.com"
-    root: "/var/www/app1"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true
-
-  - name: "app2"
-    domain: "app2.example.com"
-    root: "/var/www/app2"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true
-
-  - name: "demo"
-    domain: "demo.example.com"
-    root: "/var/www/demo"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true

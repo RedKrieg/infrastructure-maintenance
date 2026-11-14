@@ -1,19 +1,12 @@
 # Managed by Ansible - Generic 404 catch-all default server block
-# Any visitor connecting via direct IP, unknown domain, or disabled site receives a generic 404.
+# Any visitor connecting via direct IP, unconfigured domain, or disabled site receives a generic 404.
 
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    listen 443 ssl default_server;
-    listen [::]:443 ssl default_server;
 
     server_name _;
 
-    # Fallback SSL certificate for non-matching TLS handshakes
-    ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
-    ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
-
-    # Return plain generic 404
     location / {
         default_type text/plain;
         return 404 "404 Not Found\n";

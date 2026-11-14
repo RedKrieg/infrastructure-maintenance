@@ -1,10 +1,15 @@
 ---
 # ==============================================================================
-# HAProxy Package Installation
+# HAProxy and SSL Tools Package Installation
 # ==============================================================================
 
-- name: Install HAProxy
+- name: Install HAProxy, OpenSSL, and ACME prerequisites
   ansible.builtin.apt:
-    name: haproxy
+    name:
+      - haproxy
+      - openssl
+      - curl
+      - socat
+      - cron
     state: present
   tags: [proxy, haproxy, packages]

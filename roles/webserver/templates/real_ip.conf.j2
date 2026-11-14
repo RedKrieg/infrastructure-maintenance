@@ -1,6 +1,11 @@
 # Managed by Ansible - Real IP configuration for upstream HAProxy frontends
-{% for proxy_ip in haproxy_frontend_ips %}
-set_real_ip_from {{ proxy_ip }};
+{% if groups['proxies'] is defined %}
+{% for proxy in groups['proxies'] %}
+set_real_ip_from {{ hostvars[proxy]['ansible_host'] | default(proxy) }};
+{% endfor %}
+{% endif %}
+{% for subnet in haproxy_trusted_subnets %}
+set_real_ip_from {{ subnet }};
 {% endfor %}
 
 real_ip_header X-Forwarded-For;

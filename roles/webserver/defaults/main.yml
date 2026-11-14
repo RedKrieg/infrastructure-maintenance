@@ -3,44 +3,9 @@
 # Default Variables for webserver (Nginx) Role
 # ==============================================================================
 
-# Trusted HAProxy frontend IPs (subnets or individual IPs) for real_ip extraction
-haproxy_frontend_ips:
-  - "10.0.1.10"
-  - "10.0.1.20"
+# Web document root for this server's external FQDN
+webserver_root_dir: "/var/www/{{ external_fqdn | default('html') }}"
+
+# Trusted HAProxy subnets and fallback IPs for real_ip extraction
+haproxy_trusted_subnets:
   - "10.0.0.0/8"
-
-# ACME.sh & Let's Encrypt Settings
-acme_sh_install_dir: "/root/.acme.sh"
-acme_email: "admin@example.com"
-acme_challenge_dir: "/var/www/letsencrypt"
-acme_default_ca: "letsencrypt"
-# When false, uses self-signed bootstrap SSL certificate for the domain.
-# Set to true when domain resolves via public DNS to your HAProxy frontends.
-acme_issue_certs: false
-acme_use_staging: false
-
-# Configured web sites on this server
-# Visitors attempting to access any host/domain NOT in this list receive a generic 404.
-webserver_sites:
-  - name: "app1"
-    domain: "app1.example.com"
-    aliases:
-      - "www.app1.example.com"
-    root: "/var/www/app1"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true
-
-  - name: "app2"
-    domain: "app2.example.com"
-    root: "/var/www/app2"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true
-
-  - name: "demo"
-    domain: "demo.example.com"
-    root: "/var/www/demo"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true

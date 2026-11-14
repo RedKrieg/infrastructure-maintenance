@@ -1,6 +1,6 @@
-# Headless Ubuntu Initial Setup, HAProxy & Webserver Suite
+# Headless Ubuntu Initial Setup, Dynamic HAProxy & Webserver Suite
 
-An enterprise-grade, role-based Ansible solution to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Modularized into isolated roles with automated kernel & storage tuning, UFW connection rate limiting, SSH daemon hardening, Vim/Tmux/Screen/Git defaults, multi-frontend HAProxy routing, and multi-backend Nginx webservers using `acme.sh` Let's Encrypt SSL certificates with a strict generic 404 fallback.
+An automated, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Designed with dynamic 1:1 host-to-FQDN mapping, edge SSL termination and certificate management on HAProxy frontends via `acme.sh` Let's Encrypt, and backend Nginx webservers with strict generic 404 fallbacks.
 
 ---
 
@@ -9,13 +9,13 @@ An enterprise-grade, role-based Ansible solution to provision, harden, and orche
 ```
 .
 ├── ansible.cfg                      # Ansible defaults (pipelining, roles_path, YAML output)
-├── inventory.ini                    # Inventory defining proxies and webservers on 10/8 subnet
+├── inventory.ini                    # Inventory defining proxies & webservers with external_fqdn
 ├── playbook.yml                     # Main playbook orchestrating all plays and roles
 ├── vars/
 │   └── admin_users.yml              # Central users configuration file (add new admins here)
 ├── group_vars/
-│   ├── proxies.yml                  # HAProxy endpoint mappings (ports, paths, targets)
-│   └── webservers.yml               # Nginx enabled sites, real_ip proxies, acme.sh config
+│   ├── proxies.yml                  # Global proxy & acme.sh settings
+│   └── webservers.yml               # Webserver trusted proxy subnets
 ├── roles/
 │   ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
 │   │   ├── defaults/main.yml
@@ -29,30 +29,29 @@ An enterprise-grade, role-based Ansible solution to provision, harden, and orche
 │   │   ├── defaults/main.yml
 │   │   ├── files/
 │   │   └── tasks/
-│   ├── proxy/                       # HAProxy load balancer role
+│   ├── proxy/                       # HAProxy role (terminates SSL & routes 1:1 to backends)
 │   │   ├── defaults/main.yml
 │   │   ├── handlers/main.yml
 │   │   ├── tasks/
 │   │   │   ├── main.yml             # Task dispatcher
-│   │   │   ├── packages.yml         # Installs haproxy
+│   │   │   ├── packages.yml         # Installs haproxy, openssl, curl, socat, cron
 │   │   │   ├── firewall.yml         # Opens 80, 443, and 8404 in UFW
-│   │   │   └── config.yml           # Deploys haproxy.cfg and 404.http fallback
+│   │   │   ├── certs.yml            # Manages SSL certs on proxy (bootstrap & acme.sh)
+│   │   │   └── config.yml           # Deploys dynamic haproxy.cfg
 │   │   └── templates/
-│   │       └── haproxy.cfg.j2       # Dynamic frontend ports/paths to targets template
-│   └── webserver/                   # Nginx, 404 catch-all, and acme.sh SSL role
+│   │       └── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
+│   └── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
 │       ├── defaults/main.yml
 │       ├── handlers/main.yml
 │       ├── tasks/
 │       │   ├── main.yml             # Task dispatcher
-│       │   ├── packages.yml         # Installs nginx, ssl-cert, curl, socat
-│       │   ├── firewall.yml         # Opens 80 and 443 in UFW
-│       │   ├── default_404.yml      # Removes default site, sets generic 404 and real_ip
-│       │   ├── acme.yml             # Installs acme.sh and sets default CA to Let's Encrypt
-│       │   └── sites.yml            # Creates docroots, bootstrap/real certs, vhosts
+│       │   ├── packages.yml         # Installs nginx
+│       │   ├── firewall.yml         # Opens 80 in UFW
+│       │   └── config.yml           # Deploys generic 404, real_ip, and FQDN virtual host
 │       └── templates/
 │           ├── default_404.conf.j2  # Generic 404 catch-all default_server block
 │           ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
-│           └── site.conf.j2         # Virtual host with HTTP-01 challenge & SSL
+│           └── site.conf.j2         # Virtual host for assigned external_fqdn
 ├── authorized_keys                  # Default public key for redkrieg
 ├── bashrc_addons                    # Root copy of shell addons
 ├── gitconfig                        # Root copy of global git defaults
@@ -66,159 +65,97 @@ An enterprise-grade, role-based Ansible solution to provision, harden, and orche
 
 ---
 
-## Example Architecture: 2 Proxies & 3 Webservers (10.0.0.0/8 Subnet)
-
-The included configuration illustrates an active-active frontend proxy architecture forwarding traffic to a pool of three backend webservers:
+## Dynamic Architecture (10.0.0.0/8 Subnet Example)
 
 ```
-                          Internet / Clients
-                                  │
-                  ┌───────────────┴───────────────┐
-                  ▼                               ▼
-       ┌────────────────────┐           ┌────────────────────┐
-       │      proxy-01      │           │      proxy-02      │
-       │    (10.0.1.10)     │           │    (10.0.1.20)     │
-       │      HAProxy       │           │      HAProxy       │
-       └──────────┬─────────┘           └──────────┬─────────┘
-                  │                                │
-                  └───────────────┬────────────────┘
-                                  ▼
-         ┌────────────────────────┼────────────────────────┐
-         ▼                        ▼                        ▼
-┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│      web-01      │    │      web-02      │    │      web-03      │
-│   (10.0.1.11)    │    │   (10.0.1.12)    │    │   (10.0.1.13)    │
-│ Nginx + acme.sh  │    │ Nginx + acme.sh  │    │ Nginx + acme.sh  │
-└──────────────────┘    └──────────────────┘    └──────────────────┘
+                            Internet / Visitors
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+         ┌────────────────────┐           ┌────────────────────┐
+         │      proxy-01      │           │      proxy-02      │
+         │    (10.0.1.10)     │           │    (10.0.1.20)     │
+         │ HAProxy + acme.sh  │           │ HAProxy + acme.sh  │
+         │ (Decodes TLS 443)  │           │ (Decodes TLS 443)  │
+         └──────────┬─────────┘           └──────────┬─────────┘
+                    │                                │
+                    └───────────────┬────────────────┘
+                                    │ (Plain HTTP / Port 80)
+           ┌────────────────────────┼────────────────────────┐
+           ▼                        ▼                        ▼
+  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+  │      web-01      │    │      web-02      │    │      web-03      │
+  │   (10.0.1.11)    │    │   (10.0.1.12)    │    │   (10.0.1.13)    │
+  │ web1.example.com │    │ web2.example.com │    │ web3.example.com │
+  │ (Generic 404)    │    │ (Generic 404)    │    │ (Generic 404)    │
+  └──────────────────┘    └──────────────────┘    └──────────────────┘
 ```
 
-### IP Allocations:
-- **Frontend Proxies**:
-  - `proxy-01`: `10.0.1.10`
-  - `proxy-02`: `10.0.1.20`
-- **Backend Webservers**:
-  - `web-01`: `10.0.1.11`
-  - `web-02`: `10.0.1.12`
-  - `web-03`: `10.0.1.13`
+### The Only Configurable: `external_fqdn`
+In `inventory.ini`, assign the desired `external_fqdn` directly to each webserver host. The proxy role dynamically discovers these hosts from the inventory:
 
----
+```ini
+[proxies]
+proxy-01 ansible_host=10.0.1.10
+proxy-02 ansible_host=10.0.1.20
 
-## Role 1: `proxy` (HAProxy Load Balancer)
+[webservers]
+web-01 ansible_host=10.0.1.11 external_fqdn=web1.example.com
+web-02 ansible_host=10.0.1.12 external_fqdn=web2.example.com
+web-03 ansible_host=10.0.1.13 external_fqdn=web3.example.com
 
-Configured via **`group_vars/proxies.yml`** (or `roles/proxy/defaults/main.yml`).
-
-### Features:
-1. **Frontend Port and Path Mapping**:
-   Maps incoming requests by domain name, URL path, and port to backend target pools.
-2. **TLS Routing**:
-   - On Port 80 (`mode http`): Forwards HTTP requests to webservers, injects `X-Forwarded-For` and `X-Forwarded-Proto`, and routes `/.well-known/acme-challenge/` directly to backend webroots for Let's Encrypt validation.
-   - On Port 443 (`mode tcp`): Inspects the TLS Client Hello SNI (`req_ssl_sni`) and routes the encrypted stream directly to the target webserver pool. The backend webservers terminate TLS using their own `acme.sh` certificates.
-3. **Built-in HAProxy Stats Dashboard**:
-   Accessible on port `8404` at `/stats` with authentication.
-4. **Fallback 404**:
-   Unmapped requests hitting the proxy receive a clean HTTP 404.
-
-### Example Endpoint Mapping (`group_vars/proxies.yml`):
-```yaml
-proxy_endpoints:
-  - name: "app1_endpoint"
-    frontend_port: 80
-    ssl: true
-    hosts:
-      - "app1.example.com"
-      - "www.app1.example.com"
-    paths:
-      - "/app1"
-      - "/api"
-    balance: "roundrobin"
-    targets:
-      - { name: "web-01", ip: "10.0.1.11", port: 80, ssl_port: 443, check: true }
-      - { name: "web-02", ip: "10.0.1.12", port: 80, ssl_port: 443, check: true }
-      - { name: "web-03", ip: "10.0.1.13", port: 80, ssl_port: 443, check: true }
-
-  - name: "app2_endpoint"
-    frontend_port: 80
-    ssl: true
-    hosts:
-      - "app2.example.com"
-    paths:
-      - "/"
-    balance: "roundrobin"
-    targets:
-      - { name: "web-02", ip: "10.0.1.12", port: 80, ssl_port: 443, check: true }
-      - { name: "web-03", ip: "10.0.1.13", port: 80, ssl_port: 443, check: true }
+[headless_nodes:children]
+proxies
+webservers
 ```
 
 ---
 
-## Role 2: `webserver` (Nginx, 404 Catch-All & acme.sh SSL)
+## How It Works
 
-Configured via **`group_vars/webservers.yml`** (or `roles/webserver/defaults/main.yml`).
+### 1. SSL Decoding & Certificates on the Proxies (`roles/proxy`)
+- **SSL Termination**: All SSL/TLS is terminated at the proxy edge on port 443 (`bind *:443 ssl crt /etc/haproxy/certs/`).
+- **Certificate Handling**:
+  - `acme.sh` runs on the proxies.
+  - Automatically provisions a bootstrap self-signed combined `.pem` for each discovered FQDN so HAProxy starts up cleanly on first run.
+  - For HTTP-01 Let's Encrypt challenges, HAProxy routes `/.well-known/acme-challenge/` to a local `acme.sh` standalone listener on port `8888`.
+  - All regular HTTP traffic on port 80 is automatically redirected to HTTPS (`http-request redirect scheme https unless is_acme_challenge`).
+  - When `acme_issue_certs: true` is set, `acme.sh` issues genuine Let's Encrypt certificates and auto-renews them via cron.
+- **Dynamic 1:1 Mapping**:
+  HAProxy loops over `groups['webservers']` and automatically generates ACLs and backends:
+  - `web1.example.com` ➔ routes to `10.0.1.11:80`
+  - `web2.example.com` ➔ routes to `10.0.1.12:80`
+  - `web3.example.com` ➔ routes to `10.0.1.13:80`
+  - Any request not matching an enabled FQDN receives an immediate **404 Not Found**.
 
-### Features:
-1. **Generic 404 Catch-All**:
-   Removes the default Nginx welcome site and installs `/etc/nginx/conf.d/00-default-404.conf`. Any visitor accessing via direct IP address, unknown hostname, or a disabled site receives an instant `404 Not Found\n`.
-2. **HAProxy Real IP Integration**:
-   Installs `/etc/nginx/conf.d/real_ip.conf` configuring `set_real_ip_from` for each proxy (`10.0.1.10`, `10.0.1.20`, `10.0.0.0/8`). Nginx access logs and application headers reflect the visitor's genuine remote IP.
-3. **acme.sh & Let's Encrypt**:
-   - Installs `acme.sh` in `/root/.acme.sh` with Let's Encrypt as the default CA.
-   - Configures `/var/www/letsencrypt` as the HTTP-01 challenge webroot.
-   - Generates initial self-signed bootstrap certificates so Nginx starts immediately on fresh servers without certificate errors.
-   - When `acme_issue_certs: true`, requests valid certificates from Let's Encrypt and sets up daily automatic renewal hooks.
-4. **Virtual Hosts**:
-   Generates Nginx virtual hosts in `/etc/nginx/sites-available/` with HTTP-to-HTTPS redirection and document roots in `/var/www/<sitename>`.
-
-### Example Sites Configuration (`group_vars/webservers.yml`):
-```yaml
-haproxy_frontend_ips:
-  - "10.0.1.10"
-  - "10.0.1.20"
-  - "10.0.0.0/8"
-
-webserver_sites:
-  - name: "app1"
-    domain: "app1.example.com"
-    aliases:
-      - "www.app1.example.com"
-    root: "/var/www/app1"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true
-
-  - name: "app2"
-    domain: "app2.example.com"
-    root: "/var/www/app2"
-    index: "index.html index.htm"
-    enabled: true
-    ssl_enabled: true
-```
+### 2. Backend Webservers with Generic 404 Fallback (`roles/webserver`)
+- **Strict Generic 404**:
+  The default catch-all server block (`/etc/nginx/conf.d/00-default-404.conf`) returns `404 Not Found\n` for any direct IP access, unrecognized Host header, or unconfigured domain.
+- **Only the Assigned FQDN is Enabled**:
+  Each webserver only enables a single virtual host matching its `external_fqdn` (`/var/www/{{ external_fqdn }}`).
+- **HAProxy Real IP Integration**:
+  Installs `/etc/nginx/conf.d/real_ip.conf` trusting the HAProxy proxy IPs (`groups['proxies']` and `10.0.0.0/8`). Nginx access logs and application headers record the visitor's genuine remote IP from `X-Forwarded-For`.
 
 ---
 
 ## How to Run
 
-### 1. Run the Entire Suite (Base, Security, Users, Proxies, Webservers)
+### Run the Entire Cluster Deployment
 ```bash
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-### 2. Run Only Proxies or Only Webservers
+### Targeted Execution Using Tags
 ```bash
-# Provision HAProxy load balancers only:
+# Provision or update HAProxy load balancers only:
 ansible-playbook -i inventory.ini playbook.yml --tags proxy
 
-# Provision Webservers & SSL only:
+# Provision or update backend webservers only:
 ansible-playbook -i inventory.ini playbook.yml --tags webserver
-```
 
-### 3. Run Targeted Sub-Tasks
-```bash
-# Update HAProxy routing endpoints:
-ansible-playbook -i inventory.ini playbook.yml --tags haproxy
-
-# Update Nginx virtual hosts and sites:
-ansible-playbook -i inventory.ini playbook.yml --tags sites
-
-# Update Admin Users only:
+# Update user accounts and dotfiles only:
 ansible-playbook -i inventory.ini playbook.yml --tags users
+
+# Apply kernel and hardware tuning only:
+ansible-playbook -i inventory.ini playbook.yml --tags tuning
 ```
