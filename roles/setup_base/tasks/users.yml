@@ -1,0 +1,11 @@
+---
+# ==============================================================================
+# Administrative Users Provisioning
+# ==============================================================================
+
+- name: Provision configured administrative users
+  ansible.builtin.include_tasks: user_setup.yml
+  loop: "{{ admin_users }}"
+  loop_control:
+    loop_var: current_admin_user
+    label: "{{ current_admin_user.name }}"

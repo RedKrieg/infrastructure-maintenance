@@ -1,0 +1,31 @@
+---
+# ==============================================================================
+# Administrative Users Configuration
+# ==============================================================================
+# Define the administrative users to provision on target headless systems.
+# Each user specified here will automatically receive:
+#   - User account and primary group
+#   - Passwordless sudo privileges in /etc/sudoers.d/<username>
+#   - Authorized SSH public keys
+#   - SSH client ControlMaster multiplexing configuration (~/.ssh/config)
+#   - Preferred Vim configuration with pathogen.vim (~/.vimrc)
+#   - Custom bash additions, aliases, and loaders (~/.bashrc_addons)
+#   - Python virtual environment tooling helpers (~/.venv_helpers.bash)
+#   - Tab completion for workon, rmvenv, and cdp (~/.bash_completion.d/)
+#
+# To add additional administrative users in the future, append a new dictionary entry below.
+# ==============================================================================
+
+admin_users:
+  - name: redkrieg
+    shell: /bin/bash
+    sudo_nopasswd: true
+    authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID9pb/LNL4+4KU8xPbibpuTkZb/0RIz/98clnXrtxcHG redkrieg@cortex-1"
+
+# Example of adding an additional admin user:
+#  - name: sysadmin_second
+#    shell: /bin/bash
+#    sudo_nopasswd: true
+#    authorized_keys:
+#      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@machine"

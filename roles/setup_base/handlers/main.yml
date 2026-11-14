@@ -1,0 +1,19 @@
+---
+# ==============================================================================
+# Handlers for setup_base Role
+# ==============================================================================
+
+- name: Restart sysstat
+  ansible.builtin.systemd:
+    name: sysstat
+    state: restarted
+
+- name: Restart systemd-journald
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted

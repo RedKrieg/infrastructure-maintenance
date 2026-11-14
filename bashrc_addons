@@ -1,0 +1,63 @@
+# ==============================================================================
+# User Path Additions
+# ==============================================================================
+# User local binaries
+if [ -d "$HOME/.local/bin" ]; then
+    export PATH="$PATH:$HOME/.local/bin"
+fi
+
+if [ -d "$HOME/bin" ]; then
+    export PATH="$PATH:$HOME/bin"
+fi
+
+# Android debugging tools (if present)
+if [ -d "$HOME/Android/Sdk/platform-tools" ]; then
+    export PATH="$PATH:$HOME/Android/Sdk/platform-tools"
+fi
+
+# OpenSCAD library path
+export OPENSCADPATH="${HOME}/.local/share/OpenSCAD/dotSCAD/src:${HOME}/.local/share/OpenSCAD/libraries"
+
+# Default Editor
+export EDITOR="vim"
+export VISUAL="vim"
+
+# ==============================================================================
+# Python Virtual Environment Tooling (Include File)
+# ==============================================================================
+if [ -f "$HOME/.venv_helpers.bash" ]; then
+    . "$HOME/.venv_helpers.bash"
+fi
+
+# ==============================================================================
+# Bash Completion & External Tool Loaders
+# ==============================================================================
+# Load user-specific bash completions safely
+if [ -d "$HOME/.bash_completion.d" ]; then
+    for bcfile in "$HOME"/.bash_completion.d/*.bash; do
+        [ -r "$bcfile" ] && . "$bcfile"
+    done
+    unset bcfile
+fi
+
+# Node Version Manager (NVM)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+# ==============================================================================
+# Useful Shell Settings & Aliases for Headless Admin
+# ==============================================================================
+shopt -s histappend
+shopt -s checkwinsize
+export HISTSIZE=50000
+export HISTFILESIZE=100000
+export HISTCONTROL=ignoreboth:erasedups
+
+alias ll='ls -alF --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -CF --color=auto'
+alias grep='grep --color=auto'
+alias ports='ss -tulanp'
+alias df='df -h'
+alias du='du -h'

@@ -1,0 +1,35 @@
+# Ansible retry files
+*.retry
+
+# Ansible Vault password files
+.vault_pass
+.vault_pass.*
+*.vault_pass
+vault_password*
+
+# Private keys (prevent accidental credential commits)
+*.pem
+*.key
+id_rsa
+id_ed25519
+id_ecdsa
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Editor temporary & swap files
+*.swp
+*.swo
+*~
+*.bak
+.vscode/
+.idea/
+
+# OS specific files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,58 @@
+---
+# ==============================================================================
+# Headless System Performance & Accounting Tuning
+# ==============================================================================
+
+- name: Enable sysstat historical accounting service (sar)
+  ansible.builtin.lineinfile:
+    path: /etc/default/sysstat
+    regexp: '^ENABLED='
+    line: 'ENABLED="true"'
+    state: present
+  when: enable_sysstat_collection | bool
+  notify: Restart sysstat
+
+- name: Ensure sysstat service is enabled and running
+  ansible.builtin.systemd:
+    name: sysstat
+    enabled: true
+    state: started
+  when: enable_sysstat_collection | bool
+
+- name: Create convenience symlink for fd command (/usr/local/bin/fd -> /usr/bin/fdfind)
+  ansible.builtin.file:
+    src: /usr/bin/fdfind
+    dest: /usr/local/bin/fd
+    state: link
+    force: false
+  when: enable_fd_symlink | bool
+
+- name: Cap systemd-journald disk storage usage
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/maxuse.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Journal]
+      SystemMaxUse={{ journald_max_use }}
+  when: enable_journald_limit | bool
+  notify: Restart systemd-journald
+
+- name: Configure system timezone
+  community.general.timezone:
+    name: "{{ system_timezone }}"
+  when: system_timezone is defined
+
+- name: Ensure systemd-timesyncd is enabled for NTP time synchronization
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  ignore_errors: true
+
+- name: Ensure unattended-upgrades is enabled for automatic security patching
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+  when: enable_unattended_upgrades | bool

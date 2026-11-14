@@ -1,0 +1,71 @@
+---
+# ==============================================================================
+# Security Hardening: UFW Firewall & SSH Daemon
+# ==============================================================================
+
+- name: Configure UFW firewall
+  when: enable_ufw_firewall | bool
+  block:
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+
+    - name: Allow OpenSSH profile through UFW
+      community.general.ufw:
+        rule: allow
+        name: "OpenSSH"
+
+    - name: Allow SSH port 22/tcp fallback through UFW
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Set UFW default incoming policy to deny
+      community.general.ufw:
+        direction: incoming
+        policy: deny
+
+    - name: Set UFW default outgoing policy to allow
+      community.general.ufw:
+        direction: outgoing
+        policy: allow
+
+    - name: Enable UFW firewall
+      community.general.ufw:
+        state: enabled
+
+- name: Harden SSH daemon
+  when: enable_ssh_daemon_hardening | bool
+  block:
+    - name: Ensure /etc/ssh/sshd_config.d directory exists
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure sshd_config includes drop-in configurations from sshd_config.d
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "Include /etc/ssh/sshd_config.d/*.conf"
+        insertafter: BOF
+        state: present
+
+    - name: Deploy SSH daemon hardening drop-in configuration
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/01-hardening.conf
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          # Managed by Ansible - SSH Daemon Hardening
+          PasswordAuthentication no
+          PermitRootLogin prohibit-password
+          PubkeyAuthentication yes
+          KbdInteractiveAuthentication no
+          X11Forwarding no
+          MaxAuthTries 4
+      notify: Restart sshd

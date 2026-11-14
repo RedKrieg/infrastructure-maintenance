@@ -1,0 +1,101 @@
+---
+# ==============================================================================
+# Default Variables for setup_base Role
+# ==============================================================================
+
+# Admin users list (overridden by vars/admin_users.yml)
+admin_users: []
+
+# ------------------------------------------------------------------------------
+# Editor Settings
+# ------------------------------------------------------------------------------
+default_editor: "vim"
+default_editor_bin: "/usr/bin/vim.basic"
+admin_vimrc_file: "vimrc"
+admin_bashrc_addons_file: "bashrc_addons"
+admin_venv_helpers_file: "venv_helpers.bash"
+admin_workon_completion_file: "workon-completion.bash"
+
+# ------------------------------------------------------------------------------
+# SSH Client Multiplexing Settings
+# ------------------------------------------------------------------------------
+ssh_control_subdir: "control"
+# %C generates a unique hash of %l%h%p%r, avoiding Linux UNIX domain socket 108-char limit
+ssh_control_path: "~/.ssh/control/%C"
+ssh_control_persist_seconds: 300
+
+# ------------------------------------------------------------------------------
+# System & Headless Tuning
+# ------------------------------------------------------------------------------
+enable_sysstat_collection: true
+enable_journald_limit: true
+journald_max_use: "500M"
+enable_fd_symlink: true
+system_timezone: "UTC"
+enable_unattended_upgrades: true
+
+# ------------------------------------------------------------------------------
+# Security Hardening (Enabled by Default)
+# ------------------------------------------------------------------------------
+enable_ufw_firewall: true
+enable_ssh_daemon_hardening: true
+
+# ------------------------------------------------------------------------------
+# Packages: Sysadmin Diagnostics, Hardware, Network, and Python Tooling
+# ------------------------------------------------------------------------------
+sysadmin_packages:
+  # Requested by user
+  - iotop           # Process I/O monitor
+  - lm-sensors      # Hardware temperature, voltage, and fan sensors
+  - iftop           # Real-time network interface bandwidth monitor
+  - iptraf-ng       # Interactive IP network traffic monitor
+
+  # Editor
+  - vim             # Full Vim editor
+
+  # Process, Performance & System Diagnostics
+  - htop            # Interactive process viewer
+  - btop            # Modern resource monitor (CPU, memory, disks, network)
+  - sysstat         # Performance accounting tools: sar, iostat, mpstat, pidstat
+  - strace          # Trace system calls and signals
+  - lsof            # List open files and network sockets
+  - ncdu            # Ncurses interactive disk usage analyzer
+
+  # Network Troubleshooting & Connectivity
+  - tcpdump         # Packet capture and analysis
+  - mtr-tiny        # Combined traceroute and ping path diagnostics
+  - iperf3          # Network bandwidth and throughput benchmarking
+  - nmap            # Network exploration tool and port scanner
+  - socat           # Multipurpose bidirectional data relay
+  - net-tools       # Classic network utilities (netstat, arp, ifconfig)
+  - iputils-ping    # Standard ICMP ping
+  - dnsutils        # DNS lookup utilities (dig, nslookup)
+  - ethtool         # Query and control network driver and hardware settings
+  - curl            # CLI URL transfer tool
+  - wget            # Network file retriever
+
+  # Hardware & Storage Diagnostics
+  - smartmontools   # S.M.A.R.T. disk health monitoring daemon and smartctl
+  - nvme-cli        # NVMe drive health logs and management
+  - pciutils        # lspci - PCI device inspection
+  - usbutils        # lsusb - USB device inspection
+  - hdparm          # SATA/IDE drive parameters and speed testing
+
+  # Python Virtual Environment & Development Tooling
+  - python3         # Python 3 interpreter
+  - python3-venv    # Required for python3 -m venv (ensurepip)
+  - python3-pip     # Python package installer
+  - python3-dev     # Python C header files for compiling extensions
+  - pipx            # Isolated environment manager for Python CLI tools
+  - build-essential # gcc, make, libc-dev for native compiling
+  - git             # Version control system
+
+  # Shell Productivity & Terminal Administration
+  - tmux            # Terminal multiplexer for persistent remote sessions
+  - tree            # Visual directory hierarchy tree
+  - jq              # Lightweight CLI JSON processor
+  - ripgrep         # Ultra-fast grep alternative (rg)
+  - fd-find         # Fast find alternative (fdfind)
+  - rsync           # Fast remote file copy and sync
+  - unzip           # Archive decompression
+  - bash-completion # Programmable command-line completion

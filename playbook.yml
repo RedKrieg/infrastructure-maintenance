@@ -1,0 +1,11 @@
+---
+- name: Configure Headless Ubuntu Systems
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: setup_base

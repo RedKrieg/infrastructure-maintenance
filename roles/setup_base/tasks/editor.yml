@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# System-Wide Default Editor Configuration (Vim)
+# ==============================================================================
+
+- name: Set system-wide default editor alternative to Vim
+  community.general.alternatives:
+    name: editor
+    path: "{{ default_editor_bin }}"
+  when: default_editor_bin is defined
+
+- name: Set system-wide EDITOR and VISUAL environment variables in /etc/environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: "^{{ item.key }}="
+    line: '{{ item.key }}="{{ item.val }}"'
+    state: present
+  loop:
+    - { key: 'EDITOR', val: '{{ default_editor }}' }
+    - { key: 'VISUAL', val: '{{ default_editor }}' }
