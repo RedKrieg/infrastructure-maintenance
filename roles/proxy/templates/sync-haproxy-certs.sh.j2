@@ -2,9 +2,9 @@
 # ==============================================================================
 # HAProxy Certificate Synchronization Script
 # Managed by Ansible - Executed by acme.sh renewal hooks on Primary Proxy
-# Copies renewed certificates to all replica proxies and reloads HAProxy
+# Synchronizes renewed certificates to all replica proxies in the cluster
 # ==============================================================================
-set -euo pipefail
+set -u
 
 LOG_FILE="/var/log/haproxy-cert-sync.log"
 CERTS_DIR="{{ haproxy_certs_dir }}"
@@ -14,31 +14,35 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [cert-sync] $*" | tee -a "$LOG_FILE"
 }
 
-log "Starting certificate synchronization to replica proxies..."
+log "Starting cluster certificate synchronization..."
 
-# 1. Reload local HAProxy first
+# 1. Reload local HAProxy first on the Primary node
 if systemctl is-active --quiet haproxy; then
-    systemctl reload haproxy
-    log "Reloaded local HAProxy on $(hostname)"
+    if systemctl reload haproxy; then
+        log "Reloaded local HAProxy on $(hostname)"
+    else
+        log "ERROR: Failed to reload local HAProxy on $(hostname)"
+    fi
 fi
 
-# 2. Sync certificates to all replica proxies
+# 2. Iterate through all replica proxies and mirror certificates
 {% if groups['proxies'] is defined %}
 {% for proxy in groups['proxies'] %}
 {% if proxy != cert_primary_host %}
 REPLICA_IP="{{ hostvars[proxy]['ansible_host'] | default(proxy) }}"
 log "Syncing certificates to replica proxy: {{ proxy }} (${REPLICA_IP})..."
 
-rsync -avz --delete \
+if rsync -avz --delete \
     -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10" \
-    "${CERTS_DIR}/" "root@${REPLICA_IP}:${CERTS_DIR}/" >> "$LOG_FILE" 2>&1
-
-ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
-    "root@${REPLICA_IP}" "systemctl reload haproxy" >> "$LOG_FILE" 2>&1
-
-log "Successfully synced and reloaded HAProxy on {{ proxy }}"
+    "${CERTS_DIR}/" "root@${REPLICA_IP}:${CERTS_DIR}/" >> "$LOG_FILE" 2>&1 && \
+   ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+    "root@${REPLICA_IP}" "systemctl reload haproxy" >> "$LOG_FILE" 2>&1; then
+    log "SUCCESS: Synced and reloaded HAProxy on {{ proxy }} (${REPLICA_IP})"
+else
+    log "WARNING: Could not sync certificates to {{ proxy }} (${REPLICA_IP}). Host may be unreachable or in maintenance."
+fi
 {% endif %}
 {% endfor %}
 {% endif %}
 
-log "Certificate synchronization finished successfully."
+log "Cluster certificate synchronization completed."

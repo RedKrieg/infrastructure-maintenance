@@ -5,7 +5,7 @@
 # All replica proxies share the identical certificates.
 # ==============================================================================
 
-- name: Ensure HAProxy certificates directory exists
+- name: Ensure HAProxy certificates directory exists across all proxies
   ansible.builtin.file:
     path: "{{ haproxy_certs_dir }}"
     state: directory
@@ -91,32 +91,34 @@
           when: acme_issue_result is defined
           changed_when: false
 
-    - name: Slurp certificate bundles from Primary Proxy for synchronization
-      ansible.builtin.slurp:
-        src: "{{ haproxy_certs_dir }}/{{ item }}.pem"
-      register: slurped_certs
-      loop: "{{ target_fqdns }}"
-
-    - name: Store slurped certificates in hostvars for replica distribution
-      ansible.builtin.set_fact:
-        primary_ssl_bundles: >-
-          {{
-            primary_ssl_bundles | default({}) |
-            combine({ item.item: (item.content | b64decode) })
-          }}
-      loop: "{{ slurped_certs.results }}"
-      no_log: true
-
 # ==============================================================================
-# Replica Proxy Tasks: Synchronize Certificates from Primary Proxy
+# Certificate Distribution from Primary to ALL Replica Proxies
 # ==============================================================================
-- name: Deploy identical certificates to Replica Proxies
-  when:
-    - inventory_hostname != cert_primary_host
-    - hostvars[cert_primary_host]['primary_ssl_bundles'] is defined
+- name: Slurp certificate bundles from Primary Proxy
+  ansible.builtin.slurp:
+    src: "{{ haproxy_certs_dir }}/{{ item }}.pem"
+  delegate_to: "{{ cert_primary_host }}"
+  run_once: true
+  register: slurped_certs
+  loop: "{{ target_fqdns }}"
+  tags: [proxy, ssl, certs]
+
+- name: Store slurped certificates in a structured map
+  ansible.builtin.set_fact:
+    primary_ssl_bundles: >-
+      {{
+        primary_ssl_bundles | default({}) |
+        combine({ item.item: (item.content | b64decode) })
+      }}
+  loop: "{{ slurped_certs.results }}"
+  no_log: true
+  tags: [proxy, ssl, certs]
+
+- name: Deploy identical certificates to all Replica Proxies
+  when: inventory_hostname != cert_primary_host
   ansible.builtin.copy:
     dest: "{{ haproxy_certs_dir }}/{{ item }}.pem"
-    content: "{{ hostvars[cert_primary_host]['primary_ssl_bundles'][item] }}"
+    content: "{{ primary_ssl_bundles[item] }}"
     owner: root
     group: root
     mode: "0600"
@@ -139,13 +141,18 @@
         state: present
       register: primary_sync_key
 
-    - name: Authorize Primary Proxy sync key on Replica Proxies
-      when:
-        - inventory_hostname != cert_primary_host
-        - hostvars[cert_primary_host]['primary_sync_key'] is defined
+    - name: Read Primary Proxy public sync key
+      ansible.builtin.slurp:
+        src: /root/.ssh/id_ed25519_certsync.pub
+      delegate_to: "{{ cert_primary_host }}"
+      run_once: true
+      register: primary_sync_pubkey
+
+    - name: Authorize Primary Proxy sync key on all Replica Proxies
+      when: inventory_hostname != cert_primary_host
       ansible.posix.authorized_key:
         user: root
-        key: "{{ hostvars[cert_primary_host]['primary_sync_key']['public_key'] }}"
+        key: "{{ primary_sync_pubkey.content | b64decode }}"
         state: present
 
     - name: Deploy sync-haproxy-certs.sh script on Primary Proxy
