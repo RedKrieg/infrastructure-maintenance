@@ -80,7 +80,7 @@ An automated, role-based Ansible suite to provision, harden, and bootstrap fresh
   - Configures `ufw limit 22/tcp` and allows OpenSSH profile.
 - **SSH Daemon Hardening & Server Keepalives**:
   - Deploys `/etc/ssh/sshd_config.d/01-hardening.conf`.
-  - Enforces `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`, `KbdInteractiveAuthentication no`, `X11Forwarding no`, and `MaxAuthTries 4`.
+  - Enforces `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`, `KbdInteractiveAuthentication no`, `X11Forwarding no`, and `MaxAuthTries 10`.
   - Configures server-side keepalives: `ClientAliveInterval 120` and `ClientAliveCountMax 3` (drops unresponsive connections after 6 minutes of silence).
   - *Note: `fail2ban` and `/etc/pam.d/su` are not used.*
 

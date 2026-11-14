@@ -6,6 +6,7 @@
 enable_ufw_firewall: true
 enable_ssh_daemon_hardening: true
 
-# SSH Server Keepalive Settings
+# SSH Server Authentication & Keepalive Settings
+ssh_max_auth_tries: 10
 ssh_client_alive_interval: 120
 ssh_client_alive_count_max: 3

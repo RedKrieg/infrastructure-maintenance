@@ -35,7 +35,7 @@
           PubkeyAuthentication yes
           KbdInteractiveAuthentication no
           X11Forwarding no
-          MaxAuthTries 4
+          MaxAuthTries {{ ssh_max_auth_tries }}
           ClientAliveInterval {{ ssh_client_alive_interval }}
           ClientAliveCountMax {{ ssh_client_alive_count_max }}
       notify: Restart sshd
