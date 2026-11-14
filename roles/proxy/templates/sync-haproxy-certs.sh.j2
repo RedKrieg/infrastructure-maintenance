@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# HAProxy Certificate Synchronization Script
+# Managed by Ansible - Executed by acme.sh renewal hooks on Primary Proxy
+# Copies renewed certificates to all replica proxies and reloads HAProxy
+# ==============================================================================
+set -euo pipefail
+
+LOG_FILE="/var/log/haproxy-cert-sync.log"
+CERTS_DIR="{{ haproxy_certs_dir }}"
+SSH_KEY="/root/.ssh/id_ed25519_certsync"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [cert-sync] $*" | tee -a "$LOG_FILE"
+}
+
+log "Starting certificate synchronization to replica proxies..."
+
+# 1. Reload local HAProxy first
+if systemctl is-active --quiet haproxy; then
+    systemctl reload haproxy
+    log "Reloaded local HAProxy on $(hostname)"
+fi
+
+# 2. Sync certificates to all replica proxies
+{% if groups['proxies'] is defined %}
+{% for proxy in groups['proxies'] %}
+{% if proxy != cert_primary_host %}
+REPLICA_IP="{{ hostvars[proxy]['ansible_host'] | default(proxy) }}"
+log "Syncing certificates to replica proxy: {{ proxy }} (${REPLICA_IP})..."
+
+rsync -avz --delete \
+    -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10" \
+    "${CERTS_DIR}/" "root@${REPLICA_IP}:${CERTS_DIR}/" >> "$LOG_FILE" 2>&1
+
+ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 \
+    "root@${REPLICA_IP}" "systemctl reload haproxy" >> "$LOG_FILE" 2>&1
+
+log "Successfully synced and reloaded HAProxy on {{ proxy }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+
+log "Certificate synchronization finished successfully."

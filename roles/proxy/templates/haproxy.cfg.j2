@@ -1,6 +1,7 @@
 # ==============================================================================
 # HAProxy Dynamic Configuration - Managed by Ansible
 # SSL is terminated here; each external FQDN is dynamically mapped 1:1 to its webserver
+# Shared certificates: HTTP-01 challenges are forwarded to the Primary Proxy ({{ cert_primary_host }})
 # ==============================================================================
 
 global
@@ -55,7 +56,7 @@ frontend fe_http
     mode http
     option forwardfor
 
-    # Let's Encrypt HTTP-01 challenge routing
+    # Let's Encrypt HTTP-01 challenge routing (proxied to Primary Certificate Issuer)
     acl is_acme_challenge path_beg /.well-known/acme-challenge/
     use_backend be_acme if is_acme_challenge
 
@@ -84,9 +85,14 @@ frontend fe_https
     default_backend be_default_404
 
 # --- ACME Standalone Challenge Backend ---
+# Forwards challenges directly to the Primary Proxy ({{ cert_primary_host }}) so duplicate requests are never made
 backend be_acme
     mode http
-    server acme_agent 127.0.0.1:{{ acme_standalone_port }}
+{% if inventory_hostname == cert_primary_host %}
+    server acme_primary 127.0.0.1:{{ acme_standalone_port }}
+{% else %}
+    server acme_primary {{ hostvars[cert_primary_host]['ansible_host'] | default(cert_primary_host) }}:{{ acme_standalone_port }} check
+{% endif %}
 
 # --- Dynamic Backend Webservers (1:1 per external FQDN) ---
 {% if groups['webservers'] is defined %}

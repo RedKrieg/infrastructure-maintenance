@@ -1,6 +1,6 @@
 # Headless Ubuntu Initial Setup, Dynamic HAProxy & Webserver Suite
 
-An automated, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Designed with dynamic 1:1 host-to-FQDN mapping, edge SSL termination and certificate management on HAProxy frontends via `acme.sh` Let's Encrypt, and backend Nginx webservers with strict generic 404 fallbacks.
+An enterprise-grade, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Designed with dynamic 1:1 host-to-FQDN mapping, Oracle Cloud Infrastructure (OCI) multi-fault-domain redundancy, centralized SSL certificate issuance with cluster-wide deduplication via `acme.sh`, and backend Nginx webservers with strict generic 404 fallbacks.
 
 ---
 
@@ -35,11 +35,12 @@ An automated, role-based Ansible suite to provision, harden, and orchestrate hig
 │   │   ├── tasks/
 │   │   │   ├── main.yml             # Task dispatcher
 │   │   │   ├── packages.yml         # Installs haproxy, openssl, curl, socat, cron
-│   │   │   ├── firewall.yml         # Opens 80, 443, and 8404 in UFW
-│   │   │   ├── certs.yml            # Manages SSL certs on proxy (bootstrap & acme.sh)
+│   │   │   ├── firewall.yml         # Opens 80, 443, 8404, and internal 8888 in UFW
+│   │   │   ├── certs.yml            # Primary issuance & cluster-wide certificate distribution
 │   │   │   └── config.yml           # Deploys dynamic haproxy.cfg
 │   │   └── templates/
-│   │       └── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
+│   │       ├── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
+│   │       └── sync-haproxy-certs.sh.j2 # Automated cron renewal rsync hook
 │   └── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
 │       ├── defaults/main.yml
 │       ├── handlers/main.yml
@@ -65,34 +66,73 @@ An automated, role-based Ansible suite to provision, harden, and orchestrate hig
 
 ---
 
-## Dynamic Architecture (10.0.0.0/8 Subnet Example)
+## High-Redundancy Oracle Cloud Infrastructure (OCI) Architecture
+
+To achieve the **highest level of redundancy** on Oracle Cloud Infrastructure, the two HAProxy frontend nodes are deployed across distinct **Fault Domains** (or separate Availability Domains) behind an **OCI Network Load Balancer (NLB)**:
 
 ```
-                            Internet / Visitors
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-         ┌────────────────────┐           ┌────────────────────┐
-         │      proxy-01      │           │      proxy-02      │
-         │    (10.0.1.10)     │           │    (10.0.1.20)     │
-         │ HAProxy + acme.sh  │           │ HAProxy + acme.sh  │
-         │ (Decodes TLS 443)  │           │ (Decodes TLS 443)  │
-         └──────────┬─────────┘           └──────────┬─────────┘
-                    │                                │
-                    └───────────────┬────────────────┘
-                                    │ (Plain HTTP / Port 80)
-           ┌────────────────────────┼────────────────────────┐
-           ▼                        ▼                        ▼
-  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-  │      web-01      │    │      web-02      │    │      web-03      │
-  │   (10.0.1.11)    │    │   (10.0.1.12)    │    │   (10.0.1.13)    │
-  │ web1.example.com │    │ web2.example.com │    │ web3.example.com │
-  │ (Generic 404)    │    │ (Generic 404)    │    │ (Generic 404)    │
-  └──────────────────┘    └──────────────────┘    └──────────────────┘
+                            Public Internet / Visitors
+                                        │
+                                        ▼
+                  ┌───────────────────────────────────────────┐
+                  │       OCI Network Load Balancer (NLB)     │
+                  │        (Static Anycast Public IP)         │
+                  │   Multi-Fault-Domain High Availability    │
+                  └─────────────────────┬─────────────────────┘
+                                        │ (Port 80 / 443)
+                        ┌───────────────┴───────────────┐
+                        ▼                               ▼
+             ┌────────────────────┐           ┌────────────────────┐
+             │      proxy-01      │           │      proxy-02      │
+             │   (Fault Domain 1) │           │   (Fault Domain 2) │
+             │    (10.0.1.10)     │           │    (10.0.1.20)     │
+             │  Primary Cert Node │           │   Replica Proxy    │
+             │ HAProxy + acme.sh  │           │      HAProxy       │
+             └──────────┬─────────┘           └──────────┬─────────┘
+                        │                                │
+                        └───────────────┬────────────────┘
+                                        │ (Plain HTTP / Port 80)
+               ┌────────────────────────┼────────────────────────┐
+               ▼                        ▼                        ▼
+      ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+      │      web-01      │    │      web-02      │    │      web-03      │
+      │   (10.0.1.11)    │    │   (10.0.1.12)    │    │   (10.0.1.13)    │
+      │ web1.example.com │    │ web2.example.com │    │ web3.example.com │
+      │ (Generic 404)    │    │ (Generic 404)    │    │ (Generic 404)    │
+      └──────────────────┘    └──────────────────┘    └──────────────────┘
 ```
 
-### The Only Configurable: `external_fqdn`
-In `inventory.ini`, assign the desired `external_fqdn` directly to each webserver host. The proxy role dynamically discovers these hosts from the inventory:
+### Why OCI Network Load Balancer (NLB)?
+1. **Zero Downtime Failover**: Operates at Layer 4 with sub-second health checks. If `proxy-01` undergoes kernel updates or hardware maintenance, OCI NLB instantly directs 100% of traffic to `proxy-02`.
+2. **Transparent Client IP Preservation**: Preserves the original visitor's source IP address without needing complex headers.
+3. **Multi-Fault Domain (FD) Resilience**: `proxy-01` in FD-1 and `proxy-02` in FD-2 ensures that a rack-level, power-unit, or hardware failure within an Oracle data center never brings down your frontends.
+
+---
+
+## Shared SSL Certificates & Deduplication
+
+Requesting SSL certificates independently from multiple frontends causes **Let's Encrypt rate-limit bans** (5 duplicate certs/week) and causes **50% of HTTP-01 challenges to fail** when the challenge request hits `proxy-02` while `proxy-01` is verifying.
+
+This suite solves this using a **Primary Issuer + Cluster Sharing** pattern:
+
+### 1. Unified Challenge Forwarding
+- `proxy-01` (`groups['proxies'][0]`) is the designated **Primary Certificate Node**.
+- On **all** proxies (`proxy-01`, `proxy-02`), HAProxy routes `path_beg /.well-known/acme-challenge/` to `be_acme`.
+- `be_acme` on `proxy-02` forwards the challenge over the internal `10.0.0.0/8` subnet directly to `proxy-01:8888`.
+- **Result**: Whether Let's Encrypt hits `proxy-01` or `proxy-02`, the challenge is answered by `proxy-01:8888`. Challenges succeed 100% of the time with zero rate-limit waste.
+
+### 2. Cluster Certificate Synchronization
+- **During Provisioning**: The primary proxy generates/issues the certificates, and Ansible distributes the exact `.pem` bundles to all replica proxies in `/etc/haproxy/certs/`.
+- **During Automatic Cron Renewals**:
+  - `acme.sh` automatically renews certificates on `proxy-01` twice daily.
+  - The renewal hook executes `/usr/local/bin/sync-haproxy-certs.sh`.
+  - The script uses `rsync` over dedicated internal SSH keys to mirror `/etc/haproxy/certs/` to `proxy-02` and reloads HAProxy on both nodes.
+
+---
+
+## Inventory & Dynamic 1:1 Mapping
+
+The only setting required per webserver is **`external_fqdn`** in **`inventory.ini`**:
 
 ```ini
 [proxies]
@@ -109,38 +149,17 @@ proxies
 webservers
 ```
 
----
-
-## How It Works
-
-### 1. SSL Decoding & Certificates on the Proxies (`roles/proxy`)
-- **SSL Termination**: All SSL/TLS is terminated at the proxy edge on port 443 (`bind *:443 ssl crt /etc/haproxy/certs/`).
-- **Certificate Handling**:
-  - `acme.sh` runs on the proxies.
-  - Automatically provisions a bootstrap self-signed combined `.pem` for each discovered FQDN so HAProxy starts up cleanly on first run.
-  - For HTTP-01 Let's Encrypt challenges, HAProxy routes `/.well-known/acme-challenge/` to a local `acme.sh` standalone listener on port `8888`.
-  - All regular HTTP traffic on port 80 is automatically redirected to HTTPS (`http-request redirect scheme https unless is_acme_challenge`).
-  - When `acme_issue_certs: true` is set, `acme.sh` issues genuine Let's Encrypt certificates and auto-renews them via cron.
-- **Dynamic 1:1 Mapping**:
-  HAProxy loops over `groups['webservers']` and automatically generates ACLs and backends:
-  - `web1.example.com` ➔ routes to `10.0.1.11:80`
-  - `web2.example.com` ➔ routes to `10.0.1.12:80`
-  - `web3.example.com` ➔ routes to `10.0.1.13:80`
-  - Any request not matching an enabled FQDN receives an immediate **404 Not Found**.
-
-### 2. Backend Webservers with Generic 404 Fallback (`roles/webserver`)
-- **Strict Generic 404**:
-  The default catch-all server block (`/etc/nginx/conf.d/00-default-404.conf`) returns `404 Not Found\n` for any direct IP access, unrecognized Host header, or unconfigured domain.
-- **Only the Assigned FQDN is Enabled**:
-  Each webserver only enables a single virtual host matching its `external_fqdn` (`/var/www/{{ external_fqdn }}`).
-- **HAProxy Real IP Integration**:
-  Installs `/etc/nginx/conf.d/real_ip.conf` trusting the HAProxy proxy IPs (`groups['proxies']` and `10.0.0.0/8`). Nginx access logs and application headers record the visitor's genuine remote IP from `X-Forwarded-For`.
+HAProxy on both proxies dynamically generates:
+- `web1.example.com` ➔ routes to `10.0.1.11:80`
+- `web2.example.com` ➔ routes to `10.0.1.12:80`
+- `web3.example.com` ➔ routes to `10.0.1.13:80`
+- Unmapped hostnames / IPs ➔ **404 Not Found**
 
 ---
 
 ## How to Run
 
-### Run the Entire Cluster Deployment
+### Full Fleet Provisioning
 ```bash
 ansible-playbook -i inventory.ini playbook.yml
 ```
@@ -150,12 +169,12 @@ ansible-playbook -i inventory.ini playbook.yml
 # Provision or update HAProxy load balancers only:
 ansible-playbook -i inventory.ini playbook.yml --tags proxy
 
+# Synchronize certificates only:
+ansible-playbook -i inventory.ini playbook.yml --tags certs
+
 # Provision or update backend webservers only:
 ansible-playbook -i inventory.ini playbook.yml --tags webserver
 
 # Update user accounts and dotfiles only:
 ansible-playbook -i inventory.ini playbook.yml --tags users
-
-# Apply kernel and hardware tuning only:
-ansible-playbook -i inventory.ini playbook.yml --tags tuning
 ```

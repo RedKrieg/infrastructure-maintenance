@@ -1,6 +1,8 @@
 ---
 # ==============================================================================
-# SSL Certificate Management & acme.sh Setup on Proxies
+# SSL Certificate Management & Deduplication on Proxies
+# Only the Primary Proxy ({{ cert_primary_host }}) requests certificates from Let's Encrypt.
+# All replica proxies share the identical certificates.
 # ==============================================================================
 
 - name: Ensure HAProxy certificates directory exists
@@ -17,74 +19,140 @@
     target_fqdns: "{{ groups['webservers'] | default([]) | map('extract', hostvars, 'external_fqdn') | select('defined') | unique | list }}"
   tags: [proxy, ssl, certs]
 
-- name: Check existing certificates in HAProxy certs directory
-  ansible.builtin.stat:
-    path: "{{ haproxy_certs_dir }}/{{ item }}.pem"
-  register: cert_stats
-  loop: "{{ target_fqdns }}"
+# ==============================================================================
+# Primary Proxy Tasks: Certificate Issuance and Management
+# ==============================================================================
+- name: Primary Proxy Certificate Management Block
+  when: inventory_hostname == cert_primary_host
   tags: [proxy, ssl, certs]
-
-- name: Generate bootstrap self-signed SSL certificate bundles for each FQDN
-  ansible.builtin.shell:
-    cmd: >
-      openssl req -x509 -nodes -days 365 -newkey rsa:2048
-      -keyout /tmp/{{ item.item }}.key
-      -out /tmp/{{ item.item }}.crt
-      -subj "/CN={{ item.item }}" &&
-      cat /tmp/{{ item.item }}.crt /tmp/{{ item.item }}.key > {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
-      chmod 600 {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
-      rm -f /tmp/{{ item.item }}.key /tmp/{{ item.item }}.crt
-  when: not item.stat.exists
-  loop: "{{ cert_stats.results }}"
-  tags: [proxy, ssl, certs]
-
-- name: Check if acme.sh is installed on proxy
-  ansible.builtin.stat:
-    path: "{{ acme_sh_install_dir }}/acme.sh"
-  register: acme_sh_stat
-  tags: [proxy, acme, ssl]
-
-- name: Install acme.sh client on proxy
-  ansible.builtin.shell:
-    cmd: "curl -sSL https://get.acme.sh | sh -s email={{ acme_email }}"
-  when: not acme_sh_stat.stat.exists
-  args:
-    creates: "{{ acme_sh_install_dir }}/acme.sh"
-  tags: [proxy, acme, ssl]
-
-- name: Configure acme.sh default CA to Let's Encrypt
-  ansible.builtin.command:
-    cmd: "{{ acme_sh_install_dir }}/acme.sh --set-default-ca --server {{ acme_default_ca }}"
-  changed_when: false
-  when: acme_sh_stat.stat.exists or not acme_sh_stat.stat.exists
-  tags: [proxy, acme, ssl]
-
-# --- Optional Real Certificate Issuance ---
-- name: Issue and install Let's Encrypt certificates using acme.sh standalone mode
-  when: acme_issue_certs | bool
-  tags: [proxy, acme, ssl]
   block:
-    - name: Request certificates via acme.sh standalone mode
-      ansible.builtin.command:
-        cmd: >
-          {{ acme_sh_install_dir }}/acme.sh --issue
-          -d {{ item }}
-          --standalone
-          --httpport {{ acme_standalone_port }}
-          --keylength ec-256
-          {% if acme_use_staging | bool %}--staging{% endif %}
+    - name: Check existing certificates on Primary Proxy
+      ansible.builtin.stat:
+        path: "{{ haproxy_certs_dir }}/{{ item }}.pem"
+      register: cert_stats_primary
       loop: "{{ target_fqdns }}"
-      register: acme_issue_result
-      failed_when: false
-      changed_when: "'Cert success' in acme_issue_result.stdout"
 
-    - name: Install and bundle certificates for HAProxy
+    - name: Generate bootstrap self-signed SSL bundles on Primary Proxy
       ansible.builtin.shell:
         cmd: >
-          {{ acme_sh_install_dir }}/acme.sh --install-cert -d {{ item }}
-          --fullchain-file /tmp/{{ item }}_fullchain.crt
-          --key-file /tmp/{{ item }}_key.key
-          --reloadcmd "cat /tmp/{{ item }}_fullchain.crt /tmp/{{ item }}_key.key > {{ haproxy_certs_dir }}/{{ item }}.pem && chmod 600 {{ haproxy_certs_dir }}/{{ item }}.pem && rm -f /tmp/{{ item }}_* && systemctl reload haproxy"
-      loop: "{{ target_fqdns }}"
-      when: acme_issue_result is defined
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout /tmp/{{ item.item }}.key
+          -out /tmp/{{ item.item }}.crt
+          -subj "/CN={{ item.item }}" &&
+          cat /tmp/{{ item.item }}.crt /tmp/{{ item.item }}.key > {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
+          chmod 600 {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
+          rm -f /tmp/{{ item.item }}.key /tmp/{{ item.item }}.crt
+      when: not item.stat.exists
+      loop: "{{ cert_stats_primary.results }}"
+
+    - name: Check if acme.sh is installed on Primary Proxy
+      ansible.builtin.stat:
+        path: "{{ acme_sh_install_dir }}/acme.sh"
+      register: acme_sh_stat
+
+    - name: Install acme.sh client on Primary Proxy
+      ansible.builtin.shell:
+        cmd: "curl -sSL https://get.acme.sh | sh -s email={{ acme_email }}"
+      when: not acme_sh_stat.stat.exists
+      args:
+        creates: "{{ acme_sh_install_dir }}/acme.sh"
+
+    - name: Configure acme.sh default CA to Let's Encrypt on Primary Proxy
+      ansible.builtin.command:
+        cmd: "{{ acme_sh_install_dir }}/acme.sh --set-default-ca --server {{ acme_default_ca }}"
       changed_when: false
+
+    # --- Real Let's Encrypt Certificate Issuance (when enabled) ---
+    - name: Issue Let's Encrypt certificates on Primary Proxy
+      when: acme_issue_certs | bool
+      block:
+        - name: Request certificates via acme.sh standalone mode on Primary Proxy
+          ansible.builtin.command:
+            cmd: >
+              {{ acme_sh_install_dir }}/acme.sh --issue
+              -d {{ item }}
+              --standalone
+              --httpport {{ acme_standalone_port }}
+              --keylength ec-256
+              {% if acme_use_staging | bool %}--staging{% endif %}
+          loop: "{{ target_fqdns }}"
+          register: acme_issue_result
+          failed_when: false
+          changed_when: "'Cert success' in acme_issue_result.stdout"
+
+        - name: Bundle and install certificates into HAProxy format on Primary Proxy
+          ansible.builtin.shell:
+            cmd: >
+              {{ acme_sh_install_dir }}/acme.sh --install-cert -d {{ item }}
+              --fullchain-file /tmp/{{ item }}_fullchain.crt
+              --key-file /tmp/{{ item }}_key.key
+              --reloadcmd "cat /tmp/{{ item }}_fullchain.crt /tmp/{{ item }}_key.key > {{ haproxy_certs_dir }}/{{ item }}.pem && chmod 600 {{ haproxy_certs_dir }}/{{ item }}.pem && rm -f /tmp/{{ item }}_* && /usr/local/bin/sync-haproxy-certs.sh"
+          loop: "{{ target_fqdns }}"
+          when: acme_issue_result is defined
+          changed_when: false
+
+    - name: Slurp certificate bundles from Primary Proxy for synchronization
+      ansible.builtin.slurp:
+        src: "{{ haproxy_certs_dir }}/{{ item }}.pem"
+      register: slurped_certs
+      loop: "{{ target_fqdns }}"
+
+    - name: Store slurped certificates in hostvars for replica distribution
+      ansible.builtin.set_fact:
+        primary_ssl_bundles: >-
+          {{
+            primary_ssl_bundles | default({}) |
+            combine({ item.item: (item.content | b64decode) })
+          }}
+      loop: "{{ slurped_certs.results }}"
+      no_log: true
+
+# ==============================================================================
+# Replica Proxy Tasks: Synchronize Certificates from Primary Proxy
+# ==============================================================================
+- name: Deploy identical certificates to Replica Proxies
+  when:
+    - inventory_hostname != cert_primary_host
+    - hostvars[cert_primary_host]['primary_ssl_bundles'] is defined
+  ansible.builtin.copy:
+    dest: "{{ haproxy_certs_dir }}/{{ item }}.pem"
+    content: "{{ hostvars[cert_primary_host]['primary_ssl_bundles'][item] }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ target_fqdns }}"
+  notify: Reload haproxy
+  tags: [proxy, ssl, certs]
+
+# ==============================================================================
+# Automated Cron Renewal Sync Hook Setup (Between Proxies)
+# ==============================================================================
+- name: Configure SSH Key for automated cert sync from Primary to Replicas
+  when: enable_cert_sync_between_proxies | bool
+  tags: [proxy, ssl, certs]
+  block:
+    - name: Generate SSH key on Primary Proxy for cert synchronization
+      when: inventory_hostname == cert_primary_host
+      community.crypto.openssh_keypair:
+        path: /root/.ssh/id_ed25519_certsync
+        type: ed25519
+        state: present
+      register: primary_sync_key
+
+    - name: Authorize Primary Proxy sync key on Replica Proxies
+      when:
+        - inventory_hostname != cert_primary_host
+        - hostvars[cert_primary_host]['primary_sync_key'] is defined
+      ansible.posix.authorized_key:
+        user: root
+        key: "{{ hostvars[cert_primary_host]['primary_sync_key']['public_key'] }}"
+        state: present
+
+    - name: Deploy sync-haproxy-certs.sh script on Primary Proxy
+      when: inventory_hostname == cert_primary_host
+      ansible.builtin.template:
+        src: sync-haproxy-certs.sh.j2
+        dest: /usr/local/bin/sync-haproxy-certs.sh
+        owner: root
+        group: root
+        mode: "0755"

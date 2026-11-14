@@ -24,3 +24,11 @@
     proto: tcp
   when: haproxy_enable_stats | bool
   tags: [proxy, firewall, ufw]
+
+- name: Allow internal ACME challenge proxying between proxies (port 8888)
+  community.general.ufw:
+    rule: allow
+    port: "{{ acme_standalone_port }}"
+    proto: tcp
+    from_ip: "{{ internal_proxy_subnet }}"
+  tags: [proxy, firewall, ufw]

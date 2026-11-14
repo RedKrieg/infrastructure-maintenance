@@ -11,12 +11,19 @@ haproxy_timeout_connect: "5000ms"
 haproxy_timeout_client: "50000ms"
 haproxy_timeout_server: "50000ms"
 
-# SSL & Certificates Configuration (SSL is decoded/terminated on the proxy)
+# SSL & Certificates Configuration (SSL is decoded/terminated on the proxies)
 haproxy_certs_dir: "/etc/haproxy/certs"
 acme_sh_install_dir: "/root/.acme.sh"
 acme_email: "admin@example.com"
 acme_default_ca: "letsencrypt"
 acme_standalone_port: 8888
+
+# Primary proxy that owns requesting and renewing certificates from Let's Encrypt
+# Defaults to the first host in the [proxies] inventory group
+cert_primary_host: "{{ groups['proxies'][0] if (groups['proxies'] is defined and groups['proxies'] | length > 0) else inventory_hostname }}"
+enable_cert_sync_between_proxies: true
+internal_proxy_subnet: "10.0.0.0/8"
+
 # When false, uses self-signed bootstrap SSL certificates for the domains.
 # Set to true when domains resolve via public DNS to your HAProxy frontends.
 acme_issue_certs: false
