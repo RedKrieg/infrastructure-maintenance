@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# Main Task Entry Point for security Role
+# ==============================================================================
+
+- name: UFW Firewall Setup & Rate Limiting
+  ansible.builtin.include_tasks: ufw.yml
+  tags: [security, firewall, ufw]
+
+- name: SSH Daemon Hardening & Server Keepalives
+  ansible.builtin.include_tasks: sshd.yml
+  tags: [security, ssh, sshd]

@@ -8,6 +8,7 @@
     name: editor
     path: "{{ default_editor_bin }}"
   when: default_editor_bin is defined
+  tags: [editor, system]
 
 - name: Set system-wide EDITOR and VISUAL environment variables in /etc/environment
   ansible.builtin.lineinfile:
@@ -18,3 +19,4 @@
   loop:
     - { key: 'EDITOR', val: '{{ default_editor }}' }
     - { key: 'VISUAL', val: '{{ default_editor }}' }
+  tags: [editor, system]

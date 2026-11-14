@@ -1,0 +1,130 @@
+---
+# ==============================================================================
+# Kernel, Memory & Hardware Tuning
+# ==============================================================================
+
+# --- 1. BBR Congestion Control ---
+- name: Ensure tcp_bbr kernel module is loaded
+  community.general.modprobe:
+    name: tcp_bbr
+    state: present
+  ignore_errors: true
+  when: enable_bbr | bool
+  tags: [tuning, bbr, network]
+
+- name: Persist tcp_bbr kernel module across reboots
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/bbr.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible
+      tcp_bbr
+  when: enable_bbr | bool
+  tags: [tuning, bbr, network]
+
+- name: Configure BBR congestion control sysctl parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.val }}"
+    sysctl_file: /etc/sysctl.d/99-bbr.conf
+    state: present
+    reload: true
+  loop:
+    - { key: 'net.core.default_qdisc', val: 'fq' }
+    - { key: 'net.ipv4.tcp_congestion_control', val: 'bbr' }
+  ignore_errors: true
+  when: enable_bbr | bool
+  tags: [tuning, bbr, network]
+
+# --- 2. Inotify Limits ---
+- name: Increase inotify user watches and instances
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.val }}"
+    sysctl_file: /etc/sysctl.d/99-inotify.conf
+    state: present
+    reload: true
+  loop:
+    - { key: 'fs.inotify.max_user_watches', val: "{{ inotify_max_user_watches }}" }
+    - { key: 'fs.inotify.max_user_instances', val: "{{ inotify_max_user_instances }}" }
+  ignore_errors: true
+  when: enable_inotify_limits | bool
+  tags: [tuning, inotify, system]
+
+# --- 3. Conditional Swap (< 4GB RAM) ---
+- name: Configure swap on systems with less than 4GB RAM
+  when:
+    - enable_conditional_swap | bool
+    - ansible_memtotal_mb < 4096
+  tags: [tuning, swap, system]
+  block:
+    - name: Check if swapfile exists
+      ansible.builtin.stat:
+        path: /swapfile
+      register: swapfile_stat
+
+    - name: Create swapfile if not present
+      ansible.builtin.command:
+        cmd: "fallocate -l {{ swap_size_mb }}M /swapfile"
+        creates: /swapfile
+      when: not swapfile_stat.stat.exists
+
+    - name: Set permissions on swapfile
+      ansible.builtin.file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Format swapfile
+      ansible.builtin.command:
+        cmd: mkswap /swapfile
+      when: not swapfile_stat.stat.exists
+
+    - name: Enable swapfile in /etc/fstab
+      ansible.posix.mount:
+        path: none
+        src: /swapfile
+        fstype: swap
+        opts: sw
+        state: present
+
+    - name: Activate swap
+      ansible.builtin.command:
+        cmd: swapon -a
+      changed_when: false
+
+    - name: Configure swappiness and cache pressure
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.val }}"
+        sysctl_file: /etc/sysctl.d/99-swap.conf
+        state: present
+        reload: true
+      loop:
+        - { key: 'vm.swappiness', val: '10' }
+        - { key: 'vm.vfs_cache_pressure', val: '50' }
+      ignore_errors: true
+
+# --- 4. Periodic SSD TRIM on Physical Hardware ---
+- name: Enable periodic SSD TRIM timer on physical bare-metal hardware
+  ansible.builtin.systemd:
+    name: fstrim.timer
+    enabled: true
+    state: started
+  when:
+    - ansible_virtualization_role is defined and ansible_virtualization_role == 'host'
+    - ansible_virtualization_type is not defined or ansible_virtualization_type in ['NA', 'none', '']
+  tags: [tuning, storage, hardware]
+
+# --- 5. Convenience Symlink for fd ---
+- name: Create convenience symlink for fd command (/usr/local/bin/fd -> /usr/bin/fdfind)
+  ansible.builtin.file:
+    src: /usr/bin/fdfind
+    dest: /usr/local/bin/fd
+    state: link
+    force: false
+  when: enable_fd_symlink | bool
+  tags: [tuning, editor, system]

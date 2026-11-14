@@ -1,0 +1,22 @@
+---
+# ==============================================================================
+# Historical System Performance Accounting (Sysstat / sar)
+# ==============================================================================
+
+- name: Enable sysstat historical accounting service (sar)
+  ansible.builtin.lineinfile:
+    path: /etc/default/sysstat
+    regexp: '^ENABLED='
+    line: 'ENABLED="true"'
+    state: present
+  when: enable_sysstat_collection | bool
+  notify: Restart sysstat
+  tags: [sysstat, system, tuning]
+
+- name: Ensure sysstat service is enabled and running
+  ansible.builtin.systemd:
+    name: sysstat
+    enabled: true
+    state: started
+  when: enable_sysstat_collection | bool
+  tags: [sysstat, system, tuning]

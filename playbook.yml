@@ -8,4 +8,11 @@
     - vars/admin_users.yml
 
   roles:
-    - role: setup_base
+    - role: system_base
+      tags: [system_base, system, packages, tuning]
+
+    - role: security
+      tags: [security, ufw, firewall, ssh, sshd]
+
+    - role: admin_users
+      tags: [admin_users, users, dotfiles, venv]

@@ -1,0 +1,45 @@
+---
+# ==============================================================================
+# Maintenance, Upgrades & Reboot Scheduling
+# ==============================================================================
+
+- name: Configure needrestart for automatic non-interactive daemon restarts
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/auto-restart.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible - Automatic non-interactive daemon restarts after updates
+      $nrconf{restart} = 'a';
+      $nrconf{ui} = 'NeedRestart::UI::stdio';
+  when: enable_needrestart_auto | bool
+  tags: [maintenance, system]
+
+- name: Configure unattended-upgrades with scheduled reboot at 4:00 AM
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52unattended-upgrades-reboot
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by Ansible - Scheduled automatic reboots for security updates
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "{{ unattended_reboot_time }}";
+      Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+  when: enable_unattended_upgrades | bool
+  tags: [maintenance, system]
+
+- name: Configure system timezone
+  community.general.timezone:
+    name: "{{ system_timezone }}"
+  when: system_timezone is defined
+  tags: [maintenance, system]
+
+- name: Ensure systemd-timesyncd is enabled for NTP time synchronization
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+  ignore_errors: true
+  tags: [maintenance, system]

@@ -1,43 +1,11 @@
 ---
 # ==============================================================================
-# Security Hardening: UFW Firewall & SSH Daemon
+# SSH Daemon Hardening & Server Keepalives
 # ==============================================================================
-
-- name: Configure UFW firewall
-  when: enable_ufw_firewall | bool
-  block:
-    - name: Install UFW
-      ansible.builtin.apt:
-        name: ufw
-        state: present
-
-    - name: Allow OpenSSH profile through UFW
-      community.general.ufw:
-        rule: allow
-        name: "OpenSSH"
-
-    - name: Allow SSH port 22/tcp fallback through UFW
-      community.general.ufw:
-        rule: allow
-        port: "22"
-        proto: tcp
-
-    - name: Set UFW default incoming policy to deny
-      community.general.ufw:
-        direction: incoming
-        policy: deny
-
-    - name: Set UFW default outgoing policy to allow
-      community.general.ufw:
-        direction: outgoing
-        policy: allow
-
-    - name: Enable UFW firewall
-      community.general.ufw:
-        state: enabled
 
 - name: Harden SSH daemon
   when: enable_ssh_daemon_hardening | bool
+  tags: [security, ssh, sshd]
   block:
     - name: Ensure /etc/ssh/sshd_config.d directory exists
       ansible.builtin.file:
@@ -61,11 +29,13 @@
         group: root
         mode: "0600"
         content: |
-          # Managed by Ansible - SSH Daemon Hardening
+          # Managed by Ansible - SSH Daemon Hardening & Server Keepalives
           PasswordAuthentication no
           PermitRootLogin prohibit-password
           PubkeyAuthentication yes
           KbdInteractiveAuthentication no
           X11Forwarding no
           MaxAuthTries 4
+          ClientAliveInterval {{ ssh_client_alive_interval }}
+          ClientAliveCountMax {{ ssh_client_alive_count_max }}
       notify: Restart sshd

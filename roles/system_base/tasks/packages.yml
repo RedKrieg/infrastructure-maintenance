@@ -7,8 +7,10 @@
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
+  tags: [packages, system]
 
 - name: Install sysadmin troubleshooting and core packages
   ansible.builtin.apt:
     name: "{{ sysadmin_packages }}"
     state: present
+  tags: [packages, system]

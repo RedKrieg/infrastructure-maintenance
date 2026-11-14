@@ -1,0 +1,32 @@
+---
+# ==============================================================================
+# Main Task Entry Point for system_base Role
+# ==============================================================================
+
+- name: OS Pre-flight Validation
+  ansible.builtin.include_tasks: assert.yml
+  tags: [system, preflight]
+
+- name: Package Installation & Apt Cache Management
+  ansible.builtin.include_tasks: packages.yml
+  tags: [packages, system]
+
+- name: System-Wide Default Editor Configuration (Vim)
+  ansible.builtin.include_tasks: editor.yml
+  tags: [editor, system]
+
+- name: Historical Performance Accounting (sysstat / sar)
+  ansible.builtin.include_tasks: sysstat.yml
+  tags: [sysstat, system, tuning]
+
+- name: Systemd Journal Storage Cap
+  ansible.builtin.include_tasks: journald.yml
+  tags: [journald, system, tuning]
+
+- name: Maintenance, Upgrades & Reboot Scheduling
+  ansible.builtin.include_tasks: maintenance.yml
+  tags: [maintenance, system]
+
+- name: Kernel, Memory & Hardware Tuning (BBR, Inotify, Swap, TRIM)
+  ansible.builtin.include_tasks: kernel_tuning.yml
+  tags: [tuning, system]

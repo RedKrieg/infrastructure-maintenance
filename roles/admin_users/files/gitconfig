@@ -1,0 +1,16 @@
+[push]
+    autoSetupRemote = true
+    default = current
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = false
+
+[core]
+    editor = vim
+    autocrlf = input
+
+[color]
+    ui = auto

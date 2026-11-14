@@ -1,0 +1,17 @@
+---
+# ==============================================================================
+# Systemd Journal Log Storage Cap
+# ==============================================================================
+
+- name: Cap systemd-journald disk storage usage
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/maxuse.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Journal]
+      SystemMaxUse={{ journald_max_use }}
+  when: enable_journald_limit | bool
+  notify: Restart systemd-journald
+  tags: [journald, system, tuning]

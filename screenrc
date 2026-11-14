@@ -1,0 +1,14 @@
+# Generous scrollback buffer
+defscrollback 10000
+
+# Disable startup splash message
+startup_message off
+
+# Disable visual bell
+vbell off
+
+# Preserve screen contents after exiting fullscreen programs (vim/less/nano)
+altscreen on
+
+# Status line displaying hostname, window list, and timestamp
+hardstatus alwayslastline "%{= kG}[ %H ] %{= kw}%?%-Lw%?%{= rW}%n*%t%f%?%{= kw}%+Lw%? %{= kG}%=%c %d.%m.%Y"

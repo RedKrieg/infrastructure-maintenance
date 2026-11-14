@@ -7,4 +7,5 @@
   ansible.builtin.assert:
     that:
       - ansible_os_family == 'Debian'
-    fail_msg: "The setup_base role is designed for Ubuntu/Debian systems."
+    fail_msg: "The system_base role requires a Debian/Ubuntu system."
+  tags: [system, preflight]

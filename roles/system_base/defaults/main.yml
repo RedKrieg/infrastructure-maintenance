@@ -1,0 +1,91 @@
+---
+# ==============================================================================
+# Default Variables for system_base Role
+# ==============================================================================
+
+# Editor Settings
+default_editor: "vim"
+default_editor_bin: "/usr/bin/vim.basic"
+
+# System Tuning & Monitoring
+enable_sysstat_collection: true
+enable_journald_limit: true
+journald_max_use: "500M"
+enable_fd_symlink: true
+system_timezone: "UTC"
+
+# Maintenance & Upgrades
+enable_unattended_upgrades: true
+unattended_reboot_time: "04:00"
+enable_needrestart_auto: true
+
+# Kernel & Hardware Tuning
+enable_bbr: true
+enable_inotify_limits: true
+inotify_max_user_watches: 524288
+inotify_max_user_instances: 512
+enable_conditional_swap: true
+swap_size_mb: 2048
+
+# Core & Diagnostics Packages
+sysadmin_packages:
+  # User requested tools
+  - iotop
+  - lm-sensors
+  - iftop
+  - iptraf-ng
+
+  # Default Editor
+  - vim
+
+  # Maintenance & Upgrades
+  - needrestart
+  - unattended-upgrades
+
+  # Process, Performance & System Diagnostics
+  - htop
+  - btop
+  - sysstat
+  - strace
+  - lsof
+  - ncdu
+
+  # Network Troubleshooting & Connectivity
+  - tcpdump
+  - mtr-tiny
+  - iperf3
+  - nmap
+  - socat
+  - net-tools
+  - iputils-ping
+  - dnsutils
+  - ethtool
+  - curl
+  - wget
+
+  # Hardware & Storage Diagnostics
+  - smartmontools
+  - nvme-cli
+  - pciutils
+  - usbutils
+  - hdparm
+
+  # Python Virtual Environment & Development Tooling
+  - python3
+  - python3-venv
+  - python3-pip
+  - python3-dev
+  - pipx
+  - build-essential
+  - git
+
+  # Shell Productivity & Terminal Administration
+  - tmux
+  - screen
+  - tree
+  - jq
+  - ripgrep
+  - fd-find
+  - rsync
+  - unzip
+  - bash-completion

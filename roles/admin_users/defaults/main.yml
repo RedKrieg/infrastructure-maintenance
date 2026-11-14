@@ -1,0 +1,24 @@
+---
+# ==============================================================================
+# Default Variables for admin_users Role
+# ==============================================================================
+
+# Admin users list (overridden by vars/admin_users.yml)
+admin_users: []
+
+# Editor
+default_editor_bin: "/usr/bin/vim.basic"
+
+# SSH Client Multiplexing Settings
+ssh_control_subdir: "control"
+ssh_control_path: "~/.ssh/control/%C"
+ssh_control_persist_seconds: 300
+
+# File names deployed from files/ directory
+admin_vimrc_file: "vimrc"
+admin_bashrc_addons_file: "bashrc_addons"
+admin_venv_helpers_file: "venv_helpers.bash"
+admin_workon_completion_file: "workon-completion.bash"
+admin_tmux_conf_file: "tmux.conf"
+admin_screenrc_file: "screenrc"
+admin_gitconfig_file: "gitconfig"

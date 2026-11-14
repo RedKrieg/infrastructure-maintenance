@@ -1,6 +1,6 @@
 ---
 # ==============================================================================
-# Administrative Users Provisioning
+# Main Task Entry Point for admin_users Role
 # ==============================================================================
 
 - name: Provision configured administrative users
@@ -9,3 +9,4 @@
   loop_control:
     loop_var: current_admin_user
     label: "{{ current_admin_user.name }}"
+  tags: [users, dotfiles, venv]
