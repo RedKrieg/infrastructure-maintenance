@@ -1,0 +1,88 @@
+---
+# ==============================================================================
+# Default Variables for proxy (HAProxy) Role
+# ==============================================================================
+
+# HAProxy global settings
+haproxy_user: "haproxy"
+haproxy_group: "haproxy"
+haproxy_maxconn: 4096
+haproxy_timeout_connect: "5000ms"
+haproxy_timeout_client: "50000ms"
+haproxy_timeout_server: "50000ms"
+
+# Stats listener configuration
+haproxy_enable_stats: true
+haproxy_stats_port: 8404
+haproxy_stats_uri: "/stats"
+haproxy_stats_refresh: "10s"
+haproxy_stats_user: "admin"
+haproxy_stats_password: "adminpassword"
+
+# Frontend binding ports
+haproxy_bind_http_port: 80
+haproxy_bind_https_port: 443
+
+# List of endpoints with frontend ports/paths mapped to targets
+# Example endpoint structure:
+proxy_endpoints:
+  - name: "app1_service"
+    frontend_port: 80
+    ssl: true
+    hosts:
+      - "app1.example.com"
+    paths:
+      - "/app1"
+      - "/api"
+    balance: "roundrobin"
+    targets:
+      - name: "web-01"
+        ip: "10.0.1.11"
+        port: 80
+        ssl_port: 443
+        check: true
+      - name: "web-02"
+        ip: "10.0.1.12"
+        port: 80
+        ssl_port: 443
+        check: true
+      - name: "web-03"
+        ip: "10.0.1.13"
+        port: 80
+        ssl_port: 443
+        check: true
+
+  - name: "app2_service"
+    frontend_port: 80
+    ssl: true
+    hosts:
+      - "app2.example.com"
+    paths:
+      - "/"
+    balance: "roundrobin"
+    targets:
+      - name: "web-02"
+        ip: "10.0.1.12"
+        port: 80
+        ssl_port: 443
+        check: true
+      - name: "web-03"
+        ip: "10.0.1.13"
+        port: 80
+        ssl_port: 443
+        check: true
+
+  - name: "demo_service"
+    frontend_port: 80
+    ssl: true
+    hosts:
+      - "demo.example.com"
+    paths:
+      - "/demo"
+    balance: "leastconn"
+    targets:
+      - name: "web-01"
+        ip: "10.0.1.11"
+        port: 80
+        ssl_port: 443
+        check: true

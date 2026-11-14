@@ -1,0 +1,55 @@
+# ==============================================================================
+# Nginx Virtual Host Configuration for {{ site.domain }}
+# Managed by Ansible
+# ==============================================================================
+
+# HTTP Server (Port 80)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ site.domain }} {% if site.aliases is defined %}{{ site.aliases | join(' ') }}{% endif %};
+
+    # Let's Encrypt HTTP-01 ACME Challenge webroot
+    location ^~ /.well-known/acme-challenge/ {
+        root {{ acme_challenge_dir }};
+        default_type "text/plain";
+        allow all;
+    }
+
+    # Redirect all other HTTP traffic to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Server (Port 443)
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name {{ site.domain }} {% if site.aliases is defined %}{{ site.aliases | join(' ') }}{% endif %};
+
+    # SSL Certificates managed via acme.sh
+    ssl_certificate /etc/ssl/acme.sh/{{ site.domain }}/fullchain.cer;
+    ssl_certificate_key /etc/ssl/acme.sh/{{ site.domain }}/{{ site.domain }}.key;
+
+    # SSL Security Configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    root {{ site.root | default('/var/www/' ~ site.name) }};
+    index {{ site.index | default('index.html index.htm') }};
+
+    # ACME Challenge location inside HTTPS as well
+    location ^~ /.well-known/acme-challenge/ {
+        root {{ acme_challenge_dir }};
+        default_type "text/plain";
+        allow all;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

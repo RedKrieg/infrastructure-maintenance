@@ -1,0 +1,120 @@
+# ==============================================================================
+# HAProxy Configuration - Managed by Ansible
+# ==============================================================================
+
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    chroot /var/lib/haproxy
+    user {{ haproxy_user }}
+    group {{ haproxy_group }}
+    daemon
+    maxconn {{ haproxy_maxconn }}
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    timeout connect {{ haproxy_timeout_connect }}
+    timeout client  {{ haproxy_timeout_client }}
+    timeout server  {{ haproxy_timeout_server }}
+    errorfile 400 /etc/haproxy/errors/400.http
+    errorfile 403 /etc/haproxy/errors/403.http
+    errorfile 404 /etc/haproxy/errors/404.http
+    errorfile 500 /etc/haproxy/errors/500.http
+    errorfile 502 /etc/haproxy/errors/502.http
+    errorfile 503 /etc/haproxy/errors/503.http
+    errorfile 504 /etc/haproxy/errors/504.http
+
+{% if haproxy_enable_stats | bool %}
+# --- HAProxy Statistics Web UI ---
+listen stats
+    bind *:{{ haproxy_stats_port }}
+    mode http
+    stats enable
+    stats uri {{ haproxy_stats_uri }}
+    stats refresh {{ haproxy_stats_refresh }}
+    stats show-node
+    stats auth {{ haproxy_stats_user }}:{{ haproxy_stats_password }}
+{% endif %}
+
+# --- HTTP Frontend (Port {{ haproxy_bind_http_port }}) ---
+frontend fe_http
+    bind *:{{ haproxy_bind_http_port }}
+    mode http
+    option forwardfor
+    http-request set-header X-Forwarded-Proto http
+
+    # ACME Challenge Routing (Let's Encrypt HTTP-01)
+    acl is_acme_challenge path_beg /.well-known/acme-challenge/
+
+{% for ep in proxy_endpoints %}
+    # Endpoint: {{ ep.name }}
+{% if ep.hosts is defined and ep.hosts %}
+    acl is_{{ ep.name }}_host hdr(host) -i {{ ep.hosts | join(' ') }}
+{% endif %}
+{% if ep.paths is defined and ep.paths %}
+    acl is_{{ ep.name }}_path path_beg {{ ep.paths | join(' ') }}
+{% endif %}
+{% if ep.hosts is defined and ep.hosts and ep.paths is defined and ep.paths %}
+    use_backend be_{{ ep.name }} if is_{{ ep.name }}_host is_{{ ep.name }}_path
+{% elif ep.hosts is defined and ep.hosts %}
+    use_backend be_{{ ep.name }} if is_{{ ep.name }}_host
+{% elif ep.paths is defined and ep.paths %}
+    use_backend be_{{ ep.name }} if is_{{ ep.name }}_path
+{% endif %}
+{% endfor %}
+
+    default_backend be_default_fallback
+
+# --- HTTPS Frontend (Port {{ haproxy_bind_https_port }}) ---
+# Operates in TCP mode with SNI inspection to pass TLS directly to backend webservers
+frontend fe_https
+    bind *:{{ haproxy_bind_https_port }}
+    mode tcp
+    option tcplog
+    tcp-request inspect-delay 5s
+    tcp-request content accept if { req_ssl_hello_type 1 }
+
+{% for ep in proxy_endpoints %}
+{% if ep.ssl | default(true) and ep.hosts is defined and ep.hosts %}
+    acl is_{{ ep.name }}_sni req_ssl_sni -i {{ ep.hosts | join(' ') }}
+    use_backend be_{{ ep.name }}_ssl if is_{{ ep.name }}_sni
+{% endif %}
+{% endfor %}
+
+    default_backend be_default_fallback_ssl
+
+# --- HTTP Backends ---
+{% for ep in proxy_endpoints %}
+backend be_{{ ep.name }}
+    mode http
+    balance {{ ep.balance | default('roundrobin') }}
+    option forwardfor
+{% for target in ep.targets %}
+    server {{ target.name }} {{ target.ip }}:{{ target.port | default(80) }} {% if target.check | default(true) %}check{% endif %}
+{% endfor %}
+
+{% if ep.ssl | default(true) %}
+backend be_{{ ep.name }}_ssl
+    mode tcp
+    balance {{ ep.balance | default('roundrobin') }}
+{% for target in ep.targets %}
+    server {{ target.name }} {{ target.ip }}:{{ target.ssl_port | default(443) }} {% if target.check | default(true) %}check{% endif %}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+# --- Fallback Backends (Return 404 for unmapped endpoints) ---
+backend be_default_fallback
+    mode http
+    errorfile 503 /etc/haproxy/errors/404.http
+
+backend be_default_fallback_ssl
+    mode tcp

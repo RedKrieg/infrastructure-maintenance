@@ -1,0 +1,24 @@
+---
+# ==============================================================================
+# Main Task Entry Point for webserver Role
+# ==============================================================================
+
+- name: Install Nginx, ACME.sh Prerequisites, and SSL Utilities
+  ansible.builtin.include_tasks: packages.yml
+  tags: [webserver, packages]
+
+- name: Configure UFW Firewall for Web Ports (80, 443)
+  ansible.builtin.include_tasks: firewall.yml
+  tags: [webserver, firewall]
+
+- name: Configure Generic 404 Catch-All & Real IP Parsing
+  ansible.builtin.include_tasks: default_404.yml
+  tags: [webserver, nginx]
+
+- name: Install and Configure ACME.sh Client
+  ansible.builtin.include_tasks: acme.yml
+  tags: [webserver, acme, ssl]
+
+- name: Provision Enabled Sites, Document Roots & SSL Virtual Hosts
+  ansible.builtin.include_tasks: sites.yml
+  tags: [webserver, sites, ssl]

@@ -1,0 +1,10 @@
+---
+# ==============================================================================
+# HAProxy Package Installation
+# ==============================================================================
+
+- name: Install HAProxy
+  ansible.builtin.apt:
+    name: haproxy
+    state: present
+  tags: [proxy, haproxy, packages]

@@ -1,0 +1,43 @@
+---
+# ==============================================================================
+# ACME.sh & Let's Encrypt Client Setup
+# ==============================================================================
+
+- name: Ensure ACME challenge webroot directory exists
+  ansible.builtin.file:
+    path: "{{ acme_challenge_dir }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0755"
+  tags: [webserver, acme, ssl]
+
+- name: Ensure SSL certificates directory exists
+  ansible.builtin.file:
+    path: /etc/ssl/acme.sh
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [webserver, acme, ssl]
+
+- name: Check if acme.sh is installed
+  ansible.builtin.stat:
+    path: "{{ acme_sh_install_dir }}/acme.sh"
+  register: acme_sh_stat
+  tags: [webserver, acme, ssl]
+
+- name: Install acme.sh client
+  ansible.builtin.shell:
+    cmd: "curl -sSL https://get.acme.sh | sh -s email={{ acme_email }}"
+  when: not acme_sh_stat.stat.exists
+  args:
+    creates: "{{ acme_sh_install_dir }}/acme.sh"
+  tags: [webserver, acme, ssl]
+
+- name: Configure acme.sh default CA to Let's Encrypt
+  ansible.builtin.command:
+    cmd: "{{ acme_sh_install_dir }}/acme.sh --set-default-ca --server {{ acme_default_ca }}"
+  changed_when: false
+  when: acme_sh_stat.stat.exists or not acme_sh_stat.stat.exists
+  tags: [webserver, acme, ssl]

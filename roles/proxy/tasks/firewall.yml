@@ -1,0 +1,26 @@
+---
+# ==============================================================================
+# Firewall Rules for HAProxy
+# ==============================================================================
+
+- name: Allow HTTP (port 80) through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ haproxy_bind_http_port }}"
+    proto: tcp
+  tags: [proxy, firewall, ufw]
+
+- name: Allow HTTPS (port 443) through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ haproxy_bind_https_port }}"
+    proto: tcp
+  tags: [proxy, firewall, ufw]
+
+- name: Allow HAProxy stats web port through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ haproxy_stats_port }}"
+    proto: tcp
+  when: haproxy_enable_stats | bool
+  tags: [proxy, firewall, ufw]

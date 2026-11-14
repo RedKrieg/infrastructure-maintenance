@@ -1,6 +1,6 @@
-# Headless Ubuntu Initial Setup Ansible Playbook
+# Headless Ubuntu Initial Setup, HAProxy & Webserver Suite
 
-An automated, role-based Ansible suite to provision, harden, and bootstrap fresh headless Ubuntu systems. Modularized into isolated roles with fine-grained task tagging, automated kernel & storage tuning, UFW connection throttling, SSH daemon hardening with keepalives, Vim/Tmux/Screen/Git defaults, and dedicated Python virtual environment tooling.
+An enterprise-grade, role-based Ansible solution to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Modularized into isolated roles with automated kernel & storage tuning, UFW connection rate limiting, SSH daemon hardening, Vim/Tmux/Screen/Git defaults, multi-frontend HAProxy routing, and multi-backend Nginx webservers using `acme.sh` Let's Encrypt SSL certificates with a strict generic 404 fallback.
 
 ---
 
@@ -9,43 +9,50 @@ An automated, role-based Ansible suite to provision, harden, and bootstrap fresh
 ```
 .
 ├── ansible.cfg                      # Ansible defaults (pipelining, roles_path, YAML output)
-├── inventory.ini                    # Inventory defining remote headless nodes
-├── playbook.yml                     # Main entry-point playbook orchestrating roles
+├── inventory.ini                    # Inventory defining proxies and webservers on 10/8 subnet
+├── playbook.yml                     # Main playbook orchestrating all plays and roles
 ├── vars/
 │   └── admin_users.yml              # Central users configuration file (add new admins here)
+├── group_vars/
+│   ├── proxies.yml                  # HAProxy endpoint mappings (ports, paths, targets)
+│   └── webservers.yml               # Nginx enabled sites, real_ip proxies, acme.sh config
 ├── roles/
 │   ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
 │   │   ├── defaults/main.yml
 │   │   ├── handlers/main.yml
 │   │   └── tasks/
-│   │       ├── assert.yml           # OS pre-flight validation
-│   │       ├── editor.yml           # Vim system alternative & /etc/environment
-│   │       ├── journald.yml         # 500M systemd journal disk cap
-│   │       ├── kernel_tuning.yml    # BBR, inotify, conditional swap (<4GB), SSD TRIM
-│   │       ├── maintenance.yml      # needrestart auto-restarts & 4:00 AM reboot schedule
-│   │       ├── main.yml             # Task dispatcher
-│   │       ├── packages.yml         # Package suite installation
-│   │       └── sysstat.yml          # sar historical accounting
-│   ├── security/                    # Host security & firewall isolation
+│   ├── security/                    # Host security, UFW rate limiting & SSH hardening
 │   │   ├── defaults/main.yml
 │   │   ├── handlers/main.yml
 │   │   └── tasks/
-│   │       ├── main.yml
-│   │       ├── sshd.yml             # SSH daemon hardening & server keepalives
-│   │       └── ufw.yml              # UFW firewall & connection rate limiting
-│   └── admin_users/                 # Per-user provisioning & dotfiles
+│   ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
+│   │   ├── defaults/main.yml
+│   │   ├── files/
+│   │   └── tasks/
+│   ├── proxy/                       # HAProxy load balancer role
+│   │   ├── defaults/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── tasks/
+│   │   │   ├── main.yml             # Task dispatcher
+│   │   │   ├── packages.yml         # Installs haproxy
+│   │   │   ├── firewall.yml         # Opens 80, 443, and 8404 in UFW
+│   │   │   └── config.yml           # Deploys haproxy.cfg and 404.http fallback
+│   │   └── templates/
+│   │       └── haproxy.cfg.j2       # Dynamic frontend ports/paths to targets template
+│   └── webserver/                   # Nginx, 404 catch-all, and acme.sh SSL role
 │       ├── defaults/main.yml
-│       ├── files/                   # User dotfiles & scripts
-│       │   ├── bashrc_addons
-│       │   ├── gitconfig            # push.autoSetupRemote, defaultBranch main
-│       │   ├── screenrc             # 10k scrollback, visual bell off, status bar
-│       │   ├── tmux.conf            # Mouse mode, 256 colors, 10k scrollback, vi mode
-│       │   ├── venv_helpers.bash    # Python venv tooling (mkvenv, workon, etc.)
-│       │   ├── vimrc                # Preferred Vim config with Pathogen
-│       │   └── workon-completion.bash
-│       └── tasks/
-│           ├── main.yml             # Iterates through admin_users
-│           └── user_setup.yml       # Provisions user, keys, sudo, dotfiles, ssh config
+│       ├── handlers/main.yml
+│       ├── tasks/
+│       │   ├── main.yml             # Task dispatcher
+│       │   ├── packages.yml         # Installs nginx, ssl-cert, curl, socat
+│       │   ├── firewall.yml         # Opens 80 and 443 in UFW
+│       │   ├── default_404.yml      # Removes default site, sets generic 404 and real_ip
+│       │   ├── acme.yml             # Installs acme.sh and sets default CA to Let's Encrypt
+│       │   └── sites.yml            # Creates docroots, bootstrap/real certs, vhosts
+│       └── templates/
+│           ├── default_404.conf.j2  # Generic 404 catch-all default_server block
+│           ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
+│           └── site.conf.j2         # Virtual host with HTTP-01 challenge & SSL
 ├── authorized_keys                  # Default public key for redkrieg
 ├── bashrc_addons                    # Root copy of shell addons
 ├── gitconfig                        # Root copy of global git defaults
@@ -59,114 +66,159 @@ An automated, role-based Ansible suite to provision, harden, and bootstrap fresh
 
 ---
 
-## The Three Isolated Roles
+## Example Architecture: 2 Proxies & 3 Webservers (10.0.0.0/8 Subnet)
 
-### 1. `system_base`
-- **Package Suite**: Installs essential sysadmin diagnostics (`iotop`, `lm-sensors`, `iftop`, `iptraf-ng`, `htop`, `btop`, `sysstat`, `strace`, `lsof`, `ncdu`, `tcpdump`, `mtr-tiny`, `iperf3`, `nmap`, `socat`, `smartmontools`, `nvme-cli`, `pciutils`, `usbutils`, `hdparm`, `tmux`, `screen`, `tree`, `jq`, `ripgrep`, `fd-find`, `rsync`, `unzip`, `build-essential`, `python3-venv`, `pipx`).
-- **Default Editor**: Configures Vim as the system-wide alternative and exports `EDITOR=vim` and `VISUAL=vim`.
-- **Maintenance & Automatic Daemon Restarts**:
-  - Configures `needrestart` (`/etc/needrestart/conf.d/auto-restart.conf`) for non-interactive automatic daemon restarts after library updates, preventing interactive curses prompts from hanging automation.
-  - Configures `unattended-upgrades` to perform scheduled reboots for security updates at **`04:00 AM` local time** (`/etc/apt/apt.conf.d/52unattended-upgrades-reboot`).
-- **Kernel, Memory & Storage Tuning**:
-  - **BBR Congestion Control**: Loads `tcp_bbr` and configures `net.core.default_qdisc = fq` and `net.ipv4.tcp_congestion_control = bbr` for lower latency and improved throughput.
-  - **Inotify Limits**: Increases `fs.inotify.max_user_watches = 524288` and `fs.inotify.max_user_instances = 512` for development tools and file watchers.
-  - **Conditional Swap**: Inspects system memory; if total RAM is **under 4GB**, automatically creates, formats, mounts, and activates a **2GB swapfile** (`/swapfile`) with `vm.swappiness = 10` and `vm.vfs_cache_pressure = 50`. If the system has 4GB or more RAM, swap creation is skipped.
-  - **Physical Hardware SSD TRIM**: Checks virtualization facts; if the host is running on **bare-metal hardware** (`ansible_virtualization_role == 'host'`), enables `fstrim.timer` to automatically reclaim SSD blocks.
-  - **`fd` Symlink**: Symlinks `/usr/local/bin/fd -> /usr/bin/fdfind`.
+The included configuration illustrates an active-active frontend proxy architecture forwarding traffic to a pool of three backend webservers:
 
-### 2. `security`
-- **UFW Firewall with Rate Limiting**:
-  - Sets default inbound policy to `deny` and outbound to `allow`.
-  - Configures `ufw limit 22/tcp` and allows OpenSSH profile.
-- **SSH Daemon Hardening & Server Keepalives**:
-  - Deploys `/etc/ssh/sshd_config.d/01-hardening.conf`.
-  - Enforces `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`, `KbdInteractiveAuthentication no`, `X11Forwarding no`, and `MaxAuthTries 10`.
-  - Configures server-side keepalives: `ClientAliveInterval 120` and `ClientAliveCountMax 3` (drops unresponsive connections after 6 minutes of silence).
-  - *Note: `fail2ban` and `/etc/pam.d/su` are not used.*
+```
+                          Internet / Clients
+                                  │
+                  ┌───────────────┴───────────────┐
+                  ▼                               ▼
+       ┌────────────────────┐           ┌────────────────────┐
+       │      proxy-01      │           │      proxy-02      │
+       │    (10.0.1.10)     │           │    (10.0.1.20)     │
+       │      HAProxy       │           │      HAProxy       │
+       └──────────┬─────────┘           └──────────┬─────────┘
+                  │                                │
+                  └───────────────┬────────────────┘
+                                  ▼
+         ┌────────────────────────┼────────────────────────┐
+         ▼                        ▼                        ▼
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│      web-01      │    │      web-02      │    │      web-03      │
+│   (10.0.1.11)    │    │   (10.0.1.12)    │    │   (10.0.1.13)    │
+│ Nginx + acme.sh  │    │ Nginx + acme.sh  │    │ Nginx + acme.sh  │
+└──────────────────┘    └──────────────────┘    └──────────────────┘
+```
 
-### 3. `admin_users`
-- Provisions all users listed in `vars/admin_users.yml`.
-- For each user:
-  - Account and primary group creation with `sudo` group membership.
-  - Passwordless sudo configuration in `/etc/sudoers.d/<username>`.
-  - Authorized SSH public keys injection.
-  - SSH client multiplexing: `~/.ssh/config` with `ControlMaster auto`, `ControlPath ~/.ssh/control/%C`, and `ControlPersist 300`.
-  - Preferred Vim configuration with `pathogen.vim` setup.
-  - Python virtual environment tooling (`~/.venv_helpers.bash` with `mkvenv`, `workon`, `lsvenv`, `rmvenv`, `cdp`) and `~/Projects/`.
-  - Bash completion for `workon`, `rmvenv`, and `cdp`.
-  - **`~/.tmux.conf`**: Mouse mode enabled, 256 colors, 10,000-line scrollback buffer, base-index 1, and Vi keybindings.
-  - **`~/.screenrc`**: 10,000-line scrollback buffer, visual bell disabled, altscreen enabled, and clean status line.
-  - **`~/.gitconfig`**: Includes `push.autoSetupRemote = true` (automatic upstream branch creation on push), `init.defaultBranch = main`, `pull.rebase = false`, and `core.editor = vim`.
+### IP Allocations:
+- **Frontend Proxies**:
+  - `proxy-01`: `10.0.1.10`
+  - `proxy-02`: `10.0.1.20`
+- **Backend Webservers**:
+  - `web-01`: `10.0.1.11`
+  - `web-02`: `10.0.1.12`
+  - `web-03`: `10.0.1.13`
 
 ---
 
-## UFW Connection Rate Limiting Explained
+## Role 1: `proxy` (HAProxy Load Balancer)
 
-### How it Works
-When UFW applies `ufw limit 22/tcp`, it programs the Linux kernel netfilter/iptables subsystem using the `recent` module:
-- It tracks incoming connection attempts (`SYN` packets) per source IP address.
-- It calculates connections over a **sliding window of 30 seconds**.
-- If an IP address initiates **6 or more connections within 30 seconds**, the kernel immediately begins dropping all new connection attempts from that IP.
+Configured via **`group_vars/proxies.yml`** (or `roles/proxy/defaults/main.yml`).
 
-### How Long is the Block?
-- **Duration**: The block lasts for **30 seconds from the last rejected connection attempt**.
-- Because the kernel uses a sliding window, if an automated brute-force bot continuously sends connection attempts, each attempt resets the 30-second timer, keeping the attacker blocked indefinitely.
-- Once the IP stops connecting for **30 seconds**, the counter drops below 6 and normal access is instantly restored. Legitimate administrators are never permanently locked out by a typo or connection glitch.
+### Features:
+1. **Frontend Port and Path Mapping**:
+   Maps incoming requests by domain name, URL path, and port to backend target pools.
+2. **TLS Routing**:
+   - On Port 80 (`mode http`): Forwards HTTP requests to webservers, injects `X-Forwarded-For` and `X-Forwarded-Proto`, and routes `/.well-known/acme-challenge/` directly to backend webroots for Let's Encrypt validation.
+   - On Port 443 (`mode tcp`): Inspects the TLS Client Hello SNI (`req_ssl_sni`) and routes the encrypted stream directly to the target webserver pool. The backend webservers terminate TLS using their own `acme.sh` certificates.
+3. **Built-in HAProxy Stats Dashboard**:
+   Accessible on port `8404` at `/stats` with authentication.
+4. **Fallback 404**:
+   Unmapped requests hitting the proxy receive a clean HTTP 404.
 
----
-
-## Managing Administrative Users
-
-All administrative accounts and SSH public keys are managed in **`vars/admin_users.yml`**:
-
+### Example Endpoint Mapping (`group_vars/proxies.yml`):
 ```yaml
-admin_users:
-  - name: redkrieg
-    shell: /bin/bash
-    sudo_nopasswd: true
-    authorized_keys:
-      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID9pb/LNL4+4KU8xPbibpuTkZb/0RIz/98clnXrtxcHG redkrieg@cortex-1"
+proxy_endpoints:
+  - name: "app1_endpoint"
+    frontend_port: 80
+    ssl: true
+    hosts:
+      - "app1.example.com"
+      - "www.app1.example.com"
+    paths:
+      - "/app1"
+      - "/api"
+    balance: "roundrobin"
+    targets:
+      - { name: "web-01", ip: "10.0.1.11", port: 80, ssl_port: 443, check: true }
+      - { name: "web-02", ip: "10.0.1.12", port: 80, ssl_port: 443, check: true }
+      - { name: "web-03", ip: "10.0.1.13", port: 80, ssl_port: 443, check: true }
 
-  # To add another administrator:
-  # - name: alex
-  #   shell: /bin/bash
-  #   sudo_nopasswd: true
-  #   authorized_keys:
-  #     - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... alex@workstation"
+  - name: "app2_endpoint"
+    frontend_port: 80
+    ssl: true
+    hosts:
+      - "app2.example.com"
+    paths:
+      - "/"
+    balance: "roundrobin"
+    targets:
+      - { name: "web-02", ip: "10.0.1.12", port: 80, ssl_port: 443, check: true }
+      - { name: "web-03", ip: "10.0.1.13", port: 80, ssl_port: 443, check: true }
 ```
 
 ---
 
-## How to Run the Playbook
+## Role 2: `webserver` (Nginx, 404 Catch-All & acme.sh SSL)
 
-### Full Deployment
-Execute against all hosts in `inventory.ini`:
+Configured via **`group_vars/webservers.yml`** (or `roles/webserver/defaults/main.yml`).
+
+### Features:
+1. **Generic 404 Catch-All**:
+   Removes the default Nginx welcome site and installs `/etc/nginx/conf.d/00-default-404.conf`. Any visitor accessing via direct IP address, unknown hostname, or a disabled site receives an instant `404 Not Found\n`.
+2. **HAProxy Real IP Integration**:
+   Installs `/etc/nginx/conf.d/real_ip.conf` configuring `set_real_ip_from` for each proxy (`10.0.1.10`, `10.0.1.20`, `10.0.0.0/8`). Nginx access logs and application headers reflect the visitor's genuine remote IP.
+3. **acme.sh & Let's Encrypt**:
+   - Installs `acme.sh` in `/root/.acme.sh` with Let's Encrypt as the default CA.
+   - Configures `/var/www/letsencrypt` as the HTTP-01 challenge webroot.
+   - Generates initial self-signed bootstrap certificates so Nginx starts immediately on fresh servers without certificate errors.
+   - When `acme_issue_certs: true`, requests valid certificates from Let's Encrypt and sets up daily automatic renewal hooks.
+4. **Virtual Hosts**:
+   Generates Nginx virtual hosts in `/etc/nginx/sites-available/` with HTTP-to-HTTPS redirection and document roots in `/var/www/<sitename>`.
+
+### Example Sites Configuration (`group_vars/webservers.yml`):
+```yaml
+haproxy_frontend_ips:
+  - "10.0.1.10"
+  - "10.0.1.20"
+  - "10.0.0.0/8"
+
+webserver_sites:
+  - name: "app1"
+    domain: "app1.example.com"
+    aliases:
+      - "www.app1.example.com"
+    root: "/var/www/app1"
+    index: "index.html index.htm"
+    enabled: true
+    ssl_enabled: true
+
+  - name: "app2"
+    domain: "app2.example.com"
+    root: "/var/www/app2"
+    index: "index.html index.htm"
+    enabled: true
+    ssl_enabled: true
+```
+
+---
+
+## How to Run
+
+### 1. Run the Entire Suite (Base, Security, Users, Proxies, Webservers)
 ```bash
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-Target a single ad-hoc host directly:
+### 2. Run Only Proxies or Only Webservers
 ```bash
-ansible-playbook -i '192.168.1.100,' -u ubuntu playbook.yml
+# Provision HAProxy load balancers only:
+ansible-playbook -i inventory.ini playbook.yml --tags proxy
+
+# Provision Webservers & SSL only:
+ansible-playbook -i inventory.ini playbook.yml --tags webserver
 ```
 
-### Fast Selective Execution Using Tags
-
-Because tasks are tagged, you can run isolated sections of the playbook:
-
-| Goal | Command |
-| :--- | :--- |
-| **Add / Update Admin Users Only** (skips package installation and system tuning) | `ansible-playbook -i inventory.ini playbook.yml --tags users` |
-| **Update User Dotfiles Only** (`.tmux.conf`, `.screenrc`, `.gitconfig`, `.vimrc`) | `ansible-playbook -i inventory.ini playbook.yml --tags dotfiles` |
-| **Update Firewall & SSH Daemon Settings Only** | `ansible-playbook -i inventory.ini playbook.yml --tags security` |
-| **Run Kernel & Hardware Tuning Only** (BBR, Swap, TRIM, Inotify) | `ansible-playbook -i inventory.ini playbook.yml --tags tuning` |
-| **Install / Update Packages Only** | `ansible-playbook -i inventory.ini playbook.yml --tags packages` |
-| **Perform a Dry Run (Check Mode)** | `ansible-playbook -i inventory.ini playbook.yml --check --diff` |
-
----
-
-## Post-Install Connection
-Log in as any provisioned administrator:
+### 3. Run Targeted Sub-Tasks
 ```bash
-ssh redkrieg@192.168.1.100
+# Update HAProxy routing endpoints:
+ansible-playbook -i inventory.ini playbook.yml --tags haproxy
+
+# Update Nginx virtual hosts and sites:
+ansible-playbook -i inventory.ini playbook.yml --tags sites
+
+# Update Admin Users only:
+ansible-playbook -i inventory.ini playbook.yml --tags users
 ```

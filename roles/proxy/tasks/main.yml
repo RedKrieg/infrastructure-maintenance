@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# Main Task Entry Point for proxy Role
+# ==============================================================================
+
+- name: Install HAProxy Packages
+  ansible.builtin.include_tasks: packages.yml
+  tags: [proxy, packages]
+
+- name: Configure UFW Firewall for Proxy Ports
+  ansible.builtin.include_tasks: firewall.yml
+  tags: [proxy, firewall]
+
+- name: Deploy HAProxy Configuration & Manage Service
+  ansible.builtin.include_tasks: config.yml
+  tags: [proxy, haproxy]

@@ -1,5 +1,12 @@
 ---
-- name: Configure Headless Ubuntu Systems
+# ==============================================================================
+# Playbook: Headless Ubuntu Provisioning, Proxies & Webservers
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Play 1: Base System, Security & User Provisioning for ALL Nodes
+# ------------------------------------------------------------------------------
+- name: Provision Core Systems, Security & Admin Users
   hosts: all
   become: true
   gather_facts: true
@@ -16,3 +23,27 @@
 
     - role: admin_users
       tags: [admin_users, users, dotfiles, venv]
+
+# ------------------------------------------------------------------------------
+# Play 2: Frontend HAProxy Load Balancers
+# ------------------------------------------------------------------------------
+- name: Provision Frontend HAProxy Proxies
+  hosts: proxies
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: proxy
+      tags: [proxy, haproxy]
+
+# ------------------------------------------------------------------------------
+# Play 3: Backend Webservers (Nginx, Default 404 Catch-All, acme.sh)
+# ------------------------------------------------------------------------------
+- name: Provision Backend Webservers
+  hosts: webservers
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: webserver
+      tags: [webserver, nginx, ssl, acme]
