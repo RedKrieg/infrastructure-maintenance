@@ -27,8 +27,8 @@ teleport_trusted_subnets:
   - "127.0.0.1"
 
 # Lead Admin user details
-teleport_admin_user: "redkrieg"
-teleport_admin_email: "redkrieg@gmail.com"
+teleport_admin_user: "admin"
+teleport_admin_email: "admin@example.com"
 
 # Example Junior Admin user (requires JIT request for sudo elevation)
 teleport_example_user: "junior"

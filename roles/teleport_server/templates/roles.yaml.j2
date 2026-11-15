@@ -16,7 +16,13 @@ spec:
     max_session_ttl: 12h
   allow:
     logins:
-      - redkrieg
+{% if admin_users is defined and admin_users | length > 0 %}
+{% for u in admin_users %}
+      - {{ u.name }}
+{% endfor %}
+{% else %}
+      - {{ teleport_admin_user | default('admin') }}
+{% endif %}
       - ubuntu
       - root
       - '{% raw %}{{internal.logins}}{% endraw %}'

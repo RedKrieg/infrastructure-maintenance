@@ -98,7 +98,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │   └── templates/
 │   │       ├── teleport.yaml.j2     # Auth & Proxy configuration
 │   │       ├── roles.yaml.j2        # Roles (lead-admin, junior, elevated-sudo)
-│   │       └── users.yaml.j2        # Users (redkrieg, junior)
+│   │       └── users.yaml.j2        # Users (admin, junior)
 │   └── teleport_node/               # Teleport SSH Node Service role (all cluster nodes)
 │       ├── defaults/main.yml        # Auto-discovers Teleport server & join token
 │       ├── handlers/main.yml        # Restart teleport handler
@@ -156,11 +156,11 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
 
 | Provider | Layer 4 Ingress Load Balancer | Fault Domain / Distribution | Private Subnet Example | Inventory Template |
 | :--- | :--- | :--- | :--- | :--- |
-| **AWS EC2** | **AWS Network Load Balancer (NLB)** (TCP 80/443 with cross-zone load balancing) | Multiple Availability Zones (`us-east-1a`, `1b`, `1c`) | `172.31.0.0/16` | [inventory.aws.ini](file:///home/redkrieg/Projects/ansible-stuff/examples/inventories/inventory.aws.ini) |
-| **Google Cloud (GCP)** | **Regional External TCP/UDP Passthrough Network Load Balancer** | Multiple Compute Engine Zones (`us-central1-a`, `1-b`, `1-c`) | `10.128.0.0/20` | [inventory.gcp.ini](file:///home/redkrieg/Projects/ansible-stuff/examples/inventories/inventory.gcp.ini) |
-| **OpenStack** | **Octavia Load Balancer** (TCP Amphora listener) or **Keepalived VIP** | Nova Server Group (`anti-affinity`) across hypervisors | `192.168.100.0/24` | [inventory.openstack.ini](file:///home/redkrieg/Projects/ansible-stuff/examples/inventories/inventory.openstack.ini) |
-| **Oracle Cloud (OCI)** | **OCI Network Load Balancer (NLB)** (TCP listener) | Multiple Fault Domains (FD-1, FD-2, FD-3) | `10.0.0.0/16` | [inventory.ini](file:///home/redkrieg/Projects/ansible-stuff/inventory.ini) |
-| **Bare Metal / On-Prem** | **Keepalived VRRP Floating IP** or **BGP Anycast (ECMP)** | Separate physical racks / PDUs | `10.x`, `172.16.x`, `192.168.x` | [inventory.ini](file:///home/redkrieg/Projects/ansible-stuff/inventory.ini) |
+| **AWS EC2** | **AWS Network Load Balancer (NLB)** (TCP 80/443 with cross-zone load balancing) | Multiple Availability Zones (`us-east-1a`, `1b`, `1c`) | `172.31.0.0/16` | [inventory.aws.ini](examples/inventories/inventory.aws.ini) |
+| **Google Cloud (GCP)** | **Regional External TCP/UDP Passthrough Network Load Balancer** | Multiple Compute Engine Zones (`us-central1-a`, `1-b`, `1-c`) | `10.128.0.0/20` | [inventory.gcp.ini](examples/inventories/inventory.gcp.ini) |
+| **OpenStack** | **Octavia Load Balancer** (TCP Amphora listener) or **Keepalived VIP** | Nova Server Group (`anti-affinity`) across hypervisors | `192.168.100.0/24` | [inventory.openstack.ini](examples/inventories/inventory.openstack.ini) |
+| **Oracle Cloud (OCI)** | **OCI Network Load Balancer (NLB)** (TCP listener) | Multiple Fault Domains (FD-1, FD-2, FD-3) | `10.0.0.0/16` | [inventory.ini](inventory.ini) |
+| **Bare Metal / On-Prem** | **Keepalived VRRP Floating IP** or **BGP Anycast (ECMP)** | Separate physical racks / PDUs | `10.x`, `172.16.x`, `192.168.x` | [inventory.ini](inventory.ini) |
 
 ### Universal Network & Firewall Compatibility
 - **RFC 1918 Private Subnets**: Out of the box, UFW and Nginx `real_ip` trust all standard private subnets (`10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`), allowing seamless operation regardless of private VPC CIDR blocks.
@@ -304,7 +304,7 @@ The suite includes complete **[Teleport](https://goteleport.com/)** integration 
 * **Teleport SSH Node Service (`roles/teleport_node`)**:
   - Runs on all cluster nodes (`proxies`, `webservers`, `monitoring`).
   - Establishes an outbound reverse tunnel back to the Teleport Proxy—nodes require **zero inbound open SSH ports** to the public internet.
-  - **Automatic Host User Provisioning (`create_host_user_mode: keep`)**: Target OS user accounts (like `junior` or `redkrieg`) are automatically created on the fly when the user connects.
+  - **Automatic Host User Provisioning (`create_host_user_mode: keep`)**: Target OS user accounts (like `junior` or `admin`) are automatically created on the fly when the user connects.
 
 ### 2. Sudo Management with Just-In-Time (JIT) Access Requests
 
@@ -312,7 +312,7 @@ Permissions are managed centrally through declarative Teleport roles without edi
 
 | Role | Default Sudo | Escalation Capability | Description |
 | :--- | :--- | :--- | :--- |
-| **`lead-admin`** (`redkrieg`) | `ALL = (ALL) NOPASSWD: ALL` | Approver | Persistent sudo across all nodes. Can review and approve access requests. |
+| **`lead-admin`** (`admin`) | `ALL = (ALL) NOPASSWD: ALL` | Approver | Persistent sudo across all nodes. Can review and approve access requests. |
 | **`junior`** (`junior`) | **None** (unprivileged) | Can request `elevated-sudo` | Zero sudo capability on initial login. Standard commands only. |
 | **`elevated-sudo`** | `ALL = (ALL) NOPASSWD: ALL` | 1-hour expiration | Temporary escalation target granted only upon approval. |
 

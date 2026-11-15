@@ -14,7 +14,7 @@ haproxy_timeout_server: "50000ms"
 # SSL & Certificates Configuration (SSL is decoded/terminated on the proxies)
 haproxy_certs_dir: "/etc/haproxy/certs"
 acme_sh_install_dir: "/root/.acme.sh"
-acme_email: "{{ (admin_users | default([]) | selectattr('email', 'defined') | map(attribute='email') | first) | default('redkrieg@gmail.com') }}"
+acme_email: "{{ (admin_users | default([]) | selectattr('email', 'defined') | map(attribute='email') | first) | default('admin@example.com') }}"
 acme_default_ca: "letsencrypt"
 acme_standalone_port: 8888
 

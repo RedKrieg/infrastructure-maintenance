@@ -17,12 +17,12 @@
 # ==============================================================================
 
 admin_users:
-  - name: redkrieg
-    email: redkrieg@gmail.com
+  - name: admin
+    email: admin@example.com
     shell: /bin/bash
     sudo_nopasswd: true
     authorized_keys:
-      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID9pb/LNL4+4KU8xPbibpuTkZb/0RIz/98clnXrtxcHG redkrieg@cortex-1"
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG5pbmphYWRtaW5leGFtcGxla2V5ZG9ub3R1c2U= admin@example.com"
     # Optional password for authenticated services (defaults to cluster haproxy_stats_password)
     # Initial OS account passwords are automatically randomized upon initial creation.
 
