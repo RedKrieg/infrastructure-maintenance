@@ -18,6 +18,8 @@
     append: true
     shell: "{{ current_admin_user.shell | default('/bin/bash') }}"
     create_home: true
+    password: "{{ (current_admin_user.password | default(lookup('ansible.builtin.password', '/dev/null length=32 chars=ascii_letters,digits,hexdigits'))) | password_hash('sha512') }}"
+    update_password: on_create
     state: present
   tags: [users]
 
@@ -134,6 +136,17 @@
     owner: "{{ current_admin_user.name }}"
     group: "{{ current_admin_user.name }}"
     mode: "0644"
+  tags: [users, dotfiles, git]
+
+- name: "Configure git user identity for {{ current_admin_user.name }}"
+  ansible.builtin.command:
+    cmd: "git config --global {{ item.name }} '{{ item.value }}'"
+  become_user: "{{ current_admin_user.name }}"
+  loop:
+    - { name: "user.name", value: "{{ current_admin_user.name }}" }
+    - { name: "user.email", value: "{{ current_admin_user.email }}" }
+  when: current_admin_user.email is defined
+  changed_when: false
   tags: [users, dotfiles, git]
 
 - name: "Deploy ~/.bashrc_addons for {{ current_admin_user.name }}"

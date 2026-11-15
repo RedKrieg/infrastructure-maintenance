@@ -23,9 +23,15 @@ scrape_configs:
   - job_name: 'haproxy'
     scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
     metrics_path: {{ prometheus_haproxy_metrics_path | default('/metrics') }}
+{% if admin_users is defined and admin_users | length > 0 %}
+{% set first_admin = admin_users[0] %}
+{% set auth_user = first_admin.name %}
+{% set auth_pass = first_admin.service_password | default(first_admin.password | default(haproxy_stats_password | default(prometheus_haproxy_password))) %}
+{% else %}
 {% set sample_proxy = groups['proxies'][0] %}
 {% set auth_user = hostvars[sample_proxy]['haproxy_stats_user'] | default(prometheus_haproxy_user) %}
 {% set auth_pass = hostvars[sample_proxy]['haproxy_stats_password'] | default(prometheus_haproxy_password) %}
+{% endif %}
 {% if auth_user and auth_pass %}
     basic_auth:
       username: "{{ auth_user }}"

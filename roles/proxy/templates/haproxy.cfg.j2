@@ -47,7 +47,15 @@ listen stats
     stats uri {{ haproxy_stats_uri }}
     stats refresh {{ haproxy_stats_refresh }}
     stats show-node
+{% if admin_users is defined and admin_users | length > 0 %}
+    # Authenticated service accounts created from admin list
+{% for admin in admin_users %}
+{% set admin_pass = admin.service_password | default(admin.password | default(haproxy_stats_password)) %}
+    stats auth {{ admin.name }}:{{ admin_pass }}
+{% endfor %}
+{% else %}
     stats auth {{ haproxy_stats_user }}:{{ haproxy_stats_password }}
+{% endif %}
 {% if haproxy_enable_prometheus | bool %}
 
     # Native Prometheus Metrics Exporter (same ACL protection as stats)

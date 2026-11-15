@@ -6,8 +6,8 @@
 /var/log/haproxy-*.log
 /var/log/acme-*.log
 {
-    weekly
-    rotate {{ haproxy_logrotate_rotate | default(8) }}
+    {{ haproxy_logrotate_interval | default('daily') }}
+    rotate {{ haproxy_logrotate_rotate | default(60) }}
     missingok
     notifempty
     compress

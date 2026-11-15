@@ -11,6 +11,7 @@ default_editor_bin: "/usr/bin/vim.basic"
 enable_sysstat_collection: true
 enable_journald_limit: true
 journald_max_use: "500M"
+journald_max_retention_sec: "60day"
 enable_fd_symlink: true
 system_timezone: "UTC"
 
