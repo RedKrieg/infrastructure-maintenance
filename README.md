@@ -34,8 +34,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │   └── tasks/
 │   ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
 │   │   ├── defaults/main.yml
-│   │   ├── files/                   # Dotfiles, shell addons, completions & authorized keys
-│   │   │   ├── authorized_keys      # Backup public key for redkrieg
+│   │   ├── files/                   # Dotfiles, shell addons & completions
 │   │   │   ├── bashrc_addons        # Custom bash additions, aliases, and loaders
 │   │   │   ├── gitconfig            # Git configuration with push.autoSetupRemote
 │   │   │   ├── screenrc             # GNU Screen configuration
