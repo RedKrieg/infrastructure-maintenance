@@ -8,13 +8,13 @@ enable_grafana: true
 
 # Network & Service Binding
 grafana_port: 3000
-grafana_domain: "localhost"
-grafana_root_url: "%(protocol)s://%(domain)s:%(http_port)s/"
+grafana_domain: "{{ grafana_fqdn | default('grafana.' ~ (domain_name | default('localhost'))) }}"
+grafana_root_url: "https://{{ grafana_fqdn | default('grafana.' ~ (domain_name | default('localhost'))) }}/"
 
 # Administrative Credentials (use Ansible Vault in production)
-grafana_admin_user: "admin"
+grafana_admin_user: "{{ (admin_users[0].name) if (admin_users is defined and admin_users | length > 0) else 'admin' }}"
 grafana_admin_password: "{{ vault_grafana_admin_password | default('SecureGrafanaPass123!') }}"
-grafana_cookie_secure: false
+grafana_cookie_secure: true
 
 # Upstream Prometheus Datasource URL
 grafana_prometheus_url: "http://127.0.0.1:{{ prometheus_port | default(9090) }}"

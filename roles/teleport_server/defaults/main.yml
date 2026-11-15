@@ -5,7 +5,7 @@
 
 # Teleport Package and Repository
 teleport_version: "16"
-teleport_cluster_name: "teleport.cluster.local"
+teleport_cluster_name: "teleport.{{ domain_name | default('cluster.local') }}"
 
 # Teleport Network Ports
 teleport_proxy_web_port: 3080
@@ -14,8 +14,8 @@ teleport_proxy_tunnel_port: 3024
 teleport_auth_service_port: 3025
 
 # Public address advertised by the Teleport proxy
-teleport_public_addr: "{{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}:3080"
-teleport_ssh_public_addr: ""
+teleport_public_addr: "teleport.{{ domain_name | default('cluster.local') }}:443"
+teleport_ssh_public_addr: "teleport.{{ domain_name | default('cluster.local') }}:3023"
 
 # Secret static node join token (shared with teleport_node role, managed by Ansible Vault)
 teleport_auth_token: "{{ vault_teleport_auth_token | default('teleport-super-secure-join-token-secret-change-me') }}"
@@ -30,9 +30,9 @@ teleport_trusted_subnets:
 # Administrator CIDR subnets allowed to access Teleport Web UI (3080) and SSH Proxy (3023)
 teleport_admin_trusted_cidrs: "{{ admin_trusted_cidrs | default(['0.0.0.0/0']) }}"
 
-# Lead Admin user details
-teleport_admin_user: "admin"
-teleport_admin_email: "admin@example.com"
+# Lead Admin user details (inherits from admin_users as SSOT)
+teleport_admin_user: "{{ (admin_users[0].name) if (admin_users is defined and admin_users | length > 0) else 'admin' }}"
+teleport_admin_email: "{{ (admin_users[0].email) if (admin_users is defined and admin_users | length > 0) else 'admin@example.com' }}"
 
 # Example Junior Admin user (requires JIT request for sudo elevation)
 teleport_example_user: "junior"

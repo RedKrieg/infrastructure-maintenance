@@ -41,9 +41,9 @@ prometheus_alertmanager_config_file: "/etc/prometheus/alertmanager.yml"
 prometheus_alertmanager_targets:
   - "127.0.0.1:9093"
 
-# Alertmanager Email Notification Settings to Admins
+# Alertmanager Email Notification Settings to Admins (inherits from domain_name & admin_users as SSOT)
 alertmanager_email_enabled: true
-alertmanager_email_from: "alerts@example.com"
+alertmanager_email_from: "alerts@{{ domain_name | default('example.com') }}"
 # Defaults to emails of admin_users or fallback
 alertmanager_email_to: "{{ admin_users | map(attribute='email') | select('defined') | list if (admin_users is defined and admin_users | map(attribute='email') | select('defined') | list | length > 0) else ['admin@example.com'] }}"
 alertmanager_smtp_smarthost: "localhost:25"
