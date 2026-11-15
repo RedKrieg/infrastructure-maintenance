@@ -16,11 +16,7 @@ prometheus_evaluation_interval: "15s"
 prometheus_retention_time: "60d"
 
 # Trusted CIDR subnets allowed to access Prometheus Web UI / API on port 9090
-prometheus_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
-  - "127.0.0.1"
+prometheus_trusted_subnets: "{{ admin_trusted_cidrs | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1']) }}"
 
 # Self-monitoring
 prometheus_scrape_self: true

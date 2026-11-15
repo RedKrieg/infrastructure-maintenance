@@ -43,3 +43,11 @@
   loop: "{{ groups['proxies'] | default([]) }}"
   when: groups['proxies'] is defined
   tags: [proxy, firewall, ufw]
+
+- name: Allow Teleport SSH proxy (port 3023) through UFW
+  community.general.ufw:
+    rule: allow
+    port: "3023"
+    proto: tcp
+  when: (groups['teleport_servers'] is defined and groups['teleport_servers'] | length > 0) or (groups['teleport'] is defined and groups['teleport'] | length > 0)
+  tags: [proxy, firewall, ufw]

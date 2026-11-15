@@ -142,6 +142,32 @@ frontend fe_https
 {% endfor %}
 {% endif %}
 
+{% set tp_hosts = groups['teleport_servers'] | default(groups['teleport'] | default([])) %}
+{% if tp_hosts | length > 0 %}
+{% for host in tp_hosts %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set fqdn = hostvars[host]['external_fqdn'] | default(teleport_fqdn | default('teleport.' ~ domain_name)) %}
+    # Route for Teleport Web UI / Proxy: {{ fqdn }} (Protected by Admin ACL)
+    acl is_{{ clean_name }} hdr(host) -i {{ fqdn }}
+    acl is_allowed_admin_tp src -f /etc/haproxy/stats_whitelist.lst
+    http-request deny deny_status 403 if is_{{ clean_name }} !is_allowed_admin_tp
+    use_backend be_{{ clean_name }} if is_{{ clean_name }}
+{% endfor %}
+{% endif %}
+
+{% if groups['monitoring'] is defined and groups['monitoring'] | length > 0 %}
+{% for host in groups['monitoring'] %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
+{% set monitoring_host_fqdn = hostvars[host]['monitoring_fqdn'] | default(monitoring_fqdn | default('monitoring.' ~ domain_name)) %}
+    # Route for Grafana & Monitoring UI: {{ grafana_host_fqdn }} / {{ monitoring_host_fqdn }} (Protected by Admin ACL)
+    acl is_{{ clean_name }} hdr(host) -i {{ grafana_host_fqdn }} {{ monitoring_host_fqdn }}
+    acl is_allowed_admin_mon src -f /etc/haproxy/stats_whitelist.lst
+    http-request deny deny_status 403 if is_{{ clean_name }} !is_allowed_admin_mon
+    use_backend be_{{ clean_name }} if is_{{ clean_name }}
+{% endfor %}
+{% endif %}
+
     default_backend be_default_404
 
 # --- ACME Standalone Challenge Backend ---
@@ -190,6 +216,63 @@ backend be_{{ clean_name }}
 backend be_default_404
     mode http
     errorfile 503 /etc/haproxy/errors/404.http
+
+# --- Dedicated Teleport Web UI / Proxy Backends ---
+{% set tp_hosts = groups['teleport_servers'] | default(groups['teleport'] | default([])) %}
+{% if tp_hosts | length > 0 %}
+{% for host in tp_hosts %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+backend be_{{ clean_name }}
+    mode http
+    balance roundrobin
+    option forwardfor
+    http-request set-header X-Forwarded-Proto https
+    http-request set-header X-Forwarded-Port 443
+    # Teleport Web UI operates on internal port 3080 over TLS
+    server {{ host }} {{ target_ip }}:3080 ssl verify none check inter 5s fall 3 rise 2
+{% endfor %}
+{% endif %}
+
+# --- Dedicated Monitoring & Grafana UI Backends ---
+{% if groups['monitoring'] is defined and groups['monitoring'] | length > 0 %}
+{% for host in groups['monitoring'] %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
+backend be_{{ clean_name }}
+    mode http
+    balance roundrobin
+    option forwardfor
+    http-request set-header Host {{ grafana_host_fqdn }}
+    http-request set-header X-Forwarded-Proto https
+    # Grafana Web UI operates on internal HTTP port 3000
+    server {{ host }} {{ target_ip }}:3000 check inter 5s fall 3 rise 2
+{% endfor %}
+{% endif %}
+
+# --- Dedicated Teleport SSH Proxy Frontend (Port 3023 TCP) ---
+{% set tp_hosts = groups['teleport_servers'] | default(groups['teleport'] | default([])) %}
+{% if tp_hosts | length > 0 %}
+frontend fe_teleport_ssh
+{% if haproxy_enable_dual_stack | default(true) | bool %}
+    bind :::3023 v4v6
+{% else %}
+    bind *:3023
+{% endif %}
+    mode tcp
+    option tcplog
+    timeout client 1h
+    acl is_allowed_admin_tcp src -f /etc/haproxy/stats_whitelist.lst
+    tcp-request connection reject unless is_allowed_admin_tcp
+    default_backend be_teleport_ssh
+
+backend be_teleport_ssh
+    mode tcp
+    timeout server 1h
+    timeout connect 5s
+    server {{ tp_hosts[0] }} {{ hostvars[tp_hosts[0]]['ansible_host'] | default(tp_hosts[0]) }}:3023 check
+{% endif %}
 
 {% if haproxy_enable_coraza_waf | default(true) | bool %}
 # --- Coraza SPOA Backend ---

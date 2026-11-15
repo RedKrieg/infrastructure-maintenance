@@ -21,9 +21,17 @@
     mode: "0700"
   tags: [proxy, ssl, certs]
 
-- name: Build list of external FQDNs from webservers group
+- name: Build list of external FQDNs from cluster groups
   ansible.builtin.set_fact:
-    target_fqdns: "{{ groups['webservers'] | default([]) | map('extract', hostvars, 'external_fqdn') | select('defined') | unique | list }}"
+    target_fqdns: >-
+      {{
+        ((groups['webservers'] | default([]) | map('extract', hostvars, 'external_fqdn') | select('defined') | list) +
+         (groups['teleport_servers'] | default(groups['teleport'] | default([])) | map('extract', hostvars, 'external_fqdn') | select('defined') | list) +
+         ([teleport_fqdn] if (teleport_fqdn is defined and teleport_fqdn | length > 0) else []) +
+         ([monitoring_fqdn] if (monitoring_fqdn is defined and monitoring_fqdn | length > 0) else []) +
+         ([grafana_fqdn] if (grafana_fqdn is defined and grafana_fqdn | length > 0) else []) +
+         ([domain_name] if (domain_name is defined and domain_name | length > 0) else [])) | unique | list
+      }}
   tags: [proxy, ssl, certs]
 
 # ==============================================================================

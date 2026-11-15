@@ -26,6 +26,9 @@ teleport_trusted_subnets:
   - "192.168.0.0/16"
   - "127.0.0.1"
 
+# Administrator CIDR subnets allowed to access Teleport Web UI (3080) and SSH Proxy (3023)
+teleport_admin_trusted_cidrs: "{{ admin_trusted_cidrs | default(['0.0.0.0/0']) }}"
+
 # Lead Admin user details
 teleport_admin_user: "admin"
 teleport_admin_email: "admin@example.com"

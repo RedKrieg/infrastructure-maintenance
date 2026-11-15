@@ -23,8 +23,4 @@ grafana_prometheus_name: "Prometheus"
 grafana_dashboards_dir: "/var/lib/grafana/dashboards"
 
 # Trusted CIDR subnets allowed to access Grafana UI on port 3000
-grafana_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
-  - "127.0.0.1"
+grafana_trusted_subnets: "{{ admin_trusted_cidrs | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1']) }}"

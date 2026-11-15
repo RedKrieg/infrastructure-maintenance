@@ -50,9 +50,10 @@ haproxy_stats_user: "admin"
 haproxy_stats_password: "adminpassword"
 
 # Allowed IP list for HAProxy stats endpoint (supports IPv4, IPv6, CIDRs, and FQDNs).
+# Defaults to admin_trusted_cidrs as single source of truth for all admin interfaces.
 # If empty ([]), stats endpoint is accessible from any IP (subject to HTTP basic auth).
 # When populated, HAProxy restricts access strictly to these sources.
-haproxy_stats_allowed_ips: []
+haproxy_stats_allowed_ips: "{{ admin_trusted_cidrs | default([]) }}"
 
 # Action when client IP is not in the stats allowed list:
 #   '403'         - Return HTTP 403 Forbidden
