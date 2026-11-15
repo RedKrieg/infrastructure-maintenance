@@ -31,9 +31,6 @@ internal_proxy_subnets:
   - "172.16.0.0/12"
   - "192.168.0.0/16"
 
-# Single-subnet variable retained for backward compatibility
-internal_proxy_subnet: "10.0.0.0/8"
-
 # Standby renewal watchdog on replica proxies with staggered succession
 # If higher-priority proxies are dead, replicas take over based on rank, staggered by 1 day per replica
 enable_fallback_watchdog: true

@@ -18,11 +18,6 @@
         port: "22"
         proto: tcp
 
-    - name: Allow OpenSSH profile through UFW
-      community.general.ufw:
-        rule: allow
-        name: "OpenSSH"
-
     - name: Set UFW default incoming policy to deny
       community.general.ufw:
         direction: incoming

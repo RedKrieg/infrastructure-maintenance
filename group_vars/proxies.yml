@@ -1,24 +1,13 @@
 ---
 # ==============================================================================
 # Group Variables for Frontend Proxies (HAProxy)
-# All external FQDNs and webserver targets are discovered dynamically from inventory!
+# Role defaults in roles/proxy/defaults/main.yml provide sensible defaults.
+# Use this file to define cluster-level overrides or environment credentials.
 # ==============================================================================
 
-# HAProxy listening ports
-haproxy_bind_http_port: 80
-haproxy_bind_https_port: 443
+# Stats dashboard password override
+haproxy_stats_password: "SecureAdminPassword123"
 
-# SSL & Let's Encrypt settings (SSL is decoded/terminated on the proxies)
-acme_email: "admin@example.com"
-acme_default_ca: "letsencrypt"
-acme_standalone_port: 8888
-# Set to true when your external FQDNs resolve via public DNS to the proxy IPs
+# Set to true when your external FQDNs resolve via public DNS to proxy frontends
 acme_issue_certs: false
 acme_use_staging: false
-
-# Stats dashboard settings
-haproxy_enable_stats: true
-haproxy_stats_port: 8404
-haproxy_stats_uri: "/stats"
-haproxy_stats_user: "admin"
-haproxy_stats_password: "SecureAdminPassword123"

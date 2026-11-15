@@ -31,7 +31,7 @@
     port: "{{ acme_standalone_port }}"
     proto: tcp
     from_ip: "{{ item }}"
-  loop: "{{ internal_proxy_subnets | default([internal_proxy_subnet]) }}"
+  loop: "{{ internal_proxy_subnets }}"
   tags: [proxy, firewall, ufw]
 
 - name: Allow internal ACME challenge proxying from peer proxy IPs (port 8888)

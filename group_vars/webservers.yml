@@ -1,9 +1,7 @@
 ---
 # ==============================================================================
 # Group Variables for Backend Webservers
-# Each webserver's FQDN is defined individually in inventory.ini via external_fqdn
+# Role defaults in roles/webserver/defaults/main.yml provide standard RFC 1918
+# private subnets (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) and trust all proxy IPs.
+# Use this file to supply any environment-specific CIDR overrides.
 # ==============================================================================
-
-# Subnet for trusted HAProxy frontends
-haproxy_trusted_subnets:
-  - "10.0.0.0/8"
