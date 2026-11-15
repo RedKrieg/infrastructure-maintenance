@@ -48,11 +48,12 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │   ├── handlers/main.yml
 │   │   ├── tasks/
 │   │   │   ├── main.yml             # Task dispatcher
-│   │   │   ├── packages.yml         # Installs haproxy, openssl, curl, socat, cron
+│   │   │   ├── packages.yml         # Installs haproxy, openssl, curl, socat, cron, logrotate
 │   │   │   ├── firewall.yml         # Opens 80, 443, 8404, and internal 8888 in UFW
 │   │   │   ├── certs.yml            # Primary issuance & cluster-wide certificate distribution
-│   │   │   ├── stats_whitelist.yml  # Stats access control (IP, CIDR & FQDN resolution)
-│   │   │   └── config.yml           # Deploys dynamic haproxy.cfg
+│   │   │   ├── stats_whitelist.yml  # Stats & Prometheus access control (IP, CIDR & FQDN)
+│   │   │   ├── config.yml           # Deploys dynamic haproxy.cfg (HTTP/2, rate limit, HSTS)
+│   │   │   └── logrotate.yml        # Deploys cluster script log rotation
 │   │   └── templates/
 │   │       ├── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
 │   │       ├── check-and-adopt-cluster-certs.sh.j2 # Boot-time reconciliation & adoption
@@ -60,19 +61,31 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │       ├── acme-fallback-watchdog.sh.j2        # 1-day staggered standby renewal watchdog
 │   │       ├── stats_whitelist_sources.txt.j2      # Source list of allowed IPs/CIDRs/FQDNs
 │   │       ├── update-haproxy-stats-whitelist.sh.j2 # Dynamic FQDN resolution script
-│   │       └── haproxy-stats-whitelist.timer.j2    # Background DNS refresh systemd timer
-│   └── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
-│       ├── defaults/main.yml
-│       ├── handlers/main.yml
+│   │       ├── haproxy-stats-whitelist.timer.j2    # Background DNS refresh systemd timer
+│   │       └── logrotate-haproxy-scripts.j2        # Logrotate configuration for cluster logs
+│   ├── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
+│   │   ├── defaults/main.yml
+│   │   ├── handlers/main.yml
+│   │   ├── tasks/
+│   │   │   ├── main.yml             # Task dispatcher
+│   │   │   ├── packages.yml         # Installs nginx
+│   │   │   ├── firewall.yml         # Opens 80 in UFW
+│   │   │   └── config.yml           # Deploys generic 404, real_ip, and FQDN virtual host
+│   │   └── templates/
+│   │       ├── default_404.conf.j2  # Generic 404 catch-all default_server block
+│   │       ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
+│   │       └── site.conf.j2         # Virtual host for assigned external_fqdn
+│   └── prometheus_server/           # Standalone Prometheus server role
+│       ├── defaults/main.yml        # Prometheus port (9090), retention, scrape intervals
+│       ├── handlers/main.yml        # Restart & reload prometheus handlers
 │       ├── tasks/
 │       │   ├── main.yml             # Task dispatcher
-│       │   ├── packages.yml         # Installs nginx
-│       │   ├── firewall.yml         # Opens 80 in UFW
-│       │   └── config.yml           # Deploys generic 404, real_ip, and FQDN virtual host
+│       │   ├── packages.yml         # Installs prometheus package
+│       │   ├── firewall.yml         # Restricts port 9090 to trusted subnets
+│       │   └── config.yml           # Deploys prometheus.yml with promtool validation
 │       └── templates/
-│           ├── default_404.conf.j2  # Generic 404 catch-all default_server block
-│           ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
-│           └── site.conf.j2         # Virtual host for assigned external_fqdn
+│           ├── prometheus-default.j2 # Retention time args in /etc/default/prometheus
+│           └── prometheus.yml.j2     # Scrapes HAProxy cluster metrics via basic_auth
 └── README.md                        # Documentation and usage guide
 ```
 
@@ -182,6 +195,79 @@ What happens when a higher-priority proxy (such as `proxy-01`) comes back online
 
 ---
 
+## HTTP/2, Security Headers, HSTS & Volumetric Rate Limiting
+
+The HAProxy frontend provides enterprise-grade performance and defense-in-depth protections:
+
+### 1. HTTP/2 Negotiation (ALPN)
+ALPN negotiation automatically serves HTTP/2 (`h2`) with transparent fallback to `http/1.1` on the HTTPS frontend (port 443):
+```yaml
+# In roles/proxy/defaults/main.yml:
+haproxy_enable_http2: true
+```
+
+### 2. Security Headers & HSTS
+Comprehensive response headers are automatically injected to mitigate clickjacking, MIME sniffing, and downgrade attacks:
+```yaml
+haproxy_enable_security_headers: true
+haproxy_enable_hsts: true
+haproxy_hsts_max_age: 31536000          # 1 year
+haproxy_hsts_include_subdomains: true
+haproxy_hsts_preload: true
+haproxy_header_frame_options: "SAMEORIGIN"
+haproxy_header_referrer_policy: "strict-origin-when-cross-origin"
+```
+Injected headers:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: SAMEORIGIN`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+
+### 3. Layer 7 Volumetric Rate Limiting
+In-memory stick-table tracking limits brute-force attacks and abuse per client IP address. Excessive requests receive an immediate `429 Too Many Requests`:
+```yaml
+haproxy_enable_rate_limit: true
+haproxy_rate_limit_table_size: "100k"   # Max distinct IPs tracked in RAM
+haproxy_rate_limit_expire: "30s"        # Inactive table entry expiration
+haproxy_rate_limit_period: "10s"        # Rate measurement sliding window
+haproxy_rate_limit_req_rate: 150        # Max requests allowed in sliding window
+haproxy_rate_limit_status: 429          # HTTP 429 Too Many Requests
+```
+
+### 4. HTTP Backend Health Checks
+Backend webservers are actively health checked using real HTTP requests with domain-specific `Host` headers rather than simple TCP handshakes:
+```yaml
+haproxy_backend_http_check: true
+haproxy_check_inter: "3s"               # Health check interval
+haproxy_check_fall: 3                   # Consecutive failures to mark down
+haproxy_check_rise: 2                   # Consecutive successes to mark healthy
+```
+HAProxy sends `GET / HTTP/1.1\r\nHost: <external_fqdn>` and expects a valid `2xx` or `3xx` response (`http-check expect rstatus (2..|3..)`).
+
+### 5. Automated Log Rotation
+Cluster logs generated by certificate sync, standby fallback watchdogs, reconciliation, and ACL whitelist updaters are managed via `/etc/logrotate.d/haproxy-cluster-scripts`:
+- Targets: `/var/log/haproxy-*.log` and `/var/log/acme-*.log`
+- Frequency: Weekly rotation, compressed, with 8-week retention (`copytruncate`).
+
+---
+
+## Prometheus Monitoring & Native Metrics Exporter
+
+The suite includes native Prometheus integration with end-to-end access control:
+
+1. **HAProxy Native Exporter (Port 8404, URI `/metrics`)**:
+   - Built into HAProxy (`http-request use-service prometheus-exporter`).
+   - Protected by the **exact same ACL IP/CIDR/FQDN whitelist and HTTP basic authentication** as the statistics UI.
+   - Hosts defined in the `[monitoring]` inventory group are **automatically whitelisted** on all proxies without manual IP configuration.
+2. **Prometheus Server Role (`roles/prometheus_server`)**:
+   - Provisions a dedicated Prometheus server on Ubuntu.
+   - Restricts port `9090` in UFW to trusted CIDR subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.1`).
+   - Dynamically discovers all proxy targets from `groups['proxies']` and scrapes them using cluster credentials.
+   - Includes config validation using `promtool check config` before reloading the service.
+   - Configurable retention time (default: `15d`) managed via `/etc/default/prometheus`.
+
+---
+
 ## HAProxy Stats Access Control (IP, CIDR & Dynamic FQDNs)
 
 Access to the HAProxy statistics monitoring endpoint (port `8404`, URI `/stats`) can be restricted to authorized client sources supporting **plain IPv4/IPv6 addresses, CIDR blocks, and dynamic FQDN hostnames**:
@@ -223,9 +309,13 @@ web-01 ansible_host=10.0.1.11 external_fqdn=web1.example.com
 web-02 ansible_host=10.0.1.12 external_fqdn=web2.example.com
 web-03 ansible_host=10.0.1.13 external_fqdn=web3.example.com
 
+[monitoring]
+monitoring-01 ansible_host=10.0.1.50
+
 [headless_nodes:children]
 proxies
 webservers
+monitoring
 ```
 
 HAProxy on all proxies dynamically generates:
@@ -263,6 +353,9 @@ ansible-playbook -i inventory.ini playbook.yml --tags certs
 
 # Provision or update backend webservers only:
 ansible-playbook -i inventory.ini playbook.yml --tags webserver
+
+# Provision or update Prometheus monitoring server only:
+ansible-playbook -i inventory.ini playbook.yml --tags monitoring
 
 # Update user accounts and dotfiles only:
 ansible-playbook -i inventory.ini playbook.yml --tags users

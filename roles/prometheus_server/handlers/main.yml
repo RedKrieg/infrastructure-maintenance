@@ -1,0 +1,14 @@
+---
+# ==============================================================================
+# Handlers for prometheus_server Role
+# ==============================================================================
+
+- name: Restart prometheus
+  ansible.builtin.systemd:
+    name: "{{ prometheus_service_name }}"
+    state: restarted
+
+- name: Reload prometheus
+  ansible.builtin.systemd:
+    name: "{{ prometheus_service_name }}"
+    state: reloaded

@@ -1,0 +1,48 @@
+# ==============================================================================
+# Prometheus Configuration - Managed by Ansible
+# ==============================================================================
+
+global:
+  scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+  evaluation_interval: {{ prometheus_evaluation_interval | default('15s') }}
+  scrape_timeout: 10s
+
+scrape_configs:
+{% if prometheus_scrape_self | bool %}
+  # Scrape Prometheus Server Metrics
+  - job_name: 'prometheus'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['127.0.0.1:{{ prometheus_port | default(9090) }}']
+        labels:
+          role: 'monitoring'
+{% endif %}
+
+{% if prometheus_scrape_haproxy | bool and groups['proxies'] is defined and groups['proxies'] | length > 0 %}
+  # Scrape Frontend HAProxy Cluster Nodes
+  - job_name: 'haproxy'
+    scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+    metrics_path: {{ prometheus_haproxy_metrics_path | default('/metrics') }}
+{% set sample_proxy = groups['proxies'][0] %}
+{% set auth_user = hostvars[sample_proxy]['haproxy_stats_user'] | default(prometheus_haproxy_user) %}
+{% set auth_pass = hostvars[sample_proxy]['haproxy_stats_password'] | default(prometheus_haproxy_password) %}
+{% if auth_user and auth_pass %}
+    basic_auth:
+      username: "{{ auth_user }}"
+      password: "{{ auth_pass }}"
+{% endif %}
+    static_configs:
+      - targets:
+{% for host in groups['proxies'] %}
+{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_port = hostvars[host]['haproxy_stats_port'] | default(prometheus_haproxy_port | default(8404)) %}
+          - "{{ target_ip }}:{{ target_port }}"
+{% endfor %}
+        labels:
+          role: 'loadbalancer'
+          cluster: 'haproxy-proxies'
+{% endif %}
+
+{% if prometheus_custom_scrape_configs is defined and prometheus_custom_scrape_configs | length > 0 %}
+{{ prometheus_custom_scrape_configs | to_nice_yaml(indent=2) }}
+{% endif %}

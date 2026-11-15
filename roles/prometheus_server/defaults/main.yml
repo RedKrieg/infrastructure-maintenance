@@ -1,0 +1,36 @@
+---
+# ==============================================================================
+# Default Variables for prometheus_server Role
+# ==============================================================================
+
+# Prometheus package & service details
+prometheus_package_name: "prometheus"
+prometheus_service_name: "prometheus"
+prometheus_config_dir: "/etc/prometheus"
+prometheus_config_file: "/etc/prometheus/prometheus.yml"
+
+# Prometheus network and storage configuration
+prometheus_port: 9090
+prometheus_scrape_interval: "15s"
+prometheus_evaluation_interval: "15s"
+prometheus_retention_time: "15d"
+
+# Trusted CIDR subnets allowed to access Prometheus Web UI / API on port 9090
+prometheus_trusted_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1"
+
+# Self-monitoring
+prometheus_scrape_self: true
+
+# Target ingestion: HAProxy cluster frontends
+prometheus_scrape_haproxy: true
+prometheus_haproxy_port: 8404
+prometheus_haproxy_metrics_path: "/metrics"
+prometheus_haproxy_user: "admin"
+prometheus_haproxy_password: "SecureAdminPassword123"
+
+# Optional additional custom scrape jobs
+prometheus_custom_scrape_configs: []

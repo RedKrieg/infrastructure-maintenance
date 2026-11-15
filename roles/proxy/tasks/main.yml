@@ -22,3 +22,7 @@
 - name: Deploy HAProxy Configuration & Manage Service
   ansible.builtin.include_tasks: config.yml
   tags: [proxy, haproxy]
+
+- name: Configure Logrotate for Proxy Cluster Scripts
+  ansible.builtin.include_tasks: logrotate.yml
+  tags: [proxy, logrotate, logs]

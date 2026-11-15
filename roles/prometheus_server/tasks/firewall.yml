@@ -1,0 +1,13 @@
+---
+# ==============================================================================
+# Firewall Rules for Prometheus Server
+# ==============================================================================
+
+- name: Allow Prometheus port (9090) through UFW from trusted subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ prometheus_port | string }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ prometheus_trusted_subnets }}"
+  tags: [monitoring, prometheus, firewall, ufw]

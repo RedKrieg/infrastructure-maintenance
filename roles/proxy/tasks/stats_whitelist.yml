@@ -6,8 +6,7 @@
 - name: Manage Stats Endpoint Access Control
   when:
     - haproxy_enable_stats | bool
-    - haproxy_stats_allowed_ips is defined
-    - haproxy_stats_allowed_ips | length > 0
+    - (haproxy_stats_allowed_ips is defined and haproxy_stats_allowed_ips | length > 0) or (groups['monitoring'] is defined and groups['monitoring'] | length > 0)
   tags: [proxy, stats, security]
   block:
     - name: Ensure /etc/haproxy directory exists
@@ -74,7 +73,7 @@
 
 - name: Deactivate stats whitelist timer if access control is disabled
   when:
-    - (not haproxy_enable_stats | bool) or (haproxy_stats_allowed_ips is not defined) or (haproxy_stats_allowed_ips | length == 0)
+    - (not haproxy_enable_stats | bool) or ((haproxy_stats_allowed_ips is not defined or haproxy_stats_allowed_ips | length == 0) and (groups['monitoring'] is not defined or groups['monitoring'] | length == 0))
   tags: [proxy, stats, security]
   block:
     - name: Check if timer unit exists

@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# Main Task Entry Point for prometheus_server Role
+# ==============================================================================
+
+- name: Install Prometheus and Prerequisites
+  ansible.builtin.include_tasks: packages.yml
+  tags: [monitoring, prometheus, packages]
+
+- name: Configure UFW Firewall for Prometheus Port
+  ansible.builtin.include_tasks: firewall.yml
+  tags: [monitoring, prometheus, firewall, ufw]
+
+- name: Deploy Prometheus Configuration and Service
+  ansible.builtin.include_tasks: config.yml
+  tags: [monitoring, prometheus, config, service]

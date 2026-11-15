@@ -11,5 +11,6 @@
       - curl
       - socat
       - cron
+      - logrotate
     state: present
   tags: [proxy, haproxy, packages]

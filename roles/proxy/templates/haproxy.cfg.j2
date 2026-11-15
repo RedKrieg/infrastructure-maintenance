@@ -39,7 +39,7 @@ defaults
     errorfile 504 /etc/haproxy/errors/504.http
 
 {% if haproxy_enable_stats | bool %}
-# --- HAProxy Statistics Web UI ---
+# --- HAProxy Statistics Web UI & Prometheus Metrics ---
 listen stats
     bind *:{{ haproxy_stats_port }}
     mode http
@@ -48,7 +48,12 @@ listen stats
     stats refresh {{ haproxy_stats_refresh }}
     stats show-node
     stats auth {{ haproxy_stats_user }}:{{ haproxy_stats_password }}
-{% if haproxy_stats_allowed_ips is defined and haproxy_stats_allowed_ips | length > 0 %}
+{% if haproxy_enable_prometheus | bool %}
+
+    # Native Prometheus Metrics Exporter (same ACL protection as stats)
+    http-request use-service prometheus-exporter if { path {{ haproxy_prometheus_path }} }
+{% endif %}
+{% if (haproxy_stats_allowed_ips is defined and haproxy_stats_allowed_ips | length > 0) or (groups['monitoring'] is defined and groups['monitoring'] | length > 0) %}
 
     # Access Control: Allow only authorized IPs, CIDRs, and dynamically resolved FQDNs
     acl is_allowed_stats src -f /etc/haproxy/stats_whitelist.lst
@@ -76,11 +81,28 @@ frontend fe_http
 # --- HTTPS Frontend (Port {{ haproxy_bind_https_port }}) ---
 # SSL is decoded and terminated here across all certificates in {{ haproxy_certs_dir }}
 frontend fe_https
-    bind *:{{ haproxy_bind_https_port }} ssl crt {{ haproxy_certs_dir }}/
+    bind *:{{ haproxy_bind_https_port }} ssl crt {{ haproxy_certs_dir }}/{% if haproxy_enable_http2 | bool %} alpn h2,http/1.1{% endif %}
     mode http
     option forwardfor
     http-request set-header X-Forwarded-Proto https
     http-request set-header X-Forwarded-Port %[dst_port]
+{% if haproxy_enable_security_headers | bool %}
+
+    # Security & Privacy Headers
+    http-response set-header X-Content-Type-Options "nosniff"
+    http-response set-header X-Frame-Options "{{ haproxy_header_frame_options }}"
+    http-response set-header Referrer-Policy "{{ haproxy_header_referrer_policy }}"
+{% if haproxy_enable_hsts | bool %}
+    http-response set-header Strict-Transport-Security "max-age={{ haproxy_hsts_max_age }}{% if haproxy_hsts_include_subdomains | bool %}; includeSubDomains{% endif %}{% if haproxy_hsts_preload | bool %}; preload{% endif %}"
+{% endif %}
+{% endif %}
+{% if haproxy_enable_rate_limit | bool %}
+
+    # Volumetric Layer 7 Rate Limiting (Stick Table)
+    stick-table type ip size {{ haproxy_rate_limit_table_size }} expire {{ haproxy_rate_limit_expire }} store http_req_rate({{ haproxy_rate_limit_period }})
+    http-request track-sc0 src
+    http-request deny deny_status {{ haproxy_rate_limit_status }} if { sc_http_req_rate(0) gt {{ haproxy_rate_limit_req_rate }} }
+{% endif %}
 
 {% if groups['webservers'] is defined %}
 {% for host in groups['webservers'] %}
@@ -123,7 +145,13 @@ backend be_{{ clean_name }}
     balance roundrobin
     option forwardfor
     http-request set-header Host {{ fqdn }}
+{% if haproxy_backend_http_check | bool %}
+    option httpchk GET / HTTP/1.1\r\nHost:\ {{ fqdn }}
+    http-check expect rstatus (2..|3..)
+    server {{ host }} {{ target_ip }}:80 check inter {{ haproxy_check_inter }} fall {{ haproxy_check_fall }} rise {{ haproxy_check_rise }}
+{% else %}
     server {{ host }} {{ target_ip }}:80 check
+{% endif %}
 
 {% endfor %}
 {% endif %}

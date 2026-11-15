@@ -47,3 +47,15 @@
   roles:
     - role: webserver
       tags: [webserver, nginx, sites, firewall]
+
+# ------------------------------------------------------------------------------
+# Play 4: Prometheus Monitoring Server
+# ------------------------------------------------------------------------------
+- name: Provision Prometheus Monitoring Server
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: prometheus_server
+      tags: [monitoring, prometheus, firewall]

@@ -1,0 +1,13 @@
+---
+# ==============================================================================
+# Logrotate Configuration for HAProxy Cluster & ACME Script Logs
+# ==============================================================================
+
+- name: Deploy logrotate configuration for HAProxy cluster scripts
+  ansible.builtin.template:
+    src: logrotate-haproxy-scripts.j2
+    dest: /etc/logrotate.d/haproxy-cluster-scripts
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [proxy, logrotate, logs]

@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# Prometheus Package Installation
+# ==============================================================================
+
+- name: Install Prometheus and monitoring tools
+  ansible.builtin.apt:
+    name:
+      - prometheus
+      - curl
+    state: present
+  tags: [monitoring, prometheus, packages]

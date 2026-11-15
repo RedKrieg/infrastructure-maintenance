@@ -6,3 +6,9 @@
 {% for entry in haproxy_stats_allowed_ips | default([]) %}
 {{ entry }}
 {% endfor %}
+{% if groups['monitoring'] is defined %}
+# Prometheus Monitoring Hosts
+{% for host in groups['monitoring'] %}
+{{ hostvars[host]['ansible_host'] | default(host) }}
+{% endfor %}
+{% endif %}
