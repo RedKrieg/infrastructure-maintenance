@@ -1,0 +1,30 @@
+# ==============================================================================
+# Teleport Declarative Users Configuration - Managed by Ansible
+# ==============================================================================
+
+# Lead Admin User (Full administrative access & request reviewer)
+kind: user
+version: v2
+metadata:
+  name: "{{ teleport_admin_user }}"
+spec:
+  roles:
+    - lead-admin
+  traits:
+    logins:
+      - "{{ teleport_admin_user }}"
+      - ubuntu
+      - root
+
+---
+# Example Junior Admin User (Requires JIT requests for sudo access)
+kind: user
+version: v2
+metadata:
+  name: "{{ teleport_example_user }}"
+spec:
+  roles:
+    - junior
+  traits:
+    logins:
+      - "{{ teleport_example_user }}"

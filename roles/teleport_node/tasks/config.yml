@@ -1,0 +1,33 @@
+---
+# ==============================================================================
+# Teleport Node Configuration and Service Management
+# ==============================================================================
+
+- name: Ensure Teleport configuration and data directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - /etc/teleport
+    - /var/lib/teleport
+  tags: [teleport, teleport_node, config]
+
+- name: Deploy Teleport node configuration file
+  ansible.builtin.template:
+    src: teleport-node.yaml.j2
+    dest: /etc/teleport.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart teleport
+  tags: [teleport, teleport_node, config]
+
+- name: Ensure Teleport node service is enabled and started
+  ansible.builtin.systemd:
+    name: teleport
+    state: started
+    enabled: true
+  tags: [teleport, teleport_node, service]

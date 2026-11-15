@@ -1,0 +1,45 @@
+---
+# ==============================================================================
+# Teleport RBAC Configuration (Roles & Users Provisioning)
+# ==============================================================================
+
+- name: Ensure Teleport declarative resources directory exists
+  ansible.builtin.file:
+    path: /etc/teleport/resources
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [teleport, teleport_server, rbac]
+
+- name: Deploy Teleport RBAC roles template
+  ansible.builtin.template:
+    src: roles.yaml.j2
+    dest: /etc/teleport/resources/roles.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  register: teleport_roles_file
+  tags: [teleport, teleport_server, rbac]
+
+- name: Deploy Teleport declarative users template
+  ansible.builtin.template:
+    src: users.yaml.j2
+    dest: /etc/teleport/resources/users.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  register: teleport_users_file
+  tags: [teleport, teleport_server, rbac]
+
+- name: Apply Teleport RBAC roles into cluster
+  ansible.builtin.command:
+    cmd: "tctl create -f /etc/teleport/resources/roles.yaml"
+  when: teleport_roles_file.changed
+  tags: [teleport, teleport_server, rbac]
+
+- name: Apply Teleport declarative users into cluster
+  ansible.builtin.command:
+    cmd: "tctl create -f /etc/teleport/resources/users.yaml"
+  when: teleport_users_file.changed
+  tags: [teleport, teleport_server, rbac]

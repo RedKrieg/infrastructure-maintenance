@@ -1,0 +1,36 @@
+# ==============================================================================
+# Teleport Auth & Proxy Service Configuration - Managed by Ansible
+# ==============================================================================
+version: v3
+teleport:
+  nodename: "{{ inventory_hostname }}"
+  data_dir: /var/lib/teleport
+  log:
+    output: stderr
+    severity: INFO
+    format:
+      output: text
+
+auth_service:
+  enabled: true
+  cluster_name: "{{ teleport_cluster_name }}"
+  listen_addr: 0.0.0.0:{{ teleport_auth_service_port }}
+  tokens:
+    - "node:{{ teleport_auth_token }}"
+
+proxy_service:
+  enabled: true
+  listen_addr: 0.0.0.0:{{ teleport_proxy_web_port }}
+  web_listen_addr: 0.0.0.0:{{ teleport_proxy_web_port }}
+  tunnel_listen_addr: 0.0.0.0:{{ teleport_proxy_tunnel_port }}
+  ssh_listen_addr: 0.0.0.0:{{ teleport_proxy_ssh_port }}
+  public_addr: "{{ teleport_public_addr }}"
+  https_keypairs: []
+  acme:
+    enabled: false
+
+ssh_service:
+  enabled: true
+  labels:
+    role: teleport-server
+    hostname: "{{ inventory_hostname }}"

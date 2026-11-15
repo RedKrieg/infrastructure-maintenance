@@ -1,0 +1,85 @@
+# ==============================================================================
+# Teleport RBAC Roles Configuration - Managed by Ansible
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Lead Admin Role (Full Access & Persistent Sudo)
+# ------------------------------------------------------------------------------
+kind: role
+version: v5
+metadata:
+  name: lead-admin
+spec:
+  options:
+    create_host_user_mode: keep
+    create_host_user_default_shell: /bin/bash
+    max_session_ttl: 12h
+  allow:
+    logins:
+      - redkrieg
+      - ubuntu
+      - root
+      - '{% raw %}{{internal.logins}}{% endraw %}'
+    node_labels:
+      '*': '*'
+    host_sudoers:
+      - 'ALL = (ALL) NOPASSWD: ALL'
+    review_requests:
+      roles:
+        - elevated-sudo
+    rules:
+      - resources: ['role', 'user', 'session', 'node', 'access_request']
+        verbs: ['list', 'create', 'read', 'update', 'delete']
+  deny: {}
+
+---
+# ------------------------------------------------------------------------------
+# 2. Junior Admin Role (Unprivileged by Default, Requires JIT Sudo Request)
+# ------------------------------------------------------------------------------
+kind: role
+version: v5
+metadata:
+  name: junior
+spec:
+  options:
+    create_host_user_mode: keep
+    create_host_user_default_shell: /bin/bash
+    max_session_ttl: 8h
+  allow:
+    logins:
+      - junior
+      - '{% raw %}{{internal.logins}}{% endraw %}'
+    node_labels:
+      '*': '*'
+    # Notice: NO host_sudoers defined in the baseline junior role.
+    # Junior users have zero sudo capability upon initial connection.
+    # To run administrative tasks, they must request the 'elevated-sudo' role.
+    request:
+      roles:
+        - elevated-sudo
+      thresholds:
+        - approve: 1
+          deny: 1
+  deny: {}
+
+---
+# ------------------------------------------------------------------------------
+# 3. Elevated Sudo Role (Temporary Just-In-Time Escalation Target)
+# ------------------------------------------------------------------------------
+kind: role
+version: v5
+metadata:
+  name: elevated-sudo
+spec:
+  options:
+    create_host_user_mode: keep
+    max_session_ttl: 1h   # Escalated access automatically expires after 1 hour
+  allow:
+    logins:
+      - junior
+      - '{% raw %}{{internal.logins}}{% endraw %}'
+    node_labels:
+      '*': '*'
+    host_sudoers:
+      - 'ALL = (ALL) NOPASSWD: ALL'
+  deny: {}

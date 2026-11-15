@@ -65,3 +65,30 @@
   roles:
     - role: prometheus_server
       tags: [monitoring, prometheus, firewall]
+
+# ------------------------------------------------------------------------------
+# Play 5: Teleport Centralized Access & Auth/Proxy Server
+# ------------------------------------------------------------------------------
+- name: Provision Teleport Auth & Proxy Server
+  hosts: teleport_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: teleport_server
+      tags: [teleport, teleport_server, auth, rbac]
+
+# ------------------------------------------------------------------------------
+# Play 6: Teleport SSH Node Service across Cluster Nodes
+# ------------------------------------------------------------------------------
+- name: Provision Teleport Node Service on Cluster Nodes
+  hosts: headless_nodes
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: teleport_node
+      tags: [teleport, teleport_node, ssh]

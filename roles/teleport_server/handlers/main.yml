@@ -1,0 +1,14 @@
+---
+# ==============================================================================
+# Handlers for teleport_server Role
+# ==============================================================================
+
+- name: Restart teleport
+  ansible.builtin.systemd:
+    name: teleport
+    state: restarted
+
+- name: Reload teleport
+  ansible.builtin.systemd:
+    name: teleport
+    state: reloaded

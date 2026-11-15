@@ -1,0 +1,15 @@
+---
+# ==============================================================================
+# Main Task Entry Point for teleport_node Role
+# ==============================================================================
+
+- name: Manage Teleport SSH Node Service
+  when: enable_teleport_node | bool
+  block:
+    - name: Install Teleport Node Package
+      ansible.builtin.include_tasks: packages.yml
+      tags: [teleport, teleport_node, packages]
+
+    - name: Configure Teleport Node Service
+      ansible.builtin.include_tasks: config.yml
+      tags: [teleport, teleport_node, config, service]

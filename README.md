@@ -75,17 +75,39 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │       ├── default_404.conf.j2  # Generic 404 catch-all default_server block
 │   │       ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
 │   │       └── site.conf.j2         # Virtual host for assigned external_fqdn
-│   └── prometheus_server/           # Standalone Prometheus server role
-│       ├── defaults/main.yml        # Prometheus port (9090), retention, scrape intervals
-│       ├── handlers/main.yml        # Restart & reload prometheus handlers
+│   ├── prometheus_server/           # Standalone Prometheus server role
+│   │   ├── defaults/main.yml        # Prometheus port (9090), retention, scrape intervals
+│   │   ├── handlers/main.yml        # Restart & reload prometheus handlers
+│   │   ├── tasks/
+│   │   │   ├── main.yml             # Task dispatcher
+│   │   │   ├── packages.yml         # Installs prometheus package
+│   │   │   ├── firewall.yml         # Restricts port 9090 to trusted subnets
+│   │   │   └── config.yml           # Deploys prometheus.yml with promtool validation
+│   │   └── templates/
+│   │       ├── prometheus-default.j2 # Retention time args in /etc/default/prometheus
+│   │       └── prometheus.yml.j2     # Scrapes HAProxy cluster metrics via basic_auth
+│   ├── teleport_server/             # Teleport Auth & Proxy Service role
+│   │   ├── defaults/main.yml        # Web/Proxy port (3080), tunnel (3024), join tokens
+│   │   ├── handlers/main.yml        # Restart & reload teleport handlers
+│   │   ├── tasks/
+│   │   │   ├── main.yml             # Task dispatcher
+│   │   │   ├── packages.yml         # Installs Teleport package via official repo
+│   │   │   ├── firewall.yml         # Opens 3080, 3023, 3024, and internal 3025 in UFW
+│   │   │   ├── config.yml           # Deploys /etc/teleport.yaml for Auth & Proxy
+│   │   │   └── rbac.yml             # Deploys RBAC roles & users (junior, lead-admin)
+│   │   └── templates/
+│   │       ├── teleport.yaml.j2     # Auth & Proxy configuration
+│   │       ├── roles.yaml.j2        # Roles (lead-admin, junior, elevated-sudo)
+│   │       └── users.yaml.j2        # Users (redkrieg, junior)
+│   └── teleport_node/               # Teleport SSH Node Service role (all cluster nodes)
+│       ├── defaults/main.yml        # Auto-discovers Teleport server & join token
+│       ├── handlers/main.yml        # Restart teleport handler
 │       ├── tasks/
 │       │   ├── main.yml             # Task dispatcher
-│       │   ├── packages.yml         # Installs prometheus package
-│       │   ├── firewall.yml         # Restricts port 9090 to trusted subnets
-│       │   └── config.yml           # Deploys prometheus.yml with promtool validation
+│       │   ├── packages.yml         # Installs Teleport package
+│       │   └── config.yml           # Deploys /etc/teleport.yaml for SSH service
 │       └── templates/
-│           ├── prometheus-default.j2 # Retention time args in /etc/default/prometheus
-│           └── prometheus.yml.j2     # Scrapes HAProxy cluster metrics via basic_auth
+│           └── teleport-node.yaml.j2 # Outbound reverse tunnel & host user creation
 └── README.md                        # Documentation and usage guide
 ```
 
@@ -270,6 +292,61 @@ The suite includes native Prometheus integration with end-to-end access control:
 
 ---
 
+## Teleport Centralized Access & Dynamic Sudo Management
+
+The suite includes complete **[Teleport](https://goteleport.com/)** integration to eliminate credential desynchronization, static SSH keys, and static `/etc/sudoers` files across your cluster.
+
+### 1. Architecture Overview
+* **Teleport Auth & Proxy Server (`roles/teleport_server`)**:
+  - Acts as the cluster Certificate Authority and identity gateway.
+  - Hosts the Web UI / API on port `3080` (or 443), SSH proxy on port `3023`, and reverse tunnel on port `3024`.
+  - Manages centralized RBAC roles and user accounts.
+* **Teleport SSH Node Service (`roles/teleport_node`)**:
+  - Runs on all cluster nodes (`proxies`, `webservers`, `monitoring`).
+  - Establishes an outbound reverse tunnel back to the Teleport Proxy—nodes require **zero inbound open SSH ports** to the public internet.
+  - **Automatic Host User Provisioning (`create_host_user_mode: keep`)**: Target OS user accounts (like `junior` or `redkrieg`) are automatically created on the fly when the user connects.
+
+### 2. Sudo Management with Just-In-Time (JIT) Access Requests
+
+Permissions are managed centrally through declarative Teleport roles without editing `/etc/sudoers` on individual hosts:
+
+| Role | Default Sudo | Escalation Capability | Description |
+| :--- | :--- | :--- | :--- |
+| **`lead-admin`** (`redkrieg`) | `ALL = (ALL) NOPASSWD: ALL` | Approver | Persistent sudo across all nodes. Can review and approve access requests. |
+| **`junior`** (`junior`) | **None** (unprivileged) | Can request `elevated-sudo` | Zero sudo capability on initial login. Standard commands only. |
+| **`elevated-sudo`** | `ALL = (ALL) NOPASSWD: ALL` | 1-hour expiration | Temporary escalation target granted only upon approval. |
+
+### 3. Junior Sudo Workflow Example
+
+1. **Junior Logs In (Unprivileged)**:
+   ```bash
+   tsh login --proxy=teleport.example.com:3080 --user=junior
+   tsh ssh ubuntu@web-01
+   # Any sudo command fails: "junior is not in the sudoers file"
+   ```
+2. **Junior Requests Sudo Access**:
+   ```bash
+   tsh request create --roles=elevated-sudo --reason="Need to restart HAProxy and verify SSL logs"
+   # Submits request with ID: 12345-abcde...
+   ```
+3. **Lead Admin Approves Request**:
+   The lead admin (`redkrieg`) receives a notification in the Teleport Web UI or CLI:
+   ```bash
+   tctl request approve 12345-abcde...
+   # Or via tsh:
+   tsh request review --approve 12345-abcde...
+   ```
+4. **Junior Assumes Escalated Privileges**:
+   ```bash
+   tsh login --request-id=12345-abcde...
+   tsh ssh ubuntu@web-01
+   sudo systemctl restart haproxy  # Sudo works immediately!
+   ```
+5. **Automatic Revocation**:
+   After 1 hour (`max_session_ttl: 1h`), the role expires. Teleport automatically removes `/etc/sudoers.d/teleport-junior` on the target nodes.
+
+---
+
 ## HAProxy Stats Access Control (IP, CIDR & Dynamic FQDNs)
 
 Access to the HAProxy statistics monitoring endpoint (port `8404`, URI `/stats`) can be restricted to authorized client sources supporting **plain IPv4/IPv6 addresses, CIDR blocks, and dynamic FQDN hostnames**:
@@ -314,10 +391,14 @@ web-03 ansible_host=10.0.1.13 external_fqdn=web3.example.com
 [monitoring]
 monitoring-01 ansible_host=10.0.1.50
 
+[teleport_servers]
+teleport-01 ansible_host=10.0.1.60
+
 [headless_nodes:children]
 proxies
 webservers
 monitoring
+teleport_servers
 ```
 
 HAProxy on all proxies dynamically generates:
@@ -358,6 +439,12 @@ ansible-playbook -i inventory.ini playbook.yml --tags webserver
 
 # Provision or update Prometheus monitoring server only:
 ansible-playbook -i inventory.ini playbook.yml --tags monitoring
+
+# Provision or update Teleport Auth/Proxy server only:
+ansible-playbook -i inventory.ini playbook.yml --tags teleport_server
+
+# Provision or update Teleport SSH node services only:
+ansible-playbook -i inventory.ini playbook.yml --tags teleport_node
 
 # Update user accounts and dotfiles only:
 ansible-playbook -i inventory.ini playbook.yml --tags users

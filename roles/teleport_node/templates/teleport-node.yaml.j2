@@ -1,0 +1,31 @@
+# ==============================================================================
+# Teleport Node Service Configuration - Managed by Ansible
+# Connects outbound to Teleport Proxy via reverse tunnel.
+# Automatically creates host users on session start.
+# ==============================================================================
+version: v3
+teleport:
+  nodename: "{{ inventory_hostname }}"
+  data_dir: /var/lib/teleport
+  join_params:
+    token_name: "{{ teleport_auth_token }}"
+    method: token
+  proxy_server: "{{ teleport_proxy_server }}"
+  log:
+    output: stderr
+    severity: INFO
+    format:
+      output: text
+
+auth_service:
+  enabled: false
+
+proxy_service:
+  enabled: false
+
+ssh_service:
+  enabled: true
+  labels:
+{% for k, v in teleport_node_labels.items() %}
+    {{ k }}: "{{ v }}"
+{% endfor %}

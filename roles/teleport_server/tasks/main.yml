@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Main Task Entry Point for teleport_server Role
+# ==============================================================================
+
+- name: Install Teleport Server Package
+  ansible.builtin.include_tasks: packages.yml
+  tags: [teleport, teleport_server, packages]
+
+- name: Configure UFW Firewall for Teleport Server
+  ansible.builtin.include_tasks: firewall.yml
+  tags: [teleport, teleport_server, firewall]
+
+- name: Configure Teleport Auth & Proxy Services
+  ansible.builtin.include_tasks: config.yml
+  tags: [teleport, teleport_server, config]
+
+- name: Provision Teleport RBAC Roles and Users
+  ansible.builtin.include_tasks: rbac.yml
+  tags: [teleport, teleport_server, rbac]

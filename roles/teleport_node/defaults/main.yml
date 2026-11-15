@@ -1,0 +1,23 @@
+---
+# ==============================================================================
+# Default Variables for teleport_node Role
+# ==============================================================================
+
+# Enable or disable Teleport node service
+enable_teleport_node: true
+
+# Teleport Package and Repository Version
+teleport_version: "16"
+
+# Teleport Server Discovery
+# Resolves the IP of the first host in [teleport_servers] group
+teleport_server_host: "{{ hostvars[groups['teleport_servers'][0]]['ansible_host'] if (groups['teleport_servers'] is defined and groups['teleport_servers'] | length > 0) else '127.0.0.1' }}"
+teleport_proxy_server: "{{ teleport_server_host }}:3080"
+
+# Node Join Token (must match teleport_auth_token on Teleport Auth server)
+teleport_auth_token: "teleport-super-secure-join-token-secret-change-me"
+
+# Metadata labels applied to this node in Teleport Web UI / CLI
+teleport_node_labels:
+  role: "{{ (group_names | difference(['headless_nodes', 'all']))[0] | default('node') }}"
+  hostname: "{{ inventory_hostname }}"
