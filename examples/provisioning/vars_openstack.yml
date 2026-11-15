@@ -1,0 +1,73 @@
+---
+# ==============================================================================
+# OpenStack Provisioning Configuration Variables
+# ==============================================================================
+
+# Name of the cloud entry defined in ~/.config/openstack/clouds.yaml
+os_cloud: "openstack"
+
+# Network Configuration
+os_network_name: "cluster-net"
+os_subnet_name: "cluster-subnet"
+os_subnet_cidr: "192.168.100.0/24"
+os_dns_nameservers:
+  - "1.1.1.1"
+  - "8.8.8.8"
+os_external_network: "public"
+os_router_name: "cluster-router"
+
+# Compute Flavor & Glance Image
+os_flavor: "m1.medium"
+os_image: "Ubuntu 22.04 LTS"
+os_key_name: "cluster-key"
+os_ssh_user: "ubuntu"
+os_ssh_pub_key_file: "~/.ssh/id_ed25519.pub"
+
+# Server Group for Anti-Affinity across hypervisors
+os_server_group_name: "proxy-anti-affinity"
+os_server_group_policy: "anti-affinity"
+
+# Cluster Topology Allocation
+os_instances:
+  - name: "proxy-01"
+    ip: "192.168.100.10"
+    group: "proxies"
+    anti_affinity: true
+
+  - name: "proxy-02"
+    ip: "192.168.100.20"
+    group: "proxies"
+    anti_affinity: true
+
+  - name: "proxy-03"
+    ip: "192.168.100.30"
+    group: "proxies"
+    anti_affinity: true
+
+  - name: "web-01"
+    ip: "192.168.100.11"
+    group: "webservers"
+    external_fqdn: "web1.example.com"
+    anti_affinity: false
+
+  - name: "web-02"
+    ip: "192.168.100.12"
+    group: "webservers"
+    external_fqdn: "web2.example.com"
+    anti_affinity: false
+
+  - name: "web-03"
+    ip: "192.168.100.13"
+    group: "webservers"
+    external_fqdn: "web3.example.com"
+    anti_affinity: false
+
+  - name: "monitoring-01"
+    ip: "192.168.100.50"
+    group: "monitoring"
+    anti_affinity: false
+
+  - name: "teleport-01"
+    ip: "192.168.100.60"
+    group: "teleport_servers"
+    anti_affinity: false

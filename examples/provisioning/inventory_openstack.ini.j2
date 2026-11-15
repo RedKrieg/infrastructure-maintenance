@@ -1,0 +1,36 @@
+# ==============================================================================
+# OpenStack Example Inventory
+# Generated automatically by examples/provisioning/provision_openstack.yml
+# Frontends deployed in a Nova server group (anti-affinity) across hypervisors
+# Behind an OpenStack Octavia Load Balancer (TCP Amphora) or Keepalived VIP
+# ==============================================================================
+
+[proxies]
+{% for inst in os_instances if inst.group == 'proxies' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
+[webservers]
+{% for inst in os_instances if inst.group == 'webservers' %}
+{{ inst.name }} ansible_host={{ inst.ip }} external_fqdn={{ inst.external_fqdn }}
+{% endfor %}
+
+[monitoring]
+{% for inst in os_instances if inst.group == 'monitoring' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
+[teleport_servers]
+{% for inst in os_instances if inst.group == 'teleport_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
+[headless_nodes:children]
+proxies
+webservers
+monitoring
+teleport_servers
+
+[headless_nodes:vars]
+ansible_user={{ os_ssh_user }}
+ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'

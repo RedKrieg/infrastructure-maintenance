@@ -1,0 +1,22 @@
+---
+# ==============================================================================
+# Playbook: Teardown / Deprovision Azure Infrastructure
+# ==============================================================================
+
+- name: Deprovision Azure Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_azure.yml
+
+  tasks:
+    - name: Delete Resource Group (Removes all associated resources)
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ azure_resource_group }}"
+        state: absent
+
+    - name: Teardown Summary
+      ansible.builtin.debug:
+        msg: "Azure Resource Group {{ azure_resource_group }} and all associated resources successfully deleted."

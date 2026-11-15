@@ -1,0 +1,143 @@
+---
+# ==============================================================================
+# Playbook: Provision Microsoft Azure Infrastructure
+# ==============================================================================
+# Provisions:
+#   1. Resource Group
+#   2. Virtual Network & Subnet
+#   3. Network Security Group (SSH, HTTP/S, Teleport & internal VNet mesh)
+#   4. Public IPs, NICs, and Ubuntu Virtual Machines across Availability Zones
+#   5. Updates examples/inventories/inventory.azure.ini
+# ==============================================================================
+
+- name: Provision Azure Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_azure.yml
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Resource Group
+    # --------------------------------------------------------------------------
+    - name: Create Resource Group
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ azure_resource_group }}"
+        location: "{{ azure_location }}"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 2. Virtual Network & Network Security Group
+    # --------------------------------------------------------------------------
+    - name: Create Network Security Group
+      azure.azcollection.azure_rm_securitygroup:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ azure_nsg_name }}"
+        rules:
+          - name: "AllowSSH"
+            protocol: "Tcp"
+            destination_port_range: "22"
+            access: "Allow"
+            priority: 100
+            direction: "Inbound"
+          - name: "AllowHTTP"
+            protocol: "Tcp"
+            destination_port_range: "80"
+            access: "Allow"
+            priority: 110
+            direction: "Inbound"
+          - name: "AllowHTTPS"
+            protocol: "Tcp"
+            destination_port_range: "443"
+            access: "Allow"
+            priority: 120
+            direction: "Inbound"
+          - name: "AllowTeleport"
+            protocol: "Tcp"
+            destination_port_range: ["3080", "3023", "3024"]
+            access: "Allow"
+            priority: 130
+            direction: "Inbound"
+          - name: "AllowInternal"
+            protocol: "*"
+            source_address_prefix: "{{ azure_vnet_cidr }}"
+            access: "Allow"
+            priority: 140
+            direction: "Inbound"
+        state: present
+
+    - name: Create Virtual Network
+      azure.azcollection.azure_rm_virtualnetwork:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ azure_vnet_name }}"
+        address_prefixes: ["{{ azure_vnet_cidr }}"]
+        state: present
+
+    - name: Create Subnet with NSG
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ azure_resource_group }}"
+        virtual_network_name: "{{ azure_vnet_name }}"
+        name: "{{ azure_subnet_name }}"
+        address_prefix_cidr: "{{ azure_subnet_cidr }}"
+        security_group: "{{ azure_nsg_name }}"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 3. Public IPs & Network Interfaces
+    # --------------------------------------------------------------------------
+    - name: Create Public IP Addresses
+      azure.azcollection.azure_rm_publicipaddress:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ item.name }}-pip"
+        allocation_method: "Static"
+        sku: "Standard"
+        state: present
+      loop: "{{ azure_instances }}"
+
+    - name: Create Network Interfaces with Static Private IPs
+      azure.azcollection.azure_rm_networkinterface:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ item.name }}-nic"
+        virtual_network: "{{ azure_vnet_name }}"
+        subnet: "{{ azure_subnet_name }}"
+        public_ip_name: "{{ item.name }}-pip"
+        ip_configurations:
+          - name: "default"
+            private_ip_address: "{{ item.ip }}"
+            private_ip_allocation_method: "Static"
+        state: present
+      loop: "{{ azure_instances }}"
+
+    # --------------------------------------------------------------------------
+    # 4. Virtual Machines across Availability Zones
+    # --------------------------------------------------------------------------
+    - name: Provision Ubuntu Virtual Machines
+      azure.azcollection.azure_rm_virtualmachine:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ item.name }}"
+        vm_size: "{{ azure_vm_size }}"
+        admin_username: "{{ azure_ssh_user }}"
+        ssh_password_enabled: false
+        ssh_public_keys:
+          - path: "/home/{{ azure_ssh_user }}/.ssh/authorized_keys"
+            key_data: "{{ lookup('file', azure_ssh_pub_key_file | expanduser) }}"
+        network_interfaces: ["{{ item.name }}-nic"]
+        image: "{{ azure_image }}"
+        zones: ["{{ item.zone }}"]
+        state: present
+      loop: "{{ azure_instances }}"
+
+    # --------------------------------------------------------------------------
+    # 5. Inventory Generation
+    # --------------------------------------------------------------------------
+    - name: Write Updated Azure Inventory File
+      ansible.builtin.template:
+        src: "inventory_azure.ini.j2"
+        dest: "{{ playbook_dir }}/../inventories/inventory.azure.ini"
+        mode: "0644"
+
+    - name: Display Summary
+      ansible.builtin.debug:
+        msg: "Azure cluster resources successfully provisioned in Resource Group {{ azure_resource_group }}. Inventory updated."

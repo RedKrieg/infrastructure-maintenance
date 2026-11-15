@@ -1,0 +1,151 @@
+---
+# ==============================================================================
+# Playbook: Provision OpenStack Infrastructure
+# ==============================================================================
+# Provisions:
+#   1. Nova SSH Keypair
+#   2. Nova Server Group with anti-affinity policy for HAProxy frontends
+#   3. Neutron Network, Subnet & Router connecting to external gateway
+#   4. Security Group for SSH, HTTP/HTTPS, Teleport & internal subnet mesh
+#   5. Nova Compute Instances for HAProxy, Web, Metrics & Teleport
+#   6. Updates examples/inventories/inventory.openstack.ini
+# ==============================================================================
+
+- name: Provision OpenStack Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_openstack.yml
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. SSH Keypair & Anti-Affinity Group
+    # --------------------------------------------------------------------------
+    - name: Import SSH Keypair to OpenStack
+      openstack.cloud.keypair:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_key_name }}"
+        public_key: "{{ lookup('file', os_ssh_pub_key_file | expanduser) }}"
+        state: present
+
+    - name: Create Nova Anti-Affinity Server Group for Proxies
+      openstack.cloud.server_group:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_server_group_name }}"
+        policies: ["{{ os_server_group_policy }}"]
+        state: present
+      register: proxy_server_group
+
+    # --------------------------------------------------------------------------
+    # 2. Neutron Networking & Router
+    # --------------------------------------------------------------------------
+    - name: Create Tenant Private Network
+      openstack.cloud.network:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_network_name }}"
+        state: present
+      register: net
+
+    - name: Create Private Subnet
+      openstack.cloud.subnet:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_subnet_name }}"
+        network_name: "{{ os_network_name }}"
+        cidr: "{{ os_subnet_cidr }}"
+        dns_nameservers: "{{ os_dns_nameservers }}"
+        enable_dhcp: true
+        state: present
+      register: subnet
+
+    - name: Create Router Connected to External Network
+      openstack.cloud.router:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_router_name }}"
+        network: "{{ os_external_network }}"
+        interfaces:
+          - "{{ os_subnet_name }}"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 3. Security Group & Rules
+    # --------------------------------------------------------------------------
+    - name: Create Cluster Security Group
+      openstack.cloud.security_group:
+        cloud: "{{ os_cloud }}"
+        name: "cluster-secgroup"
+        description: "Security group for headless cluster"
+        state: present
+
+    - name: Allow Ingress SSH
+      openstack.cloud.security_group_rule:
+        cloud: "{{ os_cloud }}"
+        security_group: "cluster-secgroup"
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+        remote_ip_prefix: "0.0.0.0/0"
+        state: present
+
+    - name: Allow Ingress HTTP & HTTPS
+      openstack.cloud.security_group_rule:
+        cloud: "{{ os_cloud }}"
+        security_group: "cluster-secgroup"
+        protocol: tcp
+        port_range_min: "{{ item }}"
+        port_range_max: "{{ item }}"
+        remote_ip_prefix: "0.0.0.0/0"
+        state: present
+      loop: [80, 443]
+
+    - name: Allow Ingress Teleport Ports
+      openstack.cloud.security_group_rule:
+        cloud: "{{ os_cloud }}"
+        security_group: "cluster-secgroup"
+        protocol: tcp
+        port_range_min: "{{ item }}"
+        port_range_max: "{{ item }}"
+        remote_ip_prefix: "0.0.0.0/0"
+        state: present
+      loop: [3080, 3023, 3024]
+
+    - name: Allow Ingress Internal Mesh Communication
+      openstack.cloud.security_group_rule:
+        cloud: "{{ os_cloud }}"
+        security_group: "cluster-secgroup"
+        remote_ip_prefix: "{{ os_subnet_cidr }}"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 4. Compute Instances
+    # --------------------------------------------------------------------------
+    - name: Provision OpenStack Servers
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item.name }}"
+        image: "{{ os_image }}"
+        flavor: "{{ os_flavor }}"
+        key_name: "{{ os_key_name }}"
+        security_groups: ["cluster-secgroup"]
+        nics:
+          - net-name: "{{ os_network_name }}"
+            fixed_ip: "{{ item.ip }}"
+        scheduler_hints: "{{ {'group': proxy_server_group.server_group.id} if item.anti_affinity else omit }}"
+        auto_ip: true
+        wait: true
+        state: present
+      loop: "{{ os_instances }}"
+
+    # --------------------------------------------------------------------------
+    # 5. Inventory Generation
+    # --------------------------------------------------------------------------
+    - name: Write Updated OpenStack Inventory File
+      ansible.builtin.template:
+        src: "inventory_openstack.ini.j2"
+        dest: "{{ playbook_dir }}/../inventories/inventory.openstack.ini"
+        mode: "0644"
+
+    - name: Display Summary
+      ansible.builtin.debug:
+        msg: "OpenStack instances successfully provisioned in network {{ os_network_name }}. Inventory updated."

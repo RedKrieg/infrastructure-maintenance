@@ -20,18 +20,26 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── teleport-access.md           # Teleport JIT sudo access, RBAC roles & CLI helper scripts
 │   ├── monitoring.md                # Native HAProxy Prometheus metrics & dedicated Prometheus role
 │   ├── deployment.md                # Inventory setup, cloud templates, and targeted Ansible tags
-│   └── gcp-compute-setup.md         # GCP quickstart: gcloud CLI, auth & automated VM provisioning
+│   ├── aws-ec2-setup.md             # AWS EC2 quickstart: AWS CLI, VPC, subnets across AZs & EC2 automation
+│   ├── gcp-compute-setup.md         # GCP quickstart: gcloud CLI, auth & automated VM provisioning
+│   ├── azure-setup.md               # Azure quickstart: az CLI, VNet, NSG & automated VM provisioning
+│   ├── oci-compute-setup.md         # OCI quickstart: oci CLI, VCN, Fault Domains & VM provisioning
+│   └── openstack-setup.md           # OpenStack quickstart: clouds.yaml, anti-affinity & Nova provisioning
 ├── examples/
 │   ├── inventories/                 # Cloud-specific example inventory templates
 │   │   ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
 │   │   ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
+│   │   ├── inventory.azure.ini      # Microsoft Azure multi-zone example (VNet 10.240.0.0/16)
+│   │   ├── inventory.oci.ini        # Oracle Cloud Infrastructure multi-FD example (VCN 10.0.0.0/16)
 │   │   └── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
 │   └── provisioning/                # Cloud VM and network provisioning automation
-│       ├── vars_gcp.yml             # GCP project, region, and instance variables
+│       ├── provision_aws.yml        # Ansible playbook provisioning AWS VPC, subnets & EC2 instances
 │       ├── provision_gcp.yml        # Ansible playbook provisioning GCP VPC, firewalls & VMs
-│       ├── deprovision_gcp.yml      # Ansible playbook to teardown GCP resources
-│       ├── create_gcp_instances.sh  # Direct gcloud CLI script to provision instances
-│       └── delete_gcp_instances.sh  # Direct gcloud CLI script to clean up instances
+│       ├── provision_azure.yml      # Ansible playbook provisioning Azure VNet, NSG & VMs
+│       ├── provision_oci.yml        # Ansible playbook provisioning OCI VCN, subnets & VMs
+│       ├── provision_openstack.yml  # Ansible playbook provisioning OpenStack networks & Nova VMs
+│       ├── deprovision_*.yml        # Teardown playbooks for clean resource removal
+│       └── create_*_instances.sh    # Direct CLI shell scripts for zero-dependency provisioning
 ├── vars/
 │   └── admin_users.yml              # Central users configuration file (admins, credentials, public keys)
 ├── group_vars/
@@ -60,7 +68,7 @@ ansible-playbook -i inventory.ini playbook.yml --syntax-check
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-For cloud-specific inventories (AWS, GCP, OpenStack) or targeted execution by tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`), see the [Deployment Guide](docs/deployment.md).
+For cloud-specific inventories (AWS, GCP, Azure, OCI, OpenStack) or targeted execution by tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`), see the [Deployment Guide](docs/deployment.md).
 
 ---
 
@@ -70,10 +78,14 @@ Comprehensive technical documentation is organized into modular guides in the [`
 
 | Document | Description | Key Topics Included |
 | :--- | :--- | :--- |
-| **[Architecture](docs/architecture.md)** | Cloud-Agnostic High-Availability Architecture | • Generic Layer 4 Ingress Load Balancer (TCP Passthrough)<br>• Transparent client IP preservation with zero cloud lock-in<br>• Provider drop-in mapping table (AWS NLB, GCP Passthrough, Octavia, OCI, Bare Metal)<br>• RFC 1918 universal subnet compatibility & zero-cloud-agent model<br>• Dynamic 1:1 host-to-FQDN reverse proxy routing concept |
+| **[Architecture](docs/architecture.md)** | Cloud-Agnostic High-Availability Architecture | • Generic Layer 4 Ingress Load Balancer (TCP Passthrough)<br>• Transparent client IP preservation with zero cloud lock-in<br>• Provider drop-in mapping table (AWS NLB, GCP Passthrough, Azure LB, OCI NLB, Octavia, Bare Metal)<br>• RFC 1918 universal subnet compatibility & zero-cloud-agent model<br>• Dynamic 1:1 host-to-FQDN reverse proxy routing concept |
 | **[SSL Certificates & Failover](docs/ssl-certificates.md)** | Shared SSL Certificates, Succession & Recovery | • Cluster-wide HTTP-01 challenge routing via `backend be_acme`<br>• Automated `sync-haproxy-certs.sh` push over dedicated cluster SSH keys<br>• Rank-based fallback line of succession with 1-day staggered renewal windows<br>• Active SSH protocol negotiation checks (`ssh-keyscan` key exchange & RFC 4253 banner check)<br>• Boot-time reconciliation service (`haproxy-cert-reconcile.service`) & seamless rank resumption |
 | **[Proxy Security & Hardening](docs/proxy-security.md)** | Edge Hardening, Performance & Access Control | • HTTP/2 ALPN negotiation (`h2,http/1.1`) with HTTP/1.1 fallback<br>• Security response headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) & HSTS (1 year preload)<br>• In-memory stick-table volumetric rate limiting (300 req/10s $\rightarrow$ HTTP 429)<br>• Active HTTP backend health checks (`option httpchk` with Host header & regex rstatus)<br>• Dynamic stats & Prometheus ACL whitelist (IPs, CIDRs, dynamic FQDN resolution script & systemd timer)<br>• 60-day log retention via logrotate (`copytruncate`) and journald `MaxRetentionSec=60day` |
 | **[Teleport Access & Sudo Management](docs/teleport-access.md)** | Centralized Access & Dynamic Elevation | • Zero-trust access architecture: Auth/Proxy service and outbound reverse tunnels<br>• Automatic host user provisioning (`create_host_user_mode: keep`)<br>• RBAC role hierarchy: `lead-admin`, unprivileged `junior`, and temporary `elevated-sudo`<br>• Just-In-Time (JIT) access request and approval workflow<br>• Built-in CLI helper scripts and shell aliases (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`)<br>• End-to-end junior administrator workflow walkthrough |
 | **[Prometheus Monitoring](docs/monitoring.md)** | Metrics Scraping & Centralized Monitoring | • Native HAProxy Prometheus exporter (`/metrics` on port 8404)<br>• Unified ACL whitelist and HTTP basic authentication matching stats UI<br>• Automatic whitelisting of inventory `[monitoring]` group hosts<br>• Standalone Prometheus server role (`roles/prometheus_server` on port 9090)<br>• Dynamic proxy scrape target discovery and configuration<br>• Automated `promtool check config` validation, 60-day TSDB retention, and UFW isolation |
-| **[Deployment & Operations](docs/deployment.md)** | Inventory Setup & Execution Guide | • Inventory layout & dynamic 1:1 mapping syntax (`external_fqdn`)<br>• Cloud-specific inventory templates (AWS, GCP, OpenStack, OCI, bare-metal)<br>• Full fleet provisioning commands<br>• Granular execution reference with Ansible tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`)<br>• Pre-flight syntax validation instructions |
-| **[GCP Compute Setup Guide](docs/gcp-compute-setup.md)** | Google Cloud Quickstart & Instance Provisioning | • Complete beginner guide for Google Cloud Platform (GCP)<br>• Installing `gcloud` CLI (Linux, macOS, Windows) & authentication (`gcloud auth login`, ADC)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_gcp.yml`)<br>• Custom VPC, subnet (`10.128.0.0/20`), firewalls, and multi-zone VM placement<br>• Direct CLI provisioning script (`create_gcp_instances.sh`) & teardown commands<br>• Regional External TCP Passthrough Network Load Balancer setup |
+| **[Deployment & Operations](docs/deployment.md)** | Inventory Setup & Execution Guide | • Inventory layout & dynamic 1:1 mapping syntax (`external_fqdn`)<br>• Cloud-specific inventory templates (AWS, GCP, Azure, OCI, OpenStack, bare-metal)<br>• Full fleet provisioning commands<br>• Granular execution reference with Ansible tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`)<br>• Pre-flight syntax validation instructions |
+| **[AWS EC2 Setup Guide](docs/aws-ec2-setup.md)** | AWS EC2 Quickstart & Instance Provisioning | • Complete beginner guide for AWS EC2<br>• Installing AWS CLI v2 & authentication (`aws configure`, SSO)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_aws.yml`)<br>• Custom VPC, multi-AZ subnets (`us-east-1a`, `1b`, `1c`), and security groups<br>• Direct CLI script (`create_aws_instances.sh`) & Network Load Balancer (NLB) setup |
+| **[GCP Compute Setup Guide](docs/gcp-compute-setup.md)** | Google Cloud Quickstart & Instance Provisioning | • Complete beginner guide for Google Cloud Platform (GCP)<br>• Installing `gcloud` CLI & authentication (`gcloud auth login`, ADC)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_gcp.yml`)<br>• Custom VPC, subnet (`10.128.0.0/20`), firewalls, and multi-zone VM placement<br>• Direct CLI script (`create_gcp_instances.sh`) & Regional Passthrough NLB setup |
+| **[Azure Setup Guide](docs/azure-setup.md)** | Microsoft Azure Quickstart & Instance Provisioning | • Complete beginner guide for Microsoft Azure<br>• Installing Azure CLI (`az`) & authentication (`az login`, Service Principal)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_azure.yml`)<br>• Resource Groups, VNets, Subnets, NSGs, and multi-zone Ubuntu VMs (`1`, `2`, `3`)<br>• Direct CLI script (`create_azure_instances.sh`) & Azure Standard Load Balancer setup |
+| **[OCI Compute Setup Guide](docs/oci-compute-setup.md)** | Oracle Cloud Quickstart & Instance Provisioning | • Complete beginner guide for Oracle Cloud Infrastructure (OCI)<br>• Installing OCI CLI & authentication (`oci setup config`, API signing keys)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_oci.yml`)<br>• VCN, regional subnets (`10.0.1.0/24`), and multi-Fault Domain instances (`FD-1`, `FD-2`, `FD-3`)<br>• Direct CLI script (`create_oci_instances.sh`) & OCI Network Load Balancer setup |
+| **[OpenStack Setup Guide](docs/openstack-setup.md)** | OpenStack Quickstart & Instance Provisioning | • Complete beginner guide for OpenStack clouds<br>• Installing OpenStack CLI & authentication via `clouds.yaml`<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_openstack.yml`)<br>• Nova anti-affinity server groups across physical hypervisors, Neutron networks & routers<br>• Direct CLI script (`create_openstack_instances.sh`) & Octavia Load Balancer setup |

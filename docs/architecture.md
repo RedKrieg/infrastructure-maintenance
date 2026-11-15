@@ -45,8 +45,9 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
 | :--- | :--- | :--- | :--- | :--- |
 | **AWS EC2** | **AWS Network Load Balancer (NLB)** (TCP 80/443 with cross-zone load balancing) | Multiple Availability Zones (`us-east-1a`, `1b`, `1c`) | `172.31.0.0/16` | [inventory.aws.ini](../examples/inventories/inventory.aws.ini) |
 | **Google Cloud (GCP)** | **Regional External TCP/UDP Passthrough Network Load Balancer** | Multiple Compute Engine Zones (`us-central1-a`, `1-b`, `1-c`) | `10.128.0.0/20` | [inventory.gcp.ini](../examples/inventories/inventory.gcp.ini) |
+| **Microsoft Azure** | **Azure Standard Load Balancer** (TCP 80/443 load balancing rules) | Multiple Availability Zones (`1`, `2`, `3`) | `10.240.0.0/16` | [inventory.azure.ini](../examples/inventories/inventory.azure.ini) |
+| **Oracle Cloud (OCI)** | **OCI Network Load Balancer (NLB)** (TCP listener) | Multiple Fault Domains (FD-1, FD-2, FD-3) | `10.0.0.0/16` | [inventory.oci.ini](../examples/inventories/inventory.oci.ini) |
 | **OpenStack** | **Octavia Load Balancer** (TCP Amphora listener) or **Keepalived VIP** | Nova Server Group (`anti-affinity`) across hypervisors | `192.168.100.0/24` | [inventory.openstack.ini](../examples/inventories/inventory.openstack.ini) |
-| **Oracle Cloud (OCI)** | **OCI Network Load Balancer (NLB)** (TCP listener) | Multiple Fault Domains (FD-1, FD-2, FD-3) | `10.0.0.0/16` | [inventory.ini](../inventory.ini) |
 | **Bare Metal / On-Prem** | **Keepalived VRRP Floating IP** or **BGP Anycast (ECMP)** | Separate physical racks / PDUs | `10.x`, `172.16.x`, `192.168.x` | [inventory.ini](../inventory.ini) |
 
 ---

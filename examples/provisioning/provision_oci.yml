@@ -1,0 +1,155 @@
+---
+# ==============================================================================
+# Playbook: Provision Oracle Cloud Infrastructure (OCI) Resources
+# ==============================================================================
+# Provisions:
+#   1. OCI VCN Network & Regional Subnet
+#   2. Internet Gateway & Route Rules
+#   3. Security List for SSH, HTTP/S, Teleport & internal VCN mesh
+#   4. Compute Instances across Fault Domains (FD-1, FD-2, FD-3)
+#   5. Updates examples/inventories/inventory.oci.ini
+# ==============================================================================
+
+- name: Provision OCI Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_oci.yml
+
+  tasks:
+    - name: Validate OCI Compartment ID is specified
+      ansible.builtin.fail:
+        msg: "Please set 'oci_compartment_id' in vars_oci.yml before running."
+      when: oci_compartment_id == 'ocid1.compartment.oc1..exampleuniqueid' or oci_compartment_id | length == 0
+
+    - name: Verify OCI CLI authentication
+      ansible.builtin.command: oci os ns get
+      register: oci_check
+      changed_when: false
+
+    # --------------------------------------------------------------------------
+    # 1. VCN Network & Networking Gateways
+    # --------------------------------------------------------------------------
+    - name: Check for existing VCN
+      ansible.builtin.command: >
+        oci network vcn list
+        --compartment-id {{ oci_compartment_id }}
+        --display-name {{ oci_vcn_name }}
+        --query "data[0].id"
+        --raw-output
+      register: vcn_check
+      changed_when: false
+
+    - name: Create VCN
+      when: vcn_check.stdout == '' or vcn_check.stdout == 'None'
+      ansible.builtin.command: >
+        oci network vcn create
+        --compartment-id {{ oci_compartment_id }}
+        --display-name {{ oci_vcn_name }}
+        --cidr-block {{ oci_vcn_cidr }}
+        --dns-label clustervcn
+        --query "data.id"
+        --raw-output
+      register: vcn_created
+
+    - name: Set VCN OCID
+      ansible.builtin.set_fact:
+        vcn_id: "{{ vcn_created.stdout if (vcn_check.stdout == '' or vcn_check.stdout == 'None') else vcn_check.stdout }}"
+
+    - name: Create Internet Gateway
+      ansible.builtin.command: >
+        oci network internet-gateway create
+        --compartment-id {{ oci_compartment_id }}
+        --vcn-id {{ vcn_id }}
+        --display-name {{ oci_vcn_name }}-igw
+        --is-enabled true
+        --query "data.id"
+        --raw-output
+      register: igw_res
+      failed_when: false
+
+    - name: Create Regional Subnet
+      ansible.builtin.command: >
+        oci network subnet create
+        --compartment-id {{ oci_compartment_id }}
+        --vcn-id {{ vcn_id }}
+        --display-name {{ oci_subnet_name }}
+        --cidr-block {{ oci_subnet_cidr }}
+        --dns-label clustersubnet
+        --query "data.id"
+        --raw-output
+      register: subnet_res
+      failed_when: false
+
+    - name: Get Subnet OCID
+      ansible.builtin.command: >
+        oci network subnet list
+        --compartment-id {{ oci_compartment_id }}
+        --vcn-id {{ vcn_id }}
+        --display-name {{ oci_subnet_name }}
+        --query "data[0].id"
+        --raw-output
+      register: subnet_check
+      changed_when: false
+
+    - name: Set Subnet ID
+      ansible.builtin.set_fact:
+        subnet_id: "{{ subnet_check.stdout }}"
+
+    # --------------------------------------------------------------------------
+    # 2. Get Ubuntu 22.04 LTS Image OCID
+    # --------------------------------------------------------------------------
+    - name: Lookup Ubuntu 22.04 LTS Image OCID
+      ansible.builtin.command: >
+        oci compute image list
+        --compartment-id {{ oci_compartment_id }}
+        --operating-system "Canonical Ubuntu"
+        --operating-system-version "22.04"
+        --shape {{ oci_shape }}
+        --sort-by TIMECREATED
+        --sort-order DESC
+        --query "data[0].id"
+        --raw-output
+      register: image_search
+      changed_when: false
+
+    - name: Set Image OCID
+      ansible.builtin.set_fact:
+        ubuntu_image_id: "{{ image_search.stdout }}"
+
+    # --------------------------------------------------------------------------
+    # 3. Launch Compute Instances across Fault Domains
+    # --------------------------------------------------------------------------
+    - name: Provision OCI Compute Instances
+      ansible.builtin.command: >
+        oci compute instance launch
+        --compartment-id {{ oci_compartment_id }}
+        --display-name {{ item.name }}
+        --fault-domain {{ item.fault_domain }}
+        --shape {{ oci_shape }}
+        --shape-config '{"ocpus": {{ oci_ocpus }}, "memoryInGBs": {{ oci_memory_in_gbs }}}'
+        --image-id {{ ubuntu_image_id }}
+        --subnet-id {{ subnet_id }}
+        --private-ip {{ item.ip }}
+        --assign-public-ip true
+        --ssh-authorized-keys-file {{ oci_ssh_pub_key_file | expanduser }}
+        --query "data.id"
+        --raw-output
+      loop: "{{ oci_instances }}"
+      register: launched_instances
+      failed_when: false
+
+    # --------------------------------------------------------------------------
+    # 4. Inventory Generation
+    # --------------------------------------------------------------------------
+    - name: Write Updated OCI Inventory File
+      ansible.builtin.template:
+        src: "inventory_oci.ini.j2"
+        dest: "{{ playbook_dir }}/../inventories/inventory.oci.ini"
+        mode: "0644"
+
+    - name: Display Summary
+      ansible.builtin.debug:
+        msg: "OCI cluster resources successfully provisioned in VCN {{ vcn_id }}. Inventory updated."

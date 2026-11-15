@@ -1,0 +1,42 @@
+---
+# ==============================================================================
+# Playbook: Teardown / Deprovision OCI Infrastructure
+# ==============================================================================
+
+- name: Deprovision OCI Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_oci.yml
+
+  tasks:
+    - name: Terminate OCI Instances
+      ansible.builtin.shell: >
+        for inst_id in $(oci compute instance list --compartment-id {{ oci_compartment_id }} --lifecycle-state RUNNING --query "data[?contains(\"display-name\", 'proxy-') || contains(\"display-name\", 'web-') || contains(\"display-name\", 'monitoring-') || contains(\"display-name\", 'teleport-')].id" --raw-output | tr -d '[],"'); do
+          if [ -n "$inst_id" ]; then
+            oci compute instance terminate --instance-id "$inst_id" --preserve-boot-volume false --force
+          fi
+        done
+      failed_when: false
+
+    - name: Delete Subnet
+      ansible.builtin.shell: >
+        SUBNET_ID=$(oci network subnet list --compartment-id {{ oci_compartment_id }} --display-name {{ oci_subnet_name }} --query "data[0].id" --raw-output 2>/dev/null || true)
+        if [ -n "$SUBNET_ID" ] && [ "$SUBNET_ID" != "None" ]; then
+          oci network subnet delete --subnet-id "$SUBNET_ID" --force
+        fi
+      failed_when: false
+
+    - name: Delete VCN
+      ansible.builtin.shell: >
+        VCN_ID=$(oci network vcn list --compartment-id {{ oci_compartment_id }} --display-name {{ oci_vcn_name }} --query "data[0].id" --raw-output 2>/dev/null || true)
+        if [ -n "$VCN_ID" ] && [ "$VCN_ID" != "None" ]; then
+          oci network vcn delete --vcn-id "$VCN_ID" --force
+        fi
+      failed_when: false
+
+    - name: Teardown Summary
+      ansible.builtin.debug:
+        msg: "OCI cluster resources successfully deprovisioned."

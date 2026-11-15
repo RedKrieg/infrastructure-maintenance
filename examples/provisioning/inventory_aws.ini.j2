@@ -1,0 +1,36 @@
+# ==============================================================================
+# AWS EC2 Example Inventory
+# Generated automatically by examples/provisioning/provision_aws.yml
+# Frontends placed across distinct Availability Zones (e.g., us-east-1a, 1b, 1c)
+# Behind an AWS Network Load Balancer (NLB) with TCP Cross-Zone routing
+# ==============================================================================
+
+[proxies]
+{% for inst in aws_instances if inst.group == 'proxies' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
+[webservers]
+{% for inst in aws_instances if inst.group == 'webservers' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} external_fqdn={{ inst.external_fqdn }} az={{ inst.az }}
+{% endfor %}
+
+[monitoring]
+{% for inst in aws_instances if inst.group == 'monitoring' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
+[teleport_servers]
+{% for inst in aws_instances if inst.group == 'teleport_servers' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
+[headless_nodes:children]
+proxies
+webservers
+monitoring
+teleport_servers
+
+[headless_nodes:vars]
+ansible_user={{ aws_ssh_user }}
+ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'

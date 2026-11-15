@@ -1,0 +1,63 @@
+---
+# ==============================================================================
+# Playbook: Teardown / Deprovision OpenStack Infrastructure
+# ==============================================================================
+
+- name: Deprovision OpenStack Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_openstack.yml
+
+  tasks:
+    - name: Delete Nova Compute Instances
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item.name }}"
+        state: absent
+        wait: true
+      loop: "{{ os_instances }}"
+
+    - name: Delete Security Group
+      openstack.cloud.security_group:
+        cloud: "{{ os_cloud }}"
+        name: "cluster-secgroup"
+        state: absent
+
+    - name: Delete Router
+      openstack.cloud.router:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_router_name }}"
+        interfaces:
+          - "{{ os_subnet_name }}"
+        state: absent
+
+    - name: Delete Subnet
+      openstack.cloud.subnet:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_subnet_name }}"
+        state: absent
+
+    - name: Delete Network
+      openstack.cloud.network:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_network_name }}"
+        state: absent
+
+    - name: Delete Server Group
+      openstack.cloud.server_group:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_server_group_name }}"
+        state: absent
+
+    - name: Delete Keypair
+      openstack.cloud.keypair:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_key_name }}"
+        state: absent
+
+    - name: Teardown Summary
+      ansible.builtin.debug:
+        msg: "OpenStack cluster resources successfully deprovisioned."

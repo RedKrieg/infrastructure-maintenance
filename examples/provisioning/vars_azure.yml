@@ -1,0 +1,71 @@
+---
+# ==============================================================================
+# Microsoft Azure Provisioning Configuration Variables
+# ==============================================================================
+
+azure_resource_group: "cluster-rg"
+azure_location: "eastus"
+
+# Networking Configuration
+azure_vnet_name: "cluster-vnet"
+azure_vnet_cidr: "10.240.0.0/16"
+azure_subnet_name: "cluster-subnet"
+azure_subnet_cidr: "10.240.1.0/24"
+azure_nsg_name: "cluster-nsg"
+
+# VM Sizing & Image
+azure_vm_size: "Standard_B2s"
+azure_image:
+  publisher: "Canonical"
+  offer: "0001-com-ubuntu-server-jammy"
+  sku: "22_04-lts-gen2"
+  version: "latest"
+
+# SSH Authentication
+azure_ssh_user: "ubuntu"
+azure_ssh_pub_key_file: "~/.ssh/id_ed25519.pub"
+
+# Cluster Topology across Availability Zones (1, 2, 3)
+azure_instances:
+  - name: "proxy-01"
+    zone: "1"
+    ip: "10.240.1.10"
+    group: "proxies"
+
+  - name: "proxy-02"
+    zone: "2"
+    ip: "10.240.1.20"
+    group: "proxies"
+
+  - name: "proxy-03"
+    zone: "3"
+    ip: "10.240.1.30"
+    group: "proxies"
+
+  - name: "web-01"
+    zone: "1"
+    ip: "10.240.1.11"
+    group: "webservers"
+    external_fqdn: "web1.example.com"
+
+  - name: "web-02"
+    zone: "2"
+    ip: "10.240.1.21"
+    group: "webservers"
+    external_fqdn: "web2.example.com"
+
+  - name: "web-03"
+    zone: "3"
+    ip: "10.240.1.31"
+    group: "webservers"
+    external_fqdn: "web3.example.com"
+
+  - name: "monitoring-01"
+    zone: "1"
+    ip: "10.240.1.50"
+    group: "monitoring"
+
+  - name: "teleport-01"
+    zone: "1"
+    ip: "10.240.1.60"
+    group: "teleport_servers"

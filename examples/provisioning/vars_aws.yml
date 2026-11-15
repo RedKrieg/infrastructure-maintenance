@@ -1,0 +1,101 @@
+---
+# ==============================================================================
+# AWS EC2 Provisioning Configuration Variables
+# ==============================================================================
+
+aws_region: "us-east-1"
+
+# VPC Network & Subnet Topology
+aws_vpc_name: "cluster-vpc"
+aws_vpc_cidr: "172.31.0.0/16"
+
+aws_subnets:
+  - name: "cluster-subnet-1a"
+    cidr: "172.31.10.0/24"
+    az: "us-east-1a"
+  - name: "cluster-subnet-1b"
+    cidr: "172.31.20.0/24"
+    az: "us-east-1b"
+  - name: "cluster-subnet-1c"
+    cidr: "172.31.30.0/24"
+    az: "us-east-1c"
+
+# EC2 Instance Sizing & AMI
+aws_instance_type: "t3.medium"
+aws_volume_size_gb: 30
+# Official Canonical Ubuntu 22.04 LTS (Jammy) AMI name filter
+aws_ubuntu_ami_filter: "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
+
+# SSH Key Pair
+aws_key_name: "cluster-key"
+aws_ssh_user: "ubuntu"
+aws_ssh_pub_key_file: "~/.ssh/id_ed25519.pub"
+
+# Cluster Node Topology Across Availability Zones
+aws_instances:
+  - name: "proxy-01"
+    az: "us-east-1a"
+    subnet_name: "cluster-subnet-1a"
+    private_ip: "172.31.10.10"
+    group: "proxies"
+    tags:
+      Role: "proxy"
+
+  - name: "proxy-02"
+    az: "us-east-1b"
+    subnet_name: "cluster-subnet-1b"
+    private_ip: "172.31.20.10"
+    group: "proxies"
+    tags:
+      Role: "proxy"
+
+  - name: "proxy-03"
+    az: "us-east-1c"
+    subnet_name: "cluster-subnet-1c"
+    private_ip: "172.31.30.10"
+    group: "proxies"
+    tags:
+      Role: "proxy"
+
+  - name: "web-01"
+    az: "us-east-1a"
+    subnet_name: "cluster-subnet-1a"
+    private_ip: "172.31.10.11"
+    group: "webservers"
+    external_fqdn: "web1.example.com"
+    tags:
+      Role: "webserver"
+
+  - name: "web-02"
+    az: "us-east-1b"
+    subnet_name: "cluster-subnet-1b"
+    private_ip: "172.31.20.11"
+    group: "webservers"
+    external_fqdn: "web2.example.com"
+    tags:
+      Role: "webserver"
+
+  - name: "web-03"
+    az: "us-east-1c"
+    subnet_name: "cluster-subnet-1c"
+    private_ip: "172.31.30.11"
+    group: "webservers"
+    external_fqdn: "web3.example.com"
+    tags:
+      Role: "webserver"
+
+  - name: "monitoring-01"
+    az: "us-east-1a"
+    subnet_name: "cluster-subnet-1a"
+    private_ip: "172.31.10.50"
+    group: "monitoring"
+    tags:
+      Role: "monitoring"
+
+  - name: "teleport-01"
+    az: "us-east-1a"
+    subnet_name: "cluster-subnet-1a"
+    private_ip: "172.31.10.60"
+    group: "teleport_servers"
+    tags:
+      Role: "teleport"

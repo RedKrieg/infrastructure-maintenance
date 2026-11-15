@@ -47,13 +47,20 @@ Ready-to-use cloud-specific inventory templates are available in the `examples/i
 
 | Environment | Inventory Path | Architecture Highlights | Setup Guide |
 | :--- | :--- | :--- | :--- |
-| **AWS EC2** | [examples/inventories/inventory.aws.ini](../examples/inventories/inventory.aws.ini) | Multi-AZ placement (`us-east-1a`, `1b`, `1c`), AWS Network Load Balancer (NLB) fronting proxies. | — |
+| **AWS EC2** | [examples/inventories/inventory.aws.ini](../examples/inventories/inventory.aws.ini) | Multi-AZ placement (`us-east-1a`, `1b`, `1c`), AWS Network Load Balancer (NLB) fronting proxies. | [AWS EC2 Setup Guide](aws-ec2-setup.md) |
 | **Google Cloud (GCP)** | [examples/inventories/inventory.gcp.ini](../examples/inventories/inventory.gcp.ini) | Multi-zone Compute Engine (`us-central1-a`, `1-b`, `1-c`), Regional Passthrough Network Load Balancer. | [GCP Compute Setup Guide](gcp-compute-setup.md) |
-| **OpenStack** | [examples/inventories/inventory.openstack.ini](../examples/inventories/inventory.openstack.ini) | Nova anti-affinity server groups across physical hypervisors, Octavia TCP listener. | — |
+| **Microsoft Azure** | [examples/inventories/inventory.azure.ini](../examples/inventories/inventory.azure.ini) | Multi-zone Azure VMs (`1`, `2`, `3`), Azure Standard Load Balancer (TCP 80/443). | [Azure Setup Guide](azure-setup.md) |
+| **Oracle Cloud (OCI)** | [examples/inventories/inventory.oci.ini](../examples/inventories/inventory.oci.ini) | Multi-fault-domain Compute (`FD-1`, `FD-2`, `FD-3`), OCI Network Load Balancer. | [OCI Compute Setup Guide](oci-compute-setup.md) |
+| **OpenStack** | [examples/inventories/inventory.openstack.ini](../examples/inventories/inventory.openstack.ini) | Nova anti-affinity server groups across physical hypervisors, Octavia TCP listener. | [OpenStack Setup Guide](openstack-setup.md) |
 | **OCI / Bare Metal** | [inventory.ini](../inventory.ini) | Standard RFC 1918 multi-rack or fault-domain deployment. | — |
 
 > [!TIP]
-> For new users starting on Google Cloud, see the complete [Google Cloud Platform (GCP) Compute Engine Quickstart & Provisioning Guide](gcp-compute-setup.md) for step-by-step instructions on installing the `gcloud` CLI, authenticating, and running the automated instance provisioning playbooks (`examples/provisioning/provision_gcp.yml`).
+> Comprehensive quickstart and automated VM provisioning guides are available for each platform:
+> - **[AWS EC2 Setup Guide](aws-ec2-setup.md)** (`examples/provisioning/provision_aws.yml`)
+> - **[GCP Compute Setup Guide](gcp-compute-setup.md)** (`examples/provisioning/provision_gcp.yml`)
+> - **[Azure Setup Guide](azure-setup.md)** (`examples/provisioning/provision_azure.yml`)
+> - **[OCI Compute Setup Guide](oci-compute-setup.md)** (`examples/provisioning/provision_oci.yml`)
+> - **[OpenStack Setup Guide](openstack-setup.md)** (`examples/provisioning/provision_openstack.yml`)
 
 ---
 
@@ -67,7 +74,7 @@ ansible-playbook -i inventory.ini playbook.yml --syntax-check
 
 ### Full Fleet Provisioning
 ```bash
-# Using the default inventory:
+# Using the default bare-metal / RFC 1918 inventory:
 ansible-playbook -i inventory.ini playbook.yml
 
 # Or deploying to AWS EC2:
@@ -75,6 +82,12 @@ ansible-playbook -i examples/inventories/inventory.aws.ini playbook.yml
 
 # Or deploying to GCP Compute Engine:
 ansible-playbook -i examples/inventories/inventory.gcp.ini playbook.yml
+
+# Or deploying to Microsoft Azure:
+ansible-playbook -i examples/inventories/inventory.azure.ini playbook.yml
+
+# Or deploying to Oracle Cloud Infrastructure (OCI):
+ansible-playbook -i examples/inventories/inventory.oci.ini playbook.yml
 
 # Or deploying to OpenStack:
 ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml

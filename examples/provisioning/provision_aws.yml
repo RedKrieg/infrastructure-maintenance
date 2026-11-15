@@ -1,0 +1,173 @@
+---
+# ==============================================================================
+# Playbook: Provision AWS EC2 Infrastructure
+# ==============================================================================
+# Provisions:
+#   1. AWS EC2 Key Pair
+#   2. Custom VPC & Subnets across Availability Zones (us-east-1a, 1b, 1c)
+#   3. Internet Gateway & Route Table with default 0.0.0.0/0 route
+#   4. Security Group for SSH, HTTP/HTTPS, Teleport & internal VPC mesh
+#   5. EC2 Ubuntu 22.04 LTS instances for HAProxy, Web, Metrics & Teleport
+#   6. Updates examples/inventories/inventory.aws.ini
+# ==============================================================================
+
+- name: Provision AWS EC2 Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_aws.yml
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. SSH Key Pair & AMI Discovery
+    # --------------------------------------------------------------------------
+    - name: Import SSH Key Pair to AWS
+      amazon.aws.ec2_key:
+        name: "{{ aws_key_name }}"
+        key_material: "{{ lookup('file', aws_ssh_pub_key_file | expanduser) }}"
+        region: "{{ aws_region }}"
+        state: present
+
+    - name: Find Latest Canonical Ubuntu 22.04 LTS AMI
+      amazon.aws.ec2_ami_info:
+        region: "{{ aws_region }}"
+        owners: ["099720109477"] # Canonical
+        filters:
+          name: "{{ aws_ubuntu_ami_filter }}"
+          architecture: "x86_64"
+          virtualization-type: "hvm"
+          root-device-type: "ebs"
+      register: ami_search
+
+    - name: Set Ubuntu AMI ID
+      ansible.builtin.set_fact:
+        ubuntu_ami_id: "{{ (ami_search.images | sort(attribute='creation_date') | last).image_id }}"
+
+    # --------------------------------------------------------------------------
+    # 2. VPC Network & Internet Gateway
+    # --------------------------------------------------------------------------
+    - name: Create VPC Network
+      amazon.aws.ec2_vpc_net:
+        name: "{{ aws_vpc_name }}"
+        cidr_block: "{{ aws_vpc_cidr }}"
+        region: "{{ aws_region }}"
+        dns_hostnames: true
+        dns_support: true
+        state: present
+      register: vpc
+
+    - name: Create Internet Gateway
+      amazon.aws.ec2_vpc_igw:
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        state: present
+        tags:
+          Name: "{{ aws_vpc_name }}-igw"
+      register: igw
+
+    # --------------------------------------------------------------------------
+    # 3. Subnets across Availability Zones
+    # --------------------------------------------------------------------------
+    - name: Create Subnets in Availability Zones
+      amazon.aws.ec2_vpc_subnet:
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: "{{ item.cidr }}"
+        az: "{{ item.az }}"
+        region: "{{ aws_region }}"
+        map_public_ip_on_launch: true
+        state: present
+        tags:
+          Name: "{{ item.name }}"
+      loop: "{{ aws_subnets }}"
+      register: created_subnets
+
+    - name: Map Subnet Names to IDs
+      ansible.builtin.set_fact:
+        subnet_id_map: "{{ subnet_id_map | default({}) | combine({item.subnet.tags.Name: item.subnet.id}) }}"
+      loop: "{{ created_subnets.results }}"
+
+    - name: Configure Public Route Table
+      amazon.aws.ec2_vpc_route_table:
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        tags:
+          Name: "{{ aws_vpc_name }}-public-rt"
+        subnets: "{{ created_subnets.results | map(attribute='subnet.id') | list }}"
+        routes:
+          - dest: "0.0.0.0/0"
+            gateway_id: "{{ igw.gateway_id }}"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 4. Security Group
+    # --------------------------------------------------------------------------
+    - name: Create Cluster Security Group
+      amazon.aws.ec2_security_group:
+        name: "{{ aws_vpc_name }}-sg"
+        description: "Allow SSH, HTTP/HTTPS, Teleport and internal VPC traffic"
+        vpc_id: "{{ vpc.vpc.id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports: [22]
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "SSH"
+          - proto: tcp
+            ports: [80, 443]
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "HTTP and HTTPS"
+          - proto: tcp
+            ports: [3080, 3023, 3024]
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "Teleport Web, Proxy & Reverse Tunnel"
+          - proto: all
+            cidr_ip: "{{ aws_vpc_cidr }}"
+            rule_desc: "Full internal VPC mesh communication"
+        rules_egress:
+          - proto: all
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "Allow all outbound traffic"
+        state: present
+      register: sec_group
+
+    # --------------------------------------------------------------------------
+    # 5. Launch EC2 Instances
+    # --------------------------------------------------------------------------
+    - name: Provision EC2 Instances
+      amazon.aws.ec2_instance:
+        name: "{{ item.name }}"
+        image_id: "{{ ubuntu_ami_id }}"
+        instance_type: "{{ aws_instance_type }}"
+        key_name: "{{ aws_key_name }}"
+        vpc_subnet_id: "{{ subnet_id_map[item.subnet_name] }}"
+        security_groups: ["{{ sec_group.group_id }}"]
+        network:
+          assign_public_ip: true
+          private_ip_address: "{{ item.private_ip }}"
+        volumes:
+          - device_name: "/dev/sda1"
+            ebs:
+              volume_size: "{{ aws_volume_size_gb }}"
+              volume_type: "gp3"
+              delete_on_termination: true
+        tags: "{{ item.tags | combine({'Name': item.name, 'Cluster': 'headless-ubuntu'}) }}"
+        region: "{{ aws_region }}"
+        wait: true
+        state: running
+      loop: "{{ aws_instances }}"
+      register: launched_instances
+
+    # --------------------------------------------------------------------------
+    # 6. Inventory Generation
+    # --------------------------------------------------------------------------
+    - name: Write Updated AWS Inventory File
+      ansible.builtin.template:
+        src: "inventory_aws.ini.j2"
+        dest: "{{ playbook_dir }}/../inventories/inventory.aws.ini"
+        mode: "0644"
+
+    - name: Display Summary
+      ansible.builtin.debug:
+        msg: "AWS EC2 instances provisioned successfully in VPC {{ vpc.vpc.id }}. Inventory updated."

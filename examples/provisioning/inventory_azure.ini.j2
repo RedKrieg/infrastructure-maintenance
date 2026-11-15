@@ -1,0 +1,36 @@
+# ==============================================================================
+# Microsoft Azure Example Inventory
+# Generated automatically by examples/provisioning/provision_azure.yml
+# Frontends placed across distinct Availability Zones (e.g., 1, 2, 3)
+# Behind an Azure Standard Load Balancer with TCP 80/443 load balancing rules
+# ==============================================================================
+
+[proxies]
+{% for inst in azure_instances if inst.group == 'proxies' %}
+{{ inst.name }} ansible_host={{ inst.ip }} zone={{ inst.zone }}
+{% endfor %}
+
+[webservers]
+{% for inst in azure_instances if inst.group == 'webservers' %}
+{{ inst.name }} ansible_host={{ inst.ip }} external_fqdn={{ inst.external_fqdn }} zone={{ inst.zone }}
+{% endfor %}
+
+[monitoring]
+{% for inst in azure_instances if inst.group == 'monitoring' %}
+{{ inst.name }} ansible_host={{ inst.ip }} zone={{ inst.zone }}
+{% endfor %}
+
+[teleport_servers]
+{% for inst in azure_instances if inst.group == 'teleport_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }} zone={{ inst.zone }}
+{% endfor %}
+
+[headless_nodes:children]
+proxies
+webservers
+monitoring
+teleport_servers
+
+[headless_nodes:vars]
+ansible_user={{ azure_ssh_user }}
+ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'
