@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport Sudo Elevation Request Helper for Junior Admins
+# Managed by Ansible
+# ==============================================================================
+set -e
+
+ELEVATED_ROLE="elevated-sudo"
+NOWAIT=0
+REASON=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --nowait|-n)
+            NOWAIT=1
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: teleport-request-sudo [--nowait] [reason...]"
+            echo ""
+            echo "Requests temporary 'elevated-sudo' access in the Teleport cluster."
+            echo "Options:"
+            echo "  --nowait, -n    Submit request and exit immediately without waiting for approval"
+            echo "  -h, --help      Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  teleport-request-sudo Need to restart HAProxy on proxy-01"
+            echo "  teleport-request-sudo --nowait Emergency database maintenance"
+            exit 0
+            ;;
+        *)
+            if [ -z "$REASON" ]; then
+                REASON="$1"
+            else
+                REASON="$REASON $1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# If no reason was passed as CLI arguments, prompt interactively
+if [ -z "$REASON" ]; then
+    echo "===================================================================="
+    echo " Teleport Just-In-Time Sudo Elevation Request"
+    echo "===================================================================="
+    read -r -p "Enter justification reason for sudo access: " REASON
+fi
+
+if [ -z "$REASON" ]; then
+    echo "[!] Error: A justification reason is required to request elevated sudo access." >&2
+    exit 1
+fi
+
+echo "===================================================================="
+echo " Submitting Sudo Elevation Request"
+echo " Role          : ${ELEVATED_ROLE}"
+echo " Justification : ${REASON}"
+echo "===================================================================="
+
+if [ "$NOWAIT" -eq 1 ]; then
+    tsh request create --roles="${ELEVATED_ROLE}" --reason="${REASON}" --nowait
+    echo ""
+    echo "[✓] Sudo request submitted in background."
+    echo "Check approval status with: teleport-status"
+    echo "Once approved, assume role with: tsh login --request-id=<ID>"
+else
+    echo "[*] Waiting for lead administrator approval (Press Ctrl+C to cancel wait)..."
+    tsh request create --roles="${ELEVATED_ROLE}" --reason="${REASON}"
+    echo ""
+    echo "===================================================================="
+    echo "[✓] Access request APPROVED!"
+    echo "You now have temporary sudo privileges (1 hour expiration)."
+    echo "When finished, drop elevated privileges with: teleport-drop-sudo"
+    echo "===================================================================="
+fi

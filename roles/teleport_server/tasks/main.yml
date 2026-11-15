@@ -18,3 +18,7 @@
 - name: Provision Teleport RBAC Roles and Users
   ansible.builtin.include_tasks: rbac.yml
   tags: [teleport, teleport_server, rbac]
+
+- name: Deploy Teleport Admin Approval Helper Scripts
+  ansible.builtin.include_tasks: helpers.yml
+  tags: [teleport, teleport_server, helpers]

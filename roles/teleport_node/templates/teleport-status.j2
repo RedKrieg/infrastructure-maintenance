@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport Session & Privilege Status Helper
+# Managed by Ansible
+# ==============================================================================
+set -e
+
+echo "===================================================================="
+echo " Teleport Session & Privilege Status"
+echo "===================================================================="
+
+if ! tsh status >/dev/null 2>&1; then
+    echo "[!] You are not currently logged in to Teleport."
+    echo "Run 'teleport-login' to authenticate."
+    exit 1
+fi
+
+tsh status
+
+echo ""
+echo "--- Active / Pending Access Requests ---"
+tsh request ls 2>/dev/null || echo "No active access requests."
+
+# Check if elevated-sudo is among active roles
+if tsh status 2>/dev/null | grep -q "elevated-sudo"; then
+    echo ""
+    echo "[!] NOTICE: Elevated sudo privileges are currently ACTIVE."
+    echo "    To revert to standard unprivileged role: teleport-drop-sudo"
+else
+    echo ""
+    echo "[i] Status: Standard unprivileged access (No sudo)."
+    echo "    To request sudo escalation: teleport-request-sudo <reason>"
+fi

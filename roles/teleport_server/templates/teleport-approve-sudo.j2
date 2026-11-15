@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport Access Request Approver Helper (for Lead Admins)
+# Managed by Ansible
+# ==============================================================================
+set -e
+
+REQ_ID="$1"
+
+if [ -z "$REQ_ID" ]; then
+    echo "===================================================================="
+    echo " Pending Access Requests in Cluster"
+    echo "===================================================================="
+    # Try tctl first (if run directly on Auth server), fallback to tsh
+    if command -v tctl >/dev/null 2>&1 && [ -w /var/lib/teleport ]; then
+        tctl request ls
+    else
+        tsh request ls
+    fi
+    echo ""
+    read -r -p "Enter Request ID to approve (or Ctrl+C to cancel): " REQ_ID
+fi
+
+if [ -n "$REQ_ID" ]; then
+    echo "[*] Approving request ${REQ_ID}..."
+    if command -v tctl >/dev/null 2>&1 && [ -w /var/lib/teleport ]; then
+        tctl request approve "$REQ_ID"
+    else
+        tsh request review --approve "$REQ_ID"
+    fi
+    echo "[✓] Request ${REQ_ID} successfully approved!"
+fi

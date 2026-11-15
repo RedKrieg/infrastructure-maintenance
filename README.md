@@ -316,34 +316,52 @@ Permissions are managed centrally through declarative Teleport roles without edi
 | **`junior`** (`junior`) | **None** (unprivileged) | Can request `elevated-sudo` | Zero sudo capability on initial login. Standard commands only. |
 | **`elevated-sudo`** | `ALL = (ALL) NOPASSWD: ALL` | 1-hour expiration | Temporary escalation target granted only upon approval. |
 
-### 3. Junior Sudo Workflow Example
+### 3. Junior Sudo Workflow & Helper Scripts
 
-1. **Junior Logs In (Unprivileged)**:
+Pre-configured shell helpers and aliases are deployed to `/usr/local/bin` and `/etc/profile.d/teleport_helpers.sh` across all nodes so junior admins never need to memorize complex CLI flags:
+
+| Helper Command | Short Alias | Purpose |
+| :--- | :--- | :--- |
+| `teleport-login [user]` | `tlogin` | Connects and authenticates to the Teleport cluster with pre-configured proxy address. |
+| `teleport-request-sudo [reason]` | `tsudo` | Prompts for a justification reason, requests `elevated-sudo`, and waits for approval. |
+| `teleport-status` | `tstatus` | Checks active session, remaining certificate TTL, and access request status. |
+| `teleport-drop-sudo` | `tdrop` | Drops elevated role immediately and reverts to unprivileged status. |
+| `teleport-ssh [user@]node` | `tssh` | Connects to a cluster node via Teleport SSH proxy (runs `tsh ls` if no node specified). |
+| `teleport-approve-sudo [id]` | `tapprove` | *(Lead Admin)* Interactively reviews and approves pending access requests. |
+
+#### Complete Junior Admin Workflow:
+1. **Login**:
    ```bash
-   tsh login --proxy=teleport.example.com:3080 --user=junior
-   tsh ssh ubuntu@web-01
-   # Any sudo command fails: "junior is not in the sudoers file"
+   tlogin junior
+   # Authenticates via SSO/credentials to the Teleport cluster
    ```
-2. **Junior Requests Sudo Access**:
+2. **Connect (Unprivileged)**:
    ```bash
-   tsh request create --roles=elevated-sudo --reason="Need to restart HAProxy and verify SSL logs"
-   # Submits request with ID: 12345-abcde...
+   tssh web-01
+   # Normal user permissions only. Running `sudo` is rejected.
    ```
-3. **Lead Admin Approves Request**:
-   The lead admin (`redkrieg`) receives a notification in the Teleport Web UI or CLI:
+3. **Request Sudo Access**:
    ```bash
-   tctl request approve 12345-abcde...
-   # Or via tsh:
-   tsh request review --approve 12345-abcde...
+   tsudo "Need to restart HAProxy and verify SSL logs"
+   # Submits request and waits for lead admin approval:
+   # [*] Waiting for lead administrator approval (Press Ctrl+C to cancel wait)...
    ```
-4. **Junior Assumes Escalated Privileges**:
+4. **Lead Admin Approves** (from another terminal or Web UI):
    ```bash
-   tsh login --request-id=12345-abcde...
-   tsh ssh ubuntu@web-01
-   sudo systemctl restart haproxy  # Sudo works immediately!
+   tapprove
+   # Lists pending requests and approves the junior's ticket
    ```
-5. **Automatic Revocation**:
-   After 1 hour (`max_session_ttl: 1h`), the role expires. Teleport automatically removes `/etc/sudoers.d/teleport-junior` on the target nodes.
+5. **Junior Receives Immediate Sudo Access**:
+   Upon approval, `tsudo` automatically activates the elevated certificate!
+   ```bash
+   # [✓] Access request APPROVED! You now have temporary sudo privileges (1 hour expiration).
+   sudo systemctl restart haproxy    # Sudo works!
+   ```
+6. **Drop Sudo When Done**:
+   ```bash
+   tdrop
+   # [✓] Elevated sudo privileges successfully dropped. Reverted to standard unprivileged role.
+   ```
 
 ---
 

@@ -1,0 +1,28 @@
+---
+# ==============================================================================
+# Deploy Teleport Helper Scripts & Aliases for Junior Admins
+# ==============================================================================
+
+- name: Deploy Teleport CLI helper scripts to /usr/local/bin
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/usr/local/bin/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - { src: "teleport-login.j2", dest: "teleport-login" }
+    - { src: "teleport-request-sudo.j2", dest: "teleport-request-sudo" }
+    - { src: "teleport-status.j2", dest: "teleport-status" }
+    - { src: "teleport-drop-sudo.j2", dest: "teleport-drop-sudo" }
+    - { src: "teleport-ssh.j2", dest: "teleport-ssh" }
+  tags: [teleport, teleport_node, helpers]
+
+- name: Deploy Teleport shell aliases to /etc/profile.d/teleport_helpers.sh
+  ansible.builtin.template:
+    src: teleport_helpers.sh.j2
+    dest: /etc/profile.d/teleport_helpers.sh
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [teleport, teleport_node, helpers]

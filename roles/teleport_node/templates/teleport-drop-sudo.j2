@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport Drop Sudo Elevation Helper
+# Managed by Ansible
+# ==============================================================================
+set -e
+
+echo "===================================================================="
+echo " Dropping Teleport Elevated Privileges"
+echo "===================================================================="
+
+if ! tsh status >/dev/null 2>&1; then
+    echo "[!] Not logged in to Teleport."
+    exit 0
+fi
+
+tsh request drop
+
+echo ""
+echo "[✓] Elevated sudo privileges successfully dropped."
+echo "You have reverted to standard unprivileged role."

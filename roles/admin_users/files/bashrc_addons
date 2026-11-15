@@ -61,3 +61,13 @@ alias grep='grep --color=auto'
 alias ports='ss -tulanp'
 alias df='df -h'
 alias du='du -h'
+
+# Teleport Centralized Access & JIT Sudo Helpers
+alias tlogin='teleport-login'
+alias tsudo='teleport-request-sudo'
+alias tstatus='teleport-status'
+alias tdrop='teleport-drop-sudo'
+alias tssh='teleport-ssh'
+alias tapprove='teleport-approve-sudo'
+alias tnodes='tsh ls'
+alias tapps='tsh app ls'

@@ -1,0 +1,25 @@
+---
+# ==============================================================================
+# Deploy Teleport Server Approval Helper Scripts
+# ==============================================================================
+
+- name: Deploy Teleport access request approval helper script
+  ansible.builtin.template:
+    src: teleport-approve-sudo.j2
+    dest: /usr/local/bin/teleport-approve-sudo
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [teleport, teleport_server, helpers]
+
+- name: Deploy approver alias to /etc/profile.d/teleport_approver.sh
+  ansible.builtin.copy:
+    dest: /etc/profile.d/teleport_approver.sh
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # /etc/profile.d/teleport_approver.sh
+      # Managed by Ansible - Convenient Teleport approval alias
+      alias tapprove='teleport-approve-sudo'
+  tags: [teleport, teleport_server, helpers]

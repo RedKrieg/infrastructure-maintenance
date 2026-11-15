@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport SSH Helper for Cluster Nodes
+# Managed by Ansible
+# ==============================================================================
+set -e
+
+if [ $# -eq 0 ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+    echo "Usage: teleport-ssh [user@]nodename [command...]"
+    echo ""
+    echo "Connects to a cluster node via Teleport SSH proxy."
+    echo ""
+    echo "Available cluster nodes:"
+    tsh ls
+    exit 0
+fi
+
+TARGET="$1"
+shift
+
+tsh ssh "$TARGET" "$@"

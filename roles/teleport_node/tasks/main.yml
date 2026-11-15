@@ -13,3 +13,7 @@
     - name: Configure Teleport Node Service
       ansible.builtin.include_tasks: config.yml
       tags: [teleport, teleport_node, config, service]
+
+    - name: Deploy Teleport Helper Scripts & Aliases
+      ansible.builtin.include_tasks: helpers.yml
+      tags: [teleport, teleport_node, helpers]

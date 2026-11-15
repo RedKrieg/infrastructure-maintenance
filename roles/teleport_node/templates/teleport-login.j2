@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport Login Helper for Junior Admins & Operators
+# Managed by Ansible
+# ==============================================================================
+set -e
+
+DEFAULT_PROXY="{{ teleport_proxy_server }}"
+PROXY="${TELEPORT_PROXY:-$DEFAULT_PROXY}"
+USER_ARG="${1:-${TELEPORT_USER:-$USER}}"
+
+echo "===================================================================="
+echo " Teleport Cluster Login"
+echo "===================================================================="
+echo " Proxy Address : ${PROXY}"
+echo " User Account  : ${USER_ARG}"
+echo "===================================================================="
+
+tsh login --proxy="${PROXY}" --user="${USER_ARG}"
+
+echo ""
+echo "[✓] Successfully logged into Teleport!"
+echo "Current Session Status:"
+tsh status
