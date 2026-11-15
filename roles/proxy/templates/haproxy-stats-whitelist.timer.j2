@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic DNS Refresh for HAProxy Stats Whitelist FQDNs
+ConditionFileNotEmpty=/etc/haproxy/stats_whitelist_sources.txt
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ haproxy_stats_dns_refresh_minutes | default(5) }}min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

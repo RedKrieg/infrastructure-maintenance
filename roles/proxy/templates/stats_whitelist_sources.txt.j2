@@ -1,0 +1,8 @@
+# ==============================================================================
+# HAProxy Stats Access Control Sources - Managed by Ansible
+# Supports IPv4, IPv6, CIDRs, and FQDNs
+# Automatically resolved into /etc/haproxy/stats_whitelist.lst
+# ==============================================================================
+{% for entry in haproxy_stats_allowed_ips | default([]) %}
+{{ entry }}
+{% endfor %}

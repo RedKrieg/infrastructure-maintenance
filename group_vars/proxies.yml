@@ -11,3 +11,10 @@ haproxy_stats_password: "SecureAdminPassword123"
 # Set to true when your external FQDNs resolve via public DNS to proxy frontends
 acme_issue_certs: false
 acme_use_staging: false
+
+# Restrict stats endpoint to trusted IP addresses, CIDR subnets, and FQDNs
+# haproxy_stats_allowed_ips:
+#   - "127.0.0.1"
+#   - "10.0.0.0/8"
+#   - "192.168.1.50"
+#   - "admin.example.com"

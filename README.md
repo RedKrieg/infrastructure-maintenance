@@ -51,12 +51,16 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │   │   ├── packages.yml         # Installs haproxy, openssl, curl, socat, cron
 │   │   │   ├── firewall.yml         # Opens 80, 443, 8404, and internal 8888 in UFW
 │   │   │   ├── certs.yml            # Primary issuance & cluster-wide certificate distribution
+│   │   │   ├── stats_whitelist.yml  # Stats access control (IP, CIDR & FQDN resolution)
 │   │   │   └── config.yml           # Deploys dynamic haproxy.cfg
 │   │   └── templates/
 │   │       ├── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
 │   │       ├── check-and-adopt-cluster-certs.sh.j2 # Boot-time reconciliation & adoption
 │   │       ├── sync-haproxy-certs.sh.j2            # Cluster-wide certificate push script
-│   │       └── acme-fallback-watchdog.sh.j2        # 1-day staggered standby renewal watchdog
+│   │       ├── acme-fallback-watchdog.sh.j2        # 1-day staggered standby renewal watchdog
+│   │       ├── stats_whitelist_sources.txt.j2      # Source list of allowed IPs/CIDRs/FQDNs
+│   │       ├── update-haproxy-stats-whitelist.sh.j2 # Dynamic FQDN resolution script
+│   │       └── haproxy-stats-whitelist.timer.j2    # Background DNS refresh systemd timer
 │   └── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
 │       ├── defaults/main.yml
 │       ├── handlers/main.yml
@@ -175,6 +179,32 @@ What happens when a higher-priority proxy (such as `proxy-01`) comes back online
 2. **Seamless Rank Resumption**:
    - Because `proxy-01` is now online and has the renewed cert, standby watchdogs on `proxy-02` and `proxy-03` detect `proxy-01` as reachable and stand down.
    - `proxy-01` automatically resumes its rank as the primary certificate authority for future scheduled renewals.
+
+---
+
+## HAProxy Stats Access Control (IP, CIDR & Dynamic FQDNs)
+
+Access to the HAProxy statistics monitoring endpoint (port `8404`, URI `/stats`) can be restricted to authorized client sources supporting **plain IPv4/IPv6 addresses, CIDR blocks, and dynamic FQDN hostnames**:
+
+```yaml
+# In group_vars/proxies.yml or playbook vars:
+haproxy_stats_allowed_ips:
+  - "127.0.0.1"
+  - "10.0.0.0/8"
+  - "192.168.1.0/24"
+  - "admin.example.com"       # Fully qualified domain name
+  - "vpn.company.net"         # Dynamic DNS or corporate VPN gateway
+
+# Optional settings:
+haproxy_stats_deny_action: "403"          # '403' (HTTP 403 Forbidden) or 'silent-drop' (TCP drop)
+haproxy_stats_dns_refresh_minutes: 5      # Background DNS refresh frequency (default: 5 min)
+```
+
+### How FQDN Support Works
+1. **Zero Request-Time Latency**: HAProxy evaluates client source IPs using an in-memory Radix tree (`acl is_allowed_stats src -f /etc/haproxy/stats_whitelist.lst`). No blocking DNS queries occur during HTTP requests.
+2. **Dynamic Background DNS Refresh**: A dedicated systemd timer (`haproxy-stats-whitelist.timer`) executes `/usr/local/bin/update-haproxy-stats-whitelist.sh` every 5 minutes. If an administrator's Dynamic DNS IP changes, the script re-resolves the FQDN and updates HAProxy in real time via the runtime admin socket (`/run/haproxy/admin.sock`) without restarting the service or interrupting connections.
+3. **DNS Outage Resiliency**: If external DNS fails temporarily, existing resolved IP addresses in `/etc/haproxy/stats_whitelist.lst` are preserved, preventing accidental administrative lockouts.
+4. **Deny Actions**: Choose between standard HTTP `403 Forbidden` or `silent-drop` (silently drops unauthorized TCP connection attempts, appearing completely closed to port scanners).
 
 ---
 

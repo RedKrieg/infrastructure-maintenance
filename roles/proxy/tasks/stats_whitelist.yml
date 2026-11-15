@@ -1,0 +1,97 @@
+---
+# ==============================================================================
+# HAProxy Stats Access Control (IP, CIDR & Dynamic FQDN Whitelist)
+# ==============================================================================
+
+- name: Manage Stats Endpoint Access Control
+  when:
+    - haproxy_enable_stats | bool
+    - haproxy_stats_allowed_ips is defined
+    - haproxy_stats_allowed_ips | length > 0
+  tags: [proxy, stats, security]
+  block:
+    - name: Ensure /etc/haproxy directory exists
+      ansible.builtin.file:
+        path: /etc/haproxy
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy stats whitelist sources file
+      ansible.builtin.template:
+        src: stats_whitelist_sources.txt.j2
+        dest: /etc/haproxy/stats_whitelist_sources.txt
+        owner: root
+        group: root
+        mode: "0640"
+      register: whitelist_sources_result
+
+    - name: Deploy update-haproxy-stats-whitelist.sh script
+      ansible.builtin.template:
+        src: update-haproxy-stats-whitelist.sh.j2
+        dest: /usr/local/bin/update-haproxy-stats-whitelist.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Execute stats whitelist updater to resolve FQDNs and generate initial ACL list
+      ansible.builtin.command:
+        cmd: /usr/local/bin/update-haproxy-stats-whitelist.sh
+      changed_when: whitelist_sources_result.changed
+
+    - name: Deploy systemd service for stats whitelist resolution
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/haproxy-stats-whitelist.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=HAProxy Stats Access Control IP & FQDN Whitelist Resolver
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/update-haproxy-stats-whitelist.sh
+      notify: Reload systemd daemon
+
+    - name: Deploy systemd timer for periodic FQDN resolution
+      ansible.builtin.template:
+        src: haproxy-stats-whitelist.timer.j2
+        dest: /etc/systemd/system/haproxy-stats-whitelist.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd daemon
+
+    - name: Enable and start haproxy-stats-whitelist.timer
+      ansible.builtin.systemd:
+        name: haproxy-stats-whitelist.timer
+        enabled: true
+        state: started
+
+- name: Deactivate stats whitelist timer if access control is disabled
+  when:
+    - (not haproxy_enable_stats | bool) or (haproxy_stats_allowed_ips is not defined) or (haproxy_stats_allowed_ips | length == 0)
+  tags: [proxy, stats, security]
+  block:
+    - name: Check if timer unit exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/haproxy-stats-whitelist.timer
+      register: timer_stat
+
+    - name: Disable and stop haproxy-stats-whitelist.timer
+      ansible.builtin.systemd:
+        name: haproxy-stats-whitelist.timer
+        enabled: false
+        state: stopped
+      when: timer_stat.stat.exists
+      ignore_errors: true
+
+    - name: Remove unused stats whitelist file if access control disabled
+      ansible.builtin.file:
+        path: /etc/haproxy/stats_whitelist.lst
+        state: absent
+      when: timer_stat.stat.exists

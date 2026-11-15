@@ -15,6 +15,10 @@
   ansible.builtin.include_tasks: certs.yml
   tags: [proxy, ssl, certs]
 
+- name: Configure HAProxy Stats Endpoint Access Control
+  ansible.builtin.include_tasks: stats_whitelist.yml
+  tags: [proxy, stats, security]
+
 - name: Deploy HAProxy Configuration & Manage Service
   ansible.builtin.include_tasks: config.yml
   tags: [proxy, haproxy]

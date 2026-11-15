@@ -48,6 +48,16 @@ listen stats
     stats refresh {{ haproxy_stats_refresh }}
     stats show-node
     stats auth {{ haproxy_stats_user }}:{{ haproxy_stats_password }}
+{% if haproxy_stats_allowed_ips is defined and haproxy_stats_allowed_ips | length > 0 %}
+
+    # Access Control: Allow only authorized IPs, CIDRs, and dynamically resolved FQDNs
+    acl is_allowed_stats src -f /etc/haproxy/stats_whitelist.lst
+{% if haproxy_stats_deny_action == 'silent-drop' %}
+    http-request silent-drop unless is_allowed_stats
+{% else %}
+    http-request deny deny_status 403 unless is_allowed_stats
+{% endif %}
+{% endif %}
 {% endif %}
 
 # --- HTTP Frontend (Port {{ haproxy_bind_http_port }}) ---

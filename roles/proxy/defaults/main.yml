@@ -49,6 +49,19 @@ haproxy_stats_refresh: "10s"
 haproxy_stats_user: "admin"
 haproxy_stats_password: "adminpassword"
 
+# Allowed IP list for HAProxy stats endpoint (supports IPv4, IPv6, CIDRs, and FQDNs).
+# If empty ([]), stats endpoint is accessible from any IP (subject to HTTP basic auth).
+# When populated, HAProxy restricts access strictly to these sources.
+haproxy_stats_allowed_ips: []
+
+# Action when client IP is not in the stats allowed list:
+#   '403'         - Return HTTP 403 Forbidden
+#   'silent-drop' - Drop TCP connection without sending any response (simulates closed port)
+haproxy_stats_deny_action: "403"
+
+# Interval in minutes for background dynamic DNS (FQDN) re-resolution systemd timer
+haproxy_stats_dns_refresh_minutes: 5
+
 # Frontend binding ports
 haproxy_bind_http_port: 80
 haproxy_bind_https_port: 443

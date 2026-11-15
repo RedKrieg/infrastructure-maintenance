@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# HAProxy Stats Whitelist Resolver Script
+# Managed by Ansible - Resolves IPs, CIDRs, and FQDNs into HAProxy ACL format
+# ==============================================================================
+set -u
+
+SOURCES_FILE="/etc/haproxy/stats_whitelist_sources.txt"
+WHITELIST_FILE="/etc/haproxy/stats_whitelist.lst"
+TEMP_FILE="/etc/haproxy/stats_whitelist.lst.tmp.$$"
+LOG_FILE="/var/log/haproxy-stats-whitelist.log"
+HAPROXY_SOCKET="/run/haproxy/admin.sock"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [stats-whitelist] $*" | tee -a "$LOG_FILE"
+}
+
+if [ ! -f "$SOURCES_FILE" ]; then
+    exit 0
+fi
+
+resolve_target() {
+    local target="$1"
+
+    # CIDR blocks (e.g. 10.0.0.0/8, 192.168.1.0/24)
+    if [[ "$target" == *"/"* ]]; then
+        echo "$target"
+        return
+    fi
+
+    # Plain IPv4 or IPv6
+    if [[ "$target" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$target" =~ ^[0-9a-fA-F:]+$ ]]; then
+        echo "$target"
+        return
+    fi
+
+    # FQDN - resolve to all IPv4 and IPv6 addresses via getent
+    local resolved
+    resolved=$(getent ahosts "$target" 2>/dev/null | awk '{print $1}' | sort -u)
+    if [ -n "$resolved" ]; then
+        echo "$resolved"
+    else
+        log "WARNING: Could not resolve FQDN: ${target}"
+    fi
+}
+
+trap 'rm -f "$TEMP_FILE"' EXIT
+
+> "$TEMP_FILE"
+
+while IFS= read -r line || [ -n "$line" ]; do
+    # Strip comments and surrounding whitespace
+    line=$(echo "$line" | sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    [ -z "$line" ] && continue
+
+    resolve_target "$line" >> "$TEMP_FILE"
+done < "$SOURCES_FILE"
+
+# Sort and deduplicate resolved entries
+sort -u "$TEMP_FILE" -o "$TEMP_FILE"
+
+# Safeguard: Do not overwrite with an empty file if sources had entries
+if [ ! -s "$TEMP_FILE" ] && [ -s "$SOURCES_FILE" ]; then
+    log "WARNING: Temporary whitelist is empty despite non-empty sources. Keeping existing whitelist."
+    exit 0
+fi
+
+# Compare with current whitelist; if identical, no action required
+if [ -f "$WHITELIST_FILE" ] && cmp -s "$TEMP_FILE" "$WHITELIST_FILE"; then
+    exit 0
+fi
+
+# Atomically update the whitelist file on disk
+mv "$TEMP_FILE" "$WHITELIST_FILE"
+chmod 644 "$WHITELIST_FILE"
+log "Updated stats whitelist at ${WHITELIST_FILE}."
+
+# Dynamically sync to HAProxy runtime memory via admin socket if active
+if [ -S "$HAPROXY_SOCKET" ] && command -v socat >/dev/null 2>&1; then
+    echo "clear acl ${WHITELIST_FILE}" | socat stdio "$HAPROXY_SOCKET" >/dev/null 2>&1 || true
+    while IFS= read -r ip || [ -n "$ip" ]; do
+        [ -n "$ip" ] && echo "add acl ${WHITELIST_FILE} $ip" | socat stdio "$HAPROXY_SOCKET" >/dev/null 2>&1 || true
+    done < "$WHITELIST_FILE"
+    log "Dynamically updated HAProxy stats ACL via runtime admin socket."
+elif systemctl is-active --quiet haproxy; then
+    systemctl reload haproxy
+    log "Reloaded HAProxy with updated stats whitelist."
+fi
