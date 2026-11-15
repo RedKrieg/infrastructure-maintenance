@@ -5,8 +5,8 @@
 # Use this file to define cluster-level overrides or environment credentials.
 # ==============================================================================
 
-# Stats dashboard password override
-haproxy_stats_password: "SecureAdminPassword123"
+# Stats dashboard password (configured via Ansible Vault)
+haproxy_stats_password: "{{ vault_haproxy_stats_password | default('SecureAdminPassword123') }}"
 
 # Set to true when your external FQDNs resolve via public DNS to proxy frontends
 acme_issue_certs: false

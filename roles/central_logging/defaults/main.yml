@@ -1,0 +1,27 @@
+---
+# ==============================================================================
+# Default Variables for central_logging Role
+# ==============================================================================
+
+# Enable or disable centralized logging
+enable_central_logging: true
+
+# Network port and protocol for centralized log ingestion
+logging_port: 5140
+logging_protocol: "tcp"
+
+# Centralized server address (defaults to the first monitoring node)
+logging_server_host: "{{ hostvars[groups['monitoring'][0]]['ansible_host'] if (groups['monitoring'] is defined and groups['monitoring'] | length > 0) else '127.0.0.1' }}"
+
+# Directory where remote node logs are aggregated on the logging server
+logging_storage_dir: "/var/log/remote"
+
+# Log retention period on the central collector (days)
+logging_retention_days: 60
+
+# Trusted subnets permitted to send logs to the central collector
+logging_trusted_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1"

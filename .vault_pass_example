@@ -1,0 +1,6 @@
+# Example Ansible Vault Password File
+# Create a secure password file (e.g. ~/.vault_pass or .vault_pass)
+# and ensure its permissions are restricted:
+#   chmod 600 ~/.vault_pass
+# Note: .vault_pass is already ignored by .gitignore to prevent accidental commits.
+your-secure-vault-passphrase-here

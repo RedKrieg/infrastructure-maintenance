@@ -1,0 +1,24 @@
+---
+# ==============================================================================
+# Ansible Vault Sensitive Credentials & Secrets
+# ==============================================================================
+# In production, encrypt this file with:
+#   ansible-vault encrypt group_vars/all/vault.yml
+#
+# Run playbooks using:
+#   ansible-playbook -i inventory.ini playbook.yml --ask-vault-pass
+#   # or using a vault password file:
+#   ansible-playbook -i inventory.ini playbook.yml --vault-password-file ~/.vault_pass
+# ==============================================================================
+
+# HAProxy Statistics Dashboard & Prometheus Basic Auth Password
+vault_haproxy_stats_password: "VaultProtectedStatsPassword2026!"
+
+# Teleport Cluster Node Join Token
+vault_teleport_auth_token: "vault-protected-teleport-join-token-2026"
+
+# Prometheus Scrape Authentication Password
+vault_prometheus_password: "VaultProtectedPrometheusPassword2026!"
+
+# Initial Admin User Default Password (if not individually overridden)
+vault_admin_default_password: "VaultProtectedInitialAdminPassword2026!"

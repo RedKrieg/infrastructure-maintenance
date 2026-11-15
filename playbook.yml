@@ -92,3 +92,27 @@
   roles:
     - role: teleport_node
       tags: [teleport, teleport_node, ssh]
+
+# ------------------------------------------------------------------------------
+# Play 7: Centralized Log Ingestion Server on Monitoring Node
+# ------------------------------------------------------------------------------
+- name: Provision Centralized Log Ingestion Server
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: central_logging
+      tags: [logging, central_logging, logging_server]
+
+# ------------------------------------------------------------------------------
+# Play 8: Centralized Log Shipper across Cluster Nodes
+# ------------------------------------------------------------------------------
+- name: Provision Centralized Log Shipper Clients
+  hosts: headless_nodes
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: central_logging
+      tags: [logging, central_logging, logging_client]

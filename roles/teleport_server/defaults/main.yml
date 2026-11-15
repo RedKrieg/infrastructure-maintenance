@@ -16,8 +16,8 @@ teleport_auth_service_port: 3025
 # Public address advertised by the Teleport proxy
 teleport_public_addr: "{{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}:3080"
 
-# Secret static node join token (shared with teleport_node role)
-teleport_auth_token: "teleport-super-secure-join-token-secret-change-me"
+# Secret static node join token (shared with teleport_node role, managed by Ansible Vault)
+teleport_auth_token: "{{ vault_teleport_auth_token | default('teleport-super-secure-join-token-secret-change-me') }}"
 
 # Trusted CIDR subnets allowed to access the internal Teleport Auth API (port 3025)
 teleport_trusted_subnets:

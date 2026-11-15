@@ -1,0 +1,17 @@
+# ==============================================================================
+# HAProxy Stream Processing Offload Engine (SPOE) Configuration for Coraza WAF
+# Managed by Ansible
+# ==============================================================================
+
+[coraza]
+spoe-agent coraza-agent
+    messages check-request
+    option var-prefix coraza
+    timeout hello 150ms
+    timeout idle 30s
+    timeout processing 500ms
+    use-backend be_coraza
+
+spoe-message check-request
+    args app=str(headless_app) id=unique-id src=src ip=src port=src_port method=method path=path query=query version=req.ver headers=req.hdrs body=req.body
+    event on-frontend-http-request

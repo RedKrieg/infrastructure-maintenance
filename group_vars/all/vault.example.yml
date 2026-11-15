@@ -1,0 +1,20 @@
+---
+# ==============================================================================
+# Ansible Vault Sensitive Credentials & Secrets (Example Template)
+# ==============================================================================
+# Copy this file to group_vars/all/vault.yml and encrypt it:
+#   cp group_vars/all/vault.example.yml group_vars/all/vault.yml
+#   ansible-vault encrypt group_vars/all/vault.yml
+# ==============================================================================
+
+# HAProxy Statistics Dashboard & Prometheus Basic Auth Password
+vault_haproxy_stats_password: "ReplaceWithYourSecureStatsPassword"
+
+# Teleport Cluster Node Join Token
+vault_teleport_auth_token: "ReplaceWithYourTeleportJoinToken"
+
+# Prometheus Scrape Authentication Password
+vault_prometheus_password: "ReplaceWithYourPrometheusPassword"
+
+# Initial Admin User Default Password (if not individually overridden)
+vault_admin_default_password: "ReplaceWithYourAdminPassword"

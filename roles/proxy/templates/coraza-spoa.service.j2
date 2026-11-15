@@ -1,0 +1,15 @@
+[Unit]
+Description=Coraza Web Application Firewall SPOA Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/coraza-spoa -config /etc/coraza/coraza-spoa.yaml
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

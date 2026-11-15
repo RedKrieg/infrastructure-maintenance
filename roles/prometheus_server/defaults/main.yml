@@ -30,7 +30,15 @@ prometheus_scrape_haproxy: true
 prometheus_haproxy_port: 8404
 prometheus_haproxy_metrics_path: "/metrics"
 prometheus_haproxy_user: "admin"
-prometheus_haproxy_password: "SecureAdminPassword123"
+prometheus_haproxy_password: "{{ vault_prometheus_password | default(vault_haproxy_stats_password | default('SecureAdminPassword123')) }}"
+
+# Alerting Configuration
+prometheus_enable_alerts: true
+prometheus_alert_rules_file: "/etc/prometheus/alert.rules.yml"
+prometheus_alertmanager_enabled: false
+prometheus_alertmanager_port: 9093
+prometheus_alertmanager_targets:
+  - "127.0.0.1:9093"
 
 # Optional additional custom scrape jobs
 prometheus_custom_scrape_configs: []

@@ -1,0 +1,21 @@
+# ==============================================================================
+# Centralized Rsyslog Ingestion Configuration - Managed by Ansible
+# Listens on TCP port {{ logging_port }} and stores logs per remote host
+# ==============================================================================
+
+module(load="imtcp")
+input(type="imtcp" port="{{ logging_port }}" ruleset="remote_logs")
+
+# Dynamic template: /var/log/remote/<hostname>/<programname>.log
+template(name="RemoteHostFile" type="string" string="{{ logging_storage_dir }}/%HOSTNAME%/%PROGRAMNAME:::secpath-replace%.log")
+
+ruleset(name="remote_logs") {
+    action(
+        type="omfile"
+        dynaFile="RemoteHostFile"
+        dirCreateMode="0755"
+        fileCreateMode="0640"
+        createDirs="on"
+    )
+    stop
+}

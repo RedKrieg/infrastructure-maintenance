@@ -1,0 +1,43 @@
+# ==============================================================================
+# Prometheus Alerting Rules - Managed by Ansible
+# Validated with `promtool check rules` during deployment
+# ==============================================================================
+
+groups:
+  - name: haproxy_cluster_alerts
+    rules:
+      - alert: HAProxyBackendServerDown
+        expr: haproxy_server_status != 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HAProxy backend server down (instance {{ $labels.instance }})"
+          description: "Backend {{ $labels.proxy }} on server {{ $labels.server }} is reporting DOWN status."
+
+      - alert: HAProxyHigh5xxErrorRate
+        expr: sum(rate(haproxy_server_http_responses_total{code="5xx"}[5m])) / sum(rate(haproxy_server_http_responses_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HAProxy elevated 5xx error rate"
+          description: "Over 5% of responses from backend {{ $labels.proxy }} are HTTP 5xx errors for more than 5 minutes."
+
+      - alert: HAProxyRateLimitSaturationSpike
+        expr: increase(haproxy_frontend_denied_requests_total[5m]) > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HAProxy rate limit saturation spike"
+          description: "HAProxy has denied over 50 client requests under the 300req/10s volumetric rate limiter in the last 5 minutes."
+
+      - alert: ClusterNodeUnreachable
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cluster monitoring target unreachable (instance {{ $labels.instance }})"
+          description: "Scrape job {{ $labels.job }} target {{ $labels.instance }} has been unreachable for > 2 minutes."

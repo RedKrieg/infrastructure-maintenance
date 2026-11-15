@@ -1,0 +1,28 @@
+# ==============================================================================
+# Coraza Web Application Firewall Configuration - Managed by Ansible
+# OWASP Core Rule Set (CRS) Engine Directives
+# ==============================================================================
+
+SecRuleEngine On
+SecRequestBodyAccess On
+SecResponseBodyAccess Off
+SecRequestBodyLimit 13107200
+SecRequestBodyNoFilesLimit 131072
+SecRequestBodyLimitAction Reject
+SecPcreLimits 150000 150000
+
+# SQL Injection Attack Detection
+SecRule ARGS "@detectSQLi" \
+    "id:942100,phase:2,block,capture,t:none,t:utf8toUnicode,t:urlDecodeUni,t:removeNulls,msg:'SQL Injection Attack Detected',logdata:'Matched Data: %{TX.0}',tag:'attack-sqli',severity:'CRITICAL',setvar:'tx.anomaly_score=+5'"
+
+# Cross-Site Scripting (XSS) Attack Detection
+SecRule ARGS "@detectXSS" \
+    "id:941100,phase:2,block,capture,t:none,t:utf8toUnicode,t:urlDecodeUni,t:htmlEntityDecode,t:jsDecode,msg:'XSS Attack Detected',logdata:'Matched Data: %{TX.0}',tag:'attack-xss',severity:'CRITICAL',setvar:'tx.anomaly_score=+5'"
+
+# Path Traversal and OS Command Injection Detection
+SecRule REQUEST_URI|REQUEST_HEADERS|ARGS|ARGS_NAMES "@rx (?i)(?:etc/(?:passwd|shadow|group)|proc/version|\.\./\.\./|cmd\.exe|powershell\.exe)" \
+    "id:930100,phase:2,block,t:none,t:urlDecodeUni,t:normalizePath,msg:'Path Traversal / OS Command Injection Attack Detected',severity:'CRITICAL'"
+
+# Restricted HTTP Request Methods
+SecRule REQUEST_METHOD "!@rx ^(?:GET|HEAD|POST|OPTIONS|PUT|DELETE)$" \
+    "id:911100,phase:1,block,t:none,msg:'Method Not Allowed',severity:'CRITICAL'"

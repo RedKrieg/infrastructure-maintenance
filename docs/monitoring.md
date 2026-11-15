@@ -61,3 +61,16 @@ The `prometheus_server` role provisions a dedicated Prometheus monitoring node o
    ```
 4. **Firewall Isolation**:
    Port `9090` is restricted in UFW to private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and `127.0.0.1`), blocking public internet access while permitting internal administrative inspection.
+
+---
+
+## 3. Automated Cluster Alerting Rules
+
+Prometheus actively evaluates alerting rules defined in `/etc/prometheus/alert.rules.yml` (validated during deployment via `promtool check rules`):
+
+| Alert Name | Condition | Severity | Description |
+| :--- | :--- | :--- | :--- |
+| **`HAProxyBackendServerDown`** | `haproxy_server_status != 1` for 1m | `critical` | Triggers immediately when a backend Nginx webserver goes offline or fails health checks. |
+| **`HAProxyHigh5xxErrorRate`** | HTTP 5xx responses $> 5\%$ for 5m | `warning` | Warns if backend servers return elevated application error rates. |
+| **`HAProxyRateLimitSaturationSpike`** | Denied requests $> 50$ in 5m | `warning` | Detects volumetric spikes or DDoS attacks triggering the 300 req/10s rate limiter. |
+| **`ClusterNodeUnreachable`** | `up == 0` for 2m | `critical` | Fires when Prometheus is unable to scrape any cluster node for more than 2 minutes. |

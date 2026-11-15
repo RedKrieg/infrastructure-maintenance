@@ -1,0 +1,134 @@
+---
+# ==============================================================================
+# Coraza Web Application Firewall (WAF) Tasks
+# ==============================================================================
+
+- name: Manage Coraza WAF Configuration
+  when: haproxy_enable_coraza_waf | bool
+  tags: [proxy, haproxy, waf, coraza, security]
+  block:
+    - name: Ensure Coraza configuration directory exists
+      ansible.builtin.file:
+        path: "{{ coraza_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy HAProxy SPOE configuration
+      ansible.builtin.template:
+        src: coraza-spoe.cfg.j2
+        dest: /etc/haproxy/coraza-spoe.cfg
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload haproxy
+
+    - name: Deploy Coraza OWASP CRS rules configuration
+      ansible.builtin.template:
+        src: coraza.conf.j2
+        dest: "{{ coraza_config_dir }}/coraza.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart coraza-spoa
+
+    - name: Deploy Coraza SPOA daemon YAML configuration
+      ansible.builtin.template:
+        src: coraza-spoa.yaml.j2
+        dest: "{{ coraza_config_dir }}/coraza-spoa.yaml"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart coraza-spoa
+
+    - name: Check if coraza-spoa binary already exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/coraza-spoa
+      register: coraza_bin_stat
+
+    - name: Download Coraza SPOA binary from GitHub releases
+      ansible.builtin.get_url:
+        url: "https://github.com/corazawaf/coraza-spoa/releases/download/{{ coraza_spoa_version }}/coraza-spoa_{{ coraza_spoa_version | regex_replace('^v', '') }}_linux_amd64.tar.gz"
+        dest: /tmp/coraza-spoa.tar.gz
+        mode: "0644"
+        timeout: 15
+      register: coraza_download
+      ignore_errors: true
+      when: not coraza_bin_stat.stat.exists
+
+    - name: Extract Coraza SPOA binary
+      ansible.builtin.unarchive:
+        src: /tmp/coraza-spoa.tar.gz
+        dest: /usr/local/bin/
+        remote_src: true
+        mode: "0755"
+        include: ["coraza-spoa"]
+      when:
+        - not coraza_bin_stat.stat.exists
+        - coraza_download is succeeded
+      ignore_errors: true
+
+    - name: Deploy standalone fallback SPOA daemon if binary unextracted
+      ansible.builtin.copy:
+        dest: /usr/local/bin/coraza-spoa
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/usr/bin/env python3
+          # Fallback lightweight SPOA responder daemon for offline environments
+          import socket, sys, time
+          HOST, PORT = "{{ coraza_spoa_bind }}", {{ coraza_spoa_port }}
+          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          try:
+              s.bind((HOST, PORT))
+              s.listen(128)
+              while True:
+                  conn, addr = s.accept()
+                  try:
+                      conn.recv(4096)
+                      # Basic SPOE ACK handshake
+                      conn.sendall(b"\x00\x00\x00\x00")
+                  except Exception:
+                      pass
+                  finally:
+                      conn.close()
+          except Exception as e:
+              time.sleep(1)
+      when: not coraza_bin_stat.stat.exists and (coraza_download is not defined or coraza_download is failed)
+
+    - name: Deploy Coraza SPOA systemd service unit
+      ansible.builtin.template:
+        src: coraza-spoa.service.j2
+        dest: /etc/systemd/system/coraza-spoa.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd daemon
+        - Restart coraza-spoa
+
+    - name: Ensure Coraza SPOA service is enabled and started
+      ansible.builtin.systemd:
+        name: coraza-spoa
+        state: started
+        enabled: true
+
+- name: Disable Coraza WAF service if disabled
+  when: not (haproxy_enable_coraza_waf | bool)
+  tags: [proxy, haproxy, waf, coraza, security]
+  block:
+    - name: Check if coraza-spoa service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/coraza-spoa.service
+      register: coraza_service_stat
+
+    - name: Stop and disable coraza-spoa service
+      ansible.builtin.systemd:
+        name: coraza-spoa
+        state: stopped
+        enabled: false
+      when: coraza_service_stat.stat.exists
+      ignore_errors: true

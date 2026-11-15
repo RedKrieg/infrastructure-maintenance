@@ -107,6 +107,7 @@ Use Ansible tags to target specific layers or roles without running the entire p
 | `monitoring` | Prometheus | Provisions the Prometheus monitoring server and scrapes proxies. |
 | `teleport_server` | Teleport Auth & Proxy | Sets up Teleport Auth/Proxy service, joins tokens, RBAC roles, and users. |
 | `teleport_node` | Teleport SSH Nodes | Installs Teleport Node service and connects reverse tunnels on cluster hosts. |
+| `logging` | Centralized Logging | Deploys central rsyslog ingestion server on monitoring host and shippers on nodes. |
 | `users` | User Accounts | Manages user creation, dotfiles, shell helpers, and Python venv tools. |
 
 ### Tagged Command Examples
@@ -123,6 +124,9 @@ ansible-playbook -i inventory.ini playbook.yml --tags webserver
 # Provision or update Prometheus monitoring server only:
 ansible-playbook -i inventory.ini playbook.yml --tags monitoring
 
+# Provision or update Centralized Logging only:
+ansible-playbook -i inventory.ini playbook.yml --tags logging
+
 # Provision or update Teleport Auth/Proxy server only:
 ansible-playbook -i inventory.ini playbook.yml --tags teleport_server
 
@@ -131,4 +135,49 @@ ansible-playbook -i inventory.ini playbook.yml --tags teleport_node
 
 # Update user accounts, helper scripts, and dotfiles only:
 ansible-playbook -i inventory.ini playbook.yml --tags users
+```
+
+---
+
+## 5. Dynamic Cloud Inventory Plugins
+
+Instead of static INI inventories, auto-discover cloud instances using tags:
+
+```bash
+# AWS EC2 Dynamic Discovery:
+ansible-playbook -i examples/inventories/aws_ec2.yml playbook.yml
+
+# Google Cloud (GCP) Dynamic Discovery:
+ansible-playbook -i examples/inventories/gcp_compute.yml playbook.yml
+
+# Microsoft Azure Dynamic Discovery:
+ansible-playbook -i examples/inventories/azure_rm.yml playbook.yml
+```
+
+For full setup instructions, see the [Dynamic Inventory Plugins Guide](dynamic-inventory.md).
+
+---
+
+## 6. Running with Ansible Vault
+
+When `group_vars/all/vault.yml` is encrypted, pass your vault passphrase or password file:
+
+```bash
+# Using a local password file:
+ansible-playbook -i inventory.ini playbook.yml --vault-password-file ~/.vault_pass
+
+# Or prompt interactively:
+ansible-playbook -i inventory.ini playbook.yml --ask-vault-pass
+```
+
+For full details, see the [Ansible Vault Secrets Management Guide](security-vault.md).
+
+---
+
+## 7. Local Test Suite & Linting
+
+Run automated syntax validation across all inventories, provisioning playbooks, and shell scripts:
+
+```bash
+./tests/run_tests.sh
 ```

@@ -17,21 +17,28 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
 │   ├── ssl-certificates.md          # Multi-node ACME line of succession, sync scripts & recovery
 │   ├── proxy-security.md            # HTTP/2, HSTS, rate limiting (300/10s), health checks & stats ACL
+│   ├── waf-coraza.md                # Coraza WAF via HAProxy SPOE & OWASP Core Rule Set (default on)
+│   ├── security-vault.md            # Ansible Vault secrets management & credential encryption
+│   ├── centralized-logging.md       # Cluster log shipping via rsyslog with 60-day retention
 │   ├── teleport-access.md           # Teleport JIT sudo access, RBAC roles & CLI helper scripts
-│   ├── monitoring.md                # Native HAProxy Prometheus metrics & dedicated Prometheus role
+│   ├── monitoring.md                # Native HAProxy Prometheus metrics, alert rules & retention
 │   ├── deployment.md                # Inventory setup, cloud templates, and targeted Ansible tags
+│   ├── dynamic-inventory.md         # AWS, GCP, and Azure tag-based dynamic discovery plugins
 │   ├── aws-ec2-setup.md             # AWS EC2 quickstart: AWS CLI, VPC, subnets across AZs & EC2 automation
 │   ├── gcp-compute-setup.md         # GCP quickstart: gcloud CLI, auth & automated VM provisioning
 │   ├── azure-setup.md               # Azure quickstart: az CLI, VNet, NSG & automated VM provisioning
 │   ├── oci-compute-setup.md         # OCI quickstart: oci CLI, VCN, Fault Domains & VM provisioning
 │   └── openstack-setup.md           # OpenStack quickstart: clouds.yaml, anti-affinity & Nova provisioning
 ├── examples/
-│   ├── inventories/                 # Cloud-specific example inventory templates
+│   ├── inventories/                 # Cloud-specific example inventory templates & dynamic plugins
 │   │   ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
 │   │   ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
 │   │   ├── inventory.azure.ini      # Microsoft Azure multi-zone example (VNet 10.240.0.0/16)
 │   │   ├── inventory.oci.ini        # Oracle Cloud Infrastructure multi-FD example (VCN 10.0.0.0/16)
-│   │   └── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
+│   │   ├── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
+│   │   ├── aws_ec2.yml              # AWS EC2 dynamic inventory plugin configuration
+│   │   ├── gcp_compute.yml          # GCP dynamic inventory plugin configuration
+│   │   └── azure_rm.yml             # Microsoft Azure dynamic inventory plugin configuration
 │   └── provisioning/                # Cloud VM and network provisioning automation
 │       ├── provision_aws.yml        # Ansible playbook provisioning AWS VPC, subnets & EC2 instances
 │       ├── provision_gcp.yml        # Ansible playbook provisioning GCP VPC, firewalls & VMs
@@ -43,17 +50,25 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 ├── vars/
 │   └── admin_users.yml              # Central users configuration file (admins, credentials, public keys)
 ├── group_vars/
+│   ├── all/                         # Global variables across all hosts
+│   │   ├── vault.yml                # Ansible Vault encrypted secrets (stats, tokens, passwords)
+│   │   └── vault.example.yml        # Unencrypted template reference
 │   ├── proxies.yml                  # Global proxy & acme.sh settings
 │   └── webservers.yml               # Webserver trusted proxy subnets
-└── roles/
-    ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
-    ├── security/                    # Host security, UFW rate limiting & SSH hardening (MaxAuthTries 10)
-    ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
-    ├── proxy/                       # HAProxy role (terminates SSL & routes 1:1 to backends)
-    ├── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
-    ├── prometheus_server/           # Standalone Prometheus server role (port 9090, 60d retention)
-    ├── teleport_server/             # Teleport Auth & Proxy Service role (ports 3080/3023/3024)
-    └── teleport_node/               # Teleport SSH Node Service role (reverse tunnels, JIT host users)
+├── roles/
+│   ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
+│   ├── security/                    # Host security, UFW rate limiting & SSH hardening (MaxAuthTries 10)
+│   ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
+│   ├── proxy/                       # HAProxy role (terminates SSL, Coraza WAF, routes 1:1 to backends)
+│   ├── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
+│   ├── central_logging/             # Centralized log collection (server & shipper) with 60-day retention
+│   ├── prometheus_server/           # Standalone Prometheus server role (port 9090, 60d retention, alert rules)
+│   ├── teleport_server/             # Teleport Auth & Proxy Service role (ports 3080/3023/3024)
+│   └── teleport_node/               # Teleport SSH Node Service role (reverse tunnels, JIT host users)
+├── tests/
+│   └── run_tests.sh                 # Local test runner for syntax checks & shell script validation
+└── .github/
+    └── workflows/ci.yml             # Automated CI pipeline for linting and syntax checks
 ```
 
 ---
@@ -89,3 +104,7 @@ Comprehensive technical documentation is organized into modular guides in the [`
 | **[Azure Setup Guide](docs/azure-setup.md)** | Microsoft Azure Quickstart & Instance Provisioning | • Complete beginner guide for Microsoft Azure<br>• Installing Azure CLI (`az`) & authentication (`az login`, Service Principal)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_azure.yml`)<br>• Resource Groups, VNets, Subnets, NSGs, and multi-zone Ubuntu VMs (`1`, `2`, `3`)<br>• Direct CLI script (`create_azure_instances.sh`) & Azure Standard Load Balancer setup |
 | **[OCI Compute Setup Guide](docs/oci-compute-setup.md)** | Oracle Cloud Quickstart & Instance Provisioning | • Complete beginner guide for Oracle Cloud Infrastructure (OCI)<br>• Installing OCI CLI & authentication (`oci setup config`, API signing keys)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_oci.yml`)<br>• VCN, regional subnets (`10.0.1.0/24`), and multi-Fault Domain instances (`FD-1`, `FD-2`, `FD-3`)<br>• Direct CLI script (`create_oci_instances.sh`) & OCI Network Load Balancer setup |
 | **[OpenStack Setup Guide](docs/openstack-setup.md)** | OpenStack Quickstart & Instance Provisioning | • Complete beginner guide for OpenStack clouds<br>• Installing OpenStack CLI & authentication via `clouds.yaml`<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_openstack.yml`)<br>• Nova anti-affinity server groups across physical hypervisors, Neutron networks & routers<br>• Direct CLI script (`create_openstack_instances.sh`) & Octavia Load Balancer setup |
+| **[Coraza WAF Guide](docs/waf-coraza.md)** | Web Application Firewall Integration | • HAProxy Stream Processing Offload Engine (SPOE) architecture<br>• OWASP Core Rule Set (CRS) inspection for SQLi, XSS, Path Traversal & RCE<br>• Enabled by default with zero-overhead async TCP daemon socket (`coraza-spoa`)<br>• Declarative rules configuration in `/etc/coraza/coraza.conf` |
+| **[Ansible Vault Secrets](docs/security-vault.md)** | Credentials Encryption & Security | • Centralized secrets management via `group_vars/all/vault.yml`<br>• Encrypted protection for stats passwords, Teleport join tokens & Prometheus credentials<br>• Step-by-step encryption workflows with `.vault_pass` and `--vault-password-file`<br>• Built-in `.gitignore` guards preventing accidental token leaks |
+| **[Centralized Logging](docs/centralized-logging.md)** | Cluster Log Aggregation & 60-Day Storage | • Lightweight TCP log forwarding via `rsyslog` across all cluster nodes<br>• Centralized log collector on monitoring node storing in `/var/log/remote/%HOSTNAME%/`<br>• Automated daily log rotation and strict 60-day compressed retention<br>• UFW network restriction to trusted RFC 1918 internal subnets |
+| **[Dynamic Inventory](docs/dynamic-inventory.md)** | Cloud Auto-Discovery Plugins | • Automatic VM discovery for AWS EC2 (`aws_ec2.yml`), GCP (`gcp_compute.yml`), and Azure (`azure_rm.yml`)<br>• Tag-based dynamic grouping into `proxies`, `webservers`, `monitoring`, and `teleport_servers`<br>• Eliminates manual INI updates during cloud auto-scaling operations |

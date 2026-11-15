@@ -1,0 +1,18 @@
+---
+# .ansible-lint configuration file
+
+profile: production
+
+exclude_paths:
+  - .cache/
+  - .git/
+  - .github/
+  - .venv/
+  - venv/
+
+# Rules to ignore or tune
+warn_list:
+  - experimental
+  - yaml[line-length]
+  - name[play]
+  - command-instead-of-module

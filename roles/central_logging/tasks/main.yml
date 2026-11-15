@@ -1,0 +1,83 @@
+---
+# ==============================================================================
+# Main Task Entry Point for central_logging Role
+# ==============================================================================
+
+- name: Centralized Log Ingestion Server Setup
+  when:
+    - enable_central_logging | bool
+    - inventory_hostname in (groups['monitoring'] | default([]))
+  tags: [logging, central_logging, logging_server]
+  block:
+    - name: Ensure rsyslog is installed
+      ansible.builtin.apt:
+        name: rsyslog
+        state: present
+
+    - name: Ensure centralized log storage directory exists
+      ansible.builtin.file:
+        path: "{{ logging_storage_dir }}"
+        state: directory
+        owner: syslog
+        group: adm
+        mode: "0755"
+
+    - name: Configure UFW firewall for log ingestion port
+      community.general.ufw:
+        rule: allow
+        port: "{{ logging_port | string }}"
+        proto: "{{ logging_protocol }}"
+        from_ip: "{{ item }}"
+        comment: "Centralized Rsyslog ingestion"
+      loop: "{{ logging_trusted_subnets }}"
+      when: enable_ufw_firewall | default(true) | bool
+
+    - name: Deploy central rsyslog ingestion server configuration
+      ansible.builtin.template:
+        src: server_rsyslog.conf.j2
+        dest: /etc/rsyslog.d/10-central-server.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart rsyslog
+
+    - name: Deploy logrotate policy for centralized logs (60-day retention)
+      ansible.builtin.template:
+        src: logrotate_central_logging.j2
+        dest: /etc/logrotate.d/centralized-cluster-logs
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Ensure rsyslog service is running and enabled
+      ansible.builtin.systemd:
+        name: rsyslog
+        state: started
+        enabled: true
+
+- name: Centralized Log Shipper Client Setup
+  when:
+    - enable_central_logging | bool
+    - inventory_hostname not in (groups['monitoring'] | default([]))
+    - groups['monitoring'] is defined and groups['monitoring'] | length > 0
+  tags: [logging, central_logging, logging_client]
+  block:
+    - name: Ensure rsyslog is installed on log shipper client
+      ansible.builtin.apt:
+        name: rsyslog
+        state: present
+
+    - name: Deploy rsyslog client log forwarder configuration
+      ansible.builtin.template:
+        src: client_rsyslog.conf.j2
+        dest: /etc/rsyslog.d/99-central-shipper.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart rsyslog
+
+    - name: Ensure rsyslog client service is running and enabled
+      ansible.builtin.systemd:
+        name: rsyslog
+        state: started
+        enabled: true

@@ -1,0 +1,9 @@
+# ==============================================================================
+# Coraza Stream Processing Offload Agent (SPOA) Daemon Configuration
+# Managed by Ansible
+# ==============================================================================
+
+bind: "{{ coraza_spoa_bind }}:{{ coraza_spoa_port }}"
+directives: "{{ coraza_config_dir }}/coraza.conf"
+log_level: "info"
+max_request_body_size: 10485760

@@ -62,9 +62,17 @@ haproxy_stats_deny_action: "403"
 # Interval in minutes for background dynamic DNS (FQDN) re-resolution systemd timer
 haproxy_stats_dns_refresh_minutes: 5
 
-# Frontend binding ports
+# Frontend binding ports & dual-stack
 haproxy_bind_http_port: 80
 haproxy_bind_https_port: 443
+haproxy_enable_dual_stack: true
+
+# Coraza Web Application Firewall (WAF) via SPOE (Enabled by default)
+haproxy_enable_coraza_waf: true
+coraza_spoa_port: 9000
+coraza_spoa_bind: "127.0.0.1"
+coraza_config_dir: "/etc/coraza"
+coraza_spoa_version: "v0.4.0"
 
 # HTTP/2 Protocol Negotiation (ALPN)
 haproxy_enable_http2: true

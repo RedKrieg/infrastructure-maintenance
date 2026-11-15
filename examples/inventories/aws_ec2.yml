@@ -1,0 +1,29 @@
+# ==============================================================================
+# AWS EC2 Dynamic Inventory Configuration
+# Plugin: amazon.aws.aws_ec2
+# Discovers running EC2 instances tagged with Cluster: headless-ubuntu
+# ==============================================================================
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+
+filters:
+  instance-state-name:
+    - running
+  tag:Cluster:
+    - headless-ubuntu
+
+# Group hosts by their Role tag (proxies, webservers, monitoring, teleport_servers)
+keyed_groups:
+  - key: tags.Role
+    prefix: ""
+    separator: ""
+
+# Compose variables directly into host inventory
+compose:
+  ansible_host: private_ip_address
+  ansible_user: "'ubuntu'"
+  external_fqdn: tags.external_fqdn | default(omit)
+
+groups:
+  headless_nodes: "true"

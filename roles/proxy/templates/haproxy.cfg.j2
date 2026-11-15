@@ -41,7 +41,11 @@ defaults
 {% if haproxy_enable_stats | bool %}
 # --- HAProxy Statistics Web UI & Prometheus Metrics ---
 listen stats
+{% if haproxy_enable_dual_stack | default(true) | bool %}
+    bind :::{{ haproxy_stats_port }} v4v6
+{% else %}
     bind *:{{ haproxy_stats_port }}
+{% endif %}
     mode http
     stats enable
     stats uri {{ haproxy_stats_uri }}
@@ -56,14 +60,10 @@ listen stats
 {% else %}
     stats auth {{ haproxy_stats_user }}:{{ haproxy_stats_password }}
 {% endif %}
-{% if haproxy_enable_prometheus | bool %}
-
-    # Native Prometheus Metrics Exporter (same ACL protection as stats)
-    http-request use-service prometheus-exporter if { path {{ haproxy_prometheus_path }} }
-{% endif %}
 {% if (haproxy_stats_allowed_ips is defined and haproxy_stats_allowed_ips | length > 0) or (groups['monitoring'] is defined and groups['monitoring'] | length > 0) %}
 
     # Access Control: Allow only authorized IPs, CIDRs, and dynamically resolved FQDNs
+    # Evaluated before services to prevent unauthorized access to stats UI or Prometheus metrics
     acl is_allowed_stats src -f /etc/haproxy/stats_whitelist.lst
 {% if haproxy_stats_deny_action == 'silent-drop' %}
     http-request silent-drop unless is_allowed_stats
@@ -71,11 +71,20 @@ listen stats
     http-request deny deny_status 403 unless is_allowed_stats
 {% endif %}
 {% endif %}
+{% if haproxy_enable_prometheus | bool %}
+
+    # Native Prometheus Metrics Exporter (protected by preceding ACL whitelist and auth)
+    http-request use-service prometheus-exporter if { path {{ haproxy_prometheus_path }} }
+{% endif %}
 {% endif %}
 
 # --- HTTP Frontend (Port {{ haproxy_bind_http_port }}) ---
 frontend fe_http
+{% if haproxy_enable_dual_stack | default(true) | bool %}
+    bind :::{{ haproxy_bind_http_port }} v4v6
+{% else %}
     bind *:{{ haproxy_bind_http_port }}
+{% endif %}
     mode http
     option forwardfor
 
@@ -89,7 +98,11 @@ frontend fe_http
 # --- HTTPS Frontend (Port {{ haproxy_bind_https_port }}) ---
 # SSL is decoded and terminated here across all certificates in {{ haproxy_certs_dir }}
 frontend fe_https
+{% if haproxy_enable_dual_stack | default(true) | bool %}
+    bind :::{{ haproxy_bind_https_port }} v4v6 ssl crt {{ haproxy_certs_dir }}/{% if haproxy_enable_http2 | bool %} alpn h2,http/1.1{% endif %}
+{% else %}
     bind *:{{ haproxy_bind_https_port }} ssl crt {{ haproxy_certs_dir }}/{% if haproxy_enable_http2 | bool %} alpn h2,http/1.1{% endif %}
+{% endif %}
     mode http
     option forwardfor
     http-request set-header X-Forwarded-Proto https
@@ -110,6 +123,13 @@ frontend fe_https
     stick-table type ip size {{ haproxy_rate_limit_table_size }} expire {{ haproxy_rate_limit_expire }} store http_req_rate({{ haproxy_rate_limit_period }})
     http-request track-sc0 src
     http-request deny deny_status {{ haproxy_rate_limit_status }} if { sc_http_req_rate(0) gt {{ haproxy_rate_limit_req_rate }} }
+{% endif %}
+{% if haproxy_enable_coraza_waf | default(true) | bool %}
+
+    # Coraza Web Application Firewall (SPOE Engine & OWASP Core Rule Set)
+    unique-id-format %[date()]_%[pid]_%[var(txn.id)]
+    filter spoe engine coraza config /etc/haproxy/coraza-spoe.cfg
+    http-request deny deny_status 403 if { var(txn.coraza.action) -m str deny }
 {% endif %}
 
 {% if groups['webservers'] is defined %}
@@ -168,3 +188,13 @@ backend be_{{ clean_name }}
 backend be_default_404
     mode http
     errorfile 503 /etc/haproxy/errors/404.http
+
+{% if haproxy_enable_coraza_waf | default(true) | bool %}
+# --- Coraza SPOA Backend ---
+backend be_coraza
+    mode tcp
+    balance roundrobin
+    timeout connect 5s
+    timeout server 30s
+    server coraza_agent {{ coraza_spoa_bind | default('127.0.0.1') }}:{{ coraza_spoa_port | default(9000) }} check
+{% endif %}

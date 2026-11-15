@@ -7,6 +7,22 @@ global:
   evaluation_interval: {{ prometheus_evaluation_interval | default('15s') }}
   scrape_timeout: 10s
 
+{% if prometheus_enable_alerts | default(true) | bool %}
+# Alerting Configuration & Rule Files
+rule_files:
+  - "{{ prometheus_alert_rules_file | default('/etc/prometheus/alert.rules.yml') }}"
+
+{% if prometheus_alertmanager_enabled | default(false) | bool %}
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+{% for target in prometheus_alertmanager_targets | default(['127.0.0.1:9093']) %}
+            - "{{ target }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+
 scrape_configs:
 {% if prometheus_scrape_self | bool %}
   # Scrape Prometheus Server Metrics

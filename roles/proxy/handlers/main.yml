@@ -16,3 +16,8 @@
 - name: Reload systemd daemon
   ansible.builtin.systemd:
     daemon_reload: true
+
+- name: Restart coraza-spoa
+  ansible.builtin.systemd:
+    name: coraza-spoa
+    state: restarted

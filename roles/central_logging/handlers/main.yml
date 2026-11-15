@@ -1,0 +1,9 @@
+---
+# ==============================================================================
+# Handlers for central_logging Role
+# ==============================================================================
+
+- name: Restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted

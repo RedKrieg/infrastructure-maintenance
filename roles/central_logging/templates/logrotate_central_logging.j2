@@ -1,0 +1,17 @@
+# ==============================================================================
+# Centralized Cluster Log Rotation Configuration - Managed by Ansible
+# Retains aggregated cluster logs for {{ logging_retention_days }} days
+# ==============================================================================
+
+{{ logging_storage_dir }}/*/*.log {
+    daily
+    missingok
+    rotate {{ logging_retention_days }}
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+    postrotate
+        /usr/lib/rsyslog/rsyslog-rotate
+    endscript
+}

@@ -1,0 +1,14 @@
+# ==============================================================================
+# Rsyslog Log Shipper Configuration - Managed by Ansible
+# Ships local system, proxy, web, and auth logs to central collector
+# ==============================================================================
+
+# Spool and queue parameters for reliable delivery
+$ActionQueueType LinkedList
+$ActionQueueFileName srvrfwd
+$ActionResumeRetryCount -1
+$ActionQueueSaveOnShutdown on
+$ActionQueueMaxDiskSpace 1g
+
+# Forward all local logs to the centralized log server via TCP
+*.* @@{{ logging_server_host }}:{{ logging_port }}

@@ -1,0 +1,21 @@
+# ==============================================================================
+# Microsoft Azure Dynamic Inventory Configuration
+# Plugin: azure.azcollection.azure_rm
+# Discovers Azure VMs inside Resource Group cluster-rg
+# ==============================================================================
+plugin: azure.azcollection.azure_rm
+include_vm_resource_groups:
+  - cluster-rg
+
+keyed_groups:
+  - key: tags.Role
+    prefix: ""
+    separator: ""
+
+compose:
+  ansible_host: default_ipv4_address
+  ansible_user: "'ubuntu'"
+  external_fqdn: tags.external_fqdn | default(omit)
+
+groups:
+  headless_nodes: "true"

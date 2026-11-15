@@ -19,6 +19,10 @@
   ansible.builtin.include_tasks: stats_whitelist.yml
   tags: [proxy, stats, security]
 
+- name: Configure Coraza Web Application Firewall (WAF)
+  ansible.builtin.include_tasks: coraza_waf.yml
+  tags: [proxy, haproxy, waf, coraza, security]
+
 - name: Deploy HAProxy Configuration & Manage Service
   ansible.builtin.include_tasks: config.yml
   tags: [proxy, haproxy]
