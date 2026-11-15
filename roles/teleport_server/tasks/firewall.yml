@@ -8,6 +8,8 @@
     rule: allow
     port: "{{ teleport_proxy_web_port | string }}"
     proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ teleport_admin_trusted_cidrs | default(['0.0.0.0/0']) }}"
   tags: [teleport, teleport_server, firewall, ufw]
 
 - name: Allow Teleport SSH proxy port (3023) through UFW
@@ -15,6 +17,8 @@
     rule: allow
     port: "{{ teleport_proxy_ssh_port | string }}"
     proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ teleport_admin_trusted_cidrs | default(['0.0.0.0/0']) }}"
   tags: [teleport, teleport_server, firewall, ufw]
 
 - name: Allow Teleport reverse tunnel port (3024) through UFW
