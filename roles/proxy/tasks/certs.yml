@@ -36,7 +36,7 @@
 
 - name: Determine certificate issuance strategy (wildcard via DNS-01 vs individual via HTTP-01)
   ansible.builtin.set_fact:
-    use_wildcard_cert: >-
+    enable_wildcard_cert: >-
       {{
         (enable_wildcard_cert | default(false) | bool) and
         (acme_dns_provider is defined and acme_dns_provider | length > 0)
@@ -46,7 +46,7 @@
 
 - name: Set certificate target list based on issuance strategy
   ansible.builtin.set_fact:
-    cert_targets: "{{ [wildcard_cert_name] if (use_wildcard_cert | bool) else target_fqdns }}"
+    cert_targets: "{{ [wildcard_cert_name] if (enable_wildcard_cert | bool) else target_fqdns }}"
   tags: [proxy, ssl, certs]
 
 # ==============================================================================
@@ -81,14 +81,14 @@
   block:
     # --- Wildcard Certificate Generation (When DNS service access is available) ---
     - name: Check existing wildcard certificate on Primary Proxy
-      when: use_wildcard_cert | bool
+      when: enable_wildcard_cert | bool
       ansible.builtin.stat:
         path: "{{ haproxy_certs_dir }}/{{ wildcard_cert_name }}.pem"
       register: wildcard_cert_stat
 
     - name: Generate bootstrap self-signed wildcard SSL bundle on Primary Proxy
       when:
-        - use_wildcard_cert | bool
+        - enable_wildcard_cert | bool
         - not wildcard_cert_stat.stat.exists
       ansible.builtin.shell:
         cmd: >
@@ -103,7 +103,7 @@
 
     # --- Individual Certificate Generation (Fallback when DNS access is NOT available) ---
     - name: Check existing individual certificates on Primary Proxy
-      when: not (use_wildcard_cert | bool)
+      when: not (enable_wildcard_cert | bool)
       ansible.builtin.stat:
         path: "{{ haproxy_certs_dir }}/{{ item }}.pem"
       register: cert_stats_primary
@@ -111,7 +111,7 @@
 
     - name: Generate bootstrap self-signed individual SSL bundles on Primary Proxy
       when:
-        - not (use_wildcard_cert | bool)
+        - not (enable_wildcard_cert | bool)
         - not item.stat.exists
       ansible.builtin.shell:
         cmd: >
@@ -130,7 +130,7 @@
       block:
         # Case A: Wildcard Certificate via DNS-01 Challenge (DNS access available)
         - name: Request wildcard certificate via acme.sh DNS-01 on Primary Proxy
-          when: use_wildcard_cert | bool
+          when: enable_wildcard_cert | bool
           ansible.builtin.command:
             cmd: >
               {{ acme_sh_install_dir }}/acme.sh --issue
@@ -146,7 +146,7 @@
 
         - name: Bundle and install wildcard certificate into HAProxy format on Primary Proxy
           when:
-            - use_wildcard_cert | bool
+            - enable_wildcard_cert | bool
             - acme_wildcard_issue_result is defined
           ansible.builtin.shell:
             cmd: >
@@ -158,7 +158,7 @@
 
         # Case B: Individual Certificates via HTTP-01 Standalone (DNS access NOT available)
         - name: Request individual certificates via acme.sh standalone HTTP-01 on Primary Proxy
-          when: not (use_wildcard_cert | bool)
+          when: not (enable_wildcard_cert | bool)
           ansible.builtin.command:
             cmd: >
               {{ acme_sh_install_dir }}/acme.sh --issue
@@ -174,7 +174,7 @@
 
         - name: Bundle and install individual certificates into HAProxy format on Primary Proxy
           when:
-            - not (use_wildcard_cert | bool)
+            - not (enable_wildcard_cert | bool)
             - acme_issue_result is defined
           ansible.builtin.shell:
             cmd: >
