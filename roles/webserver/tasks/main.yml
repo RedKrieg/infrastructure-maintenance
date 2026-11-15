@@ -11,6 +11,10 @@
   ansible.builtin.include_tasks: firewall.yml
   tags: [webserver, firewall]
 
+- name: Manage Internal TLS Certificates
+  ansible.builtin.include_tasks: tls.yml
+  tags: [webserver, ssl, tls]
+
 - name: Configure Generic 404, Real IP & External FQDN Site
   ansible.builtin.include_tasks: config.yml
   tags: [webserver, nginx, sites]

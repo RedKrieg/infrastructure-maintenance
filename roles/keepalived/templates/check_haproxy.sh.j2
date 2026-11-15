@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Keepalived HAProxy Health Check Track Script
+# Managed by Ansible - Exits with 0 if HAProxy is active, 1 otherwise
+# ==============================================================================
+set -euo pipefail
+
+if pidof haproxy >/dev/null 2>&1; then
+    exit 0
+fi
+
+if systemctl is-active --quiet haproxy; then
+    exit 0
+fi
+
+exit 1

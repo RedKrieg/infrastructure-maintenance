@@ -1,0 +1,59 @@
+---
+# ==============================================================================
+# Main Task Entry Point for keepalived Role
+# ==============================================================================
+
+- name: Manage Keepalived VRRP Configuration
+  when: enable_keepalived | bool
+  tags: [keepalived, vrrp, ha, baremetal]
+  block:
+    - name: Install Keepalived package
+      ansible.builtin.apt:
+        name: keepalived
+        state: present
+
+    - name: Allow VRRP traffic through UFW
+      community.general.ufw:
+        rule: allow
+        proto: "112"
+      when: enable_ufw_firewall | default(true) | bool
+
+    - name: Deploy HAProxy health check track script
+      ansible.builtin.template:
+        src: check_haproxy.sh.j2
+        dest: /usr/local/bin/check_haproxy.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy Keepalived configuration
+      ansible.builtin.template:
+        src: keepalived.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+        owner: root
+        group: root
+        mode: "0640"
+      notify: Restart keepalived
+
+    - name: Ensure Keepalived service is running and enabled
+      ansible.builtin.systemd:
+        name: keepalived
+        state: started
+        enabled: true
+
+- name: Disable Keepalived service if not enabled
+  when: not (enable_keepalived | bool)
+  tags: [keepalived, vrrp, ha, baremetal]
+  block:
+    - name: Check if keepalived service unit exists
+      ansible.builtin.stat:
+        path: /lib/systemd/system/keepalived.service
+      register: keepalived_service_stat
+
+    - name: Ensure Keepalived service is stopped and disabled
+      ansible.builtin.systemd:
+        name: keepalived
+        state: stopped
+        enabled: false
+      when: keepalived_service_stat.stat.exists
+      ignore_errors: true

@@ -1,0 +1,18 @@
+---
+# ==============================================================================
+# Grafana Firewall (UFW) Configuration
+# ==============================================================================
+
+- name: Allow Grafana web interface from trusted subnets
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ grafana_port | default(3000) | string }}"
+    from_ip: "{{ item }}"
+    comment: "Allow Grafana UI from trusted subnet {{ item }}"
+  loop: "{{ grafana_trusted_subnets }}"
+  when:
+    - ufw_enabled | default(true) | bool
+    - grafana_trusted_subnets is defined
+    - grafana_trusted_subnets | length > 0
+  tags: [grafana, firewall]

@@ -1,0 +1,44 @@
+---
+# ==============================================================================
+# Internal TLS Certificate Provisioning for Webserver
+# ==============================================================================
+
+- name: Manage Internal TLS Certificates for Zero-Trust Backend
+  when: webserver_enable_ssl | bool
+  tags: [webserver, ssl, tls]
+  block:
+    - name: Ensure internal SSL certificate directory exists
+      ansible.builtin.file:
+        path: "{{ webserver_ssl_cert_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Check if internal certificate already exists
+      ansible.builtin.stat:
+        path: "{{ webserver_ssl_cert }}"
+      register: internal_cert_stat
+
+    - name: Generate internal private key and self-signed certificate
+      ansible.builtin.command: >
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048
+        -keyout {{ webserver_ssl_key }}
+        -out {{ webserver_ssl_cert }}
+        -subj "/CN={{ external_fqdn | default(inventory_hostname) }}/O=InternalCluster"
+      when: not internal_cert_stat.stat.exists
+      notify: Reload nginx
+
+    - name: Secure internal TLS private key permissions
+      ansible.builtin.file:
+        path: "{{ webserver_ssl_key }}"
+        owner: root
+        group: www-data
+        mode: "0640"
+
+    - name: Set internal TLS public certificate permissions
+      ansible.builtin.file:
+        path: "{{ webserver_ssl_cert }}"
+        owner: root
+        group: root
+        mode: "0644"

@@ -16,14 +16,50 @@
   when: enable_needrestart_auto | bool
   tags: [maintenance, system]
 
-- name: Configure unattended-upgrades with scheduled reboot at 4:00 AM
+- name: Enforce Dpkg force-confold to preserve customized configurations on update
+  ansible.builtin.copy:
+    dest: /etc/dpkg/dpkg.cfg.d/force-confold
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible - Keep existing configuration when upstream packages change
+      force-confdef
+      force-confold
+  when: enable_unattended_upgrades | bool
+  tags: [maintenance, system]
+
+- name: Configure APT periodic update intervals
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by Ansible - Daily automated security update checks
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+  when: enable_unattended_upgrades | bool
+  tags: [maintenance, system]
+
+- name: Configure unattended-upgrades with force-confold and scheduled reboot
   ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/52unattended-upgrades-reboot
     owner: root
     group: root
     mode: "0644"
     content: |
-      // Managed by Ansible - Scheduled automatic reboots for security updates
+      // Managed by Ansible - Scheduled automatic reboots and config preservation
+      Dpkg::Options {
+         "--force-confdef";
+         "--force-confold";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::MinimalSteps "true";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
       Unattended-Upgrade::Automatic-Reboot "true";
       Unattended-Upgrade::Automatic-Reboot-Time "{{ unattended_reboot_time }}";
       Unattended-Upgrade::Automatic-Reboot-WithUsers "true";

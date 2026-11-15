@@ -1,0 +1,29 @@
+---
+# ==============================================================================
+# Main Task Entry Point for node_exporter Role
+# ==============================================================================
+
+- name: Manage Prometheus Node Exporter
+  when: enable_node_exporter | bool
+  tags: [monitoring, node_exporter, telemetry]
+  block:
+    - name: Install prometheus-node-exporter package
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+
+    - name: Allow node_exporter port through UFW
+      community.general.ufw:
+        rule: allow
+        port: "{{ node_exporter_port | string }}"
+        proto: tcp
+        from_ip: "{{ item }}"
+        comment: "Prometheus Node Exporter"
+      loop: "{{ node_exporter_trusted_subnets }}"
+      when: enable_ufw_firewall | default(true) | bool
+
+    - name: Ensure prometheus-node-exporter service is enabled and started
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: true

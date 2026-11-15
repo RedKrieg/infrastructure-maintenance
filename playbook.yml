@@ -24,6 +24,9 @@
     - role: admin_users
       tags: [admin_users, users, dotfiles, venv]
 
+    - role: node_exporter
+      tags: [node_exporter, monitoring, telemetry]
+
 # ------------------------------------------------------------------------------
 # Play 2: Frontend HAProxy Load Balancers & SSL Certificate Orchestration
 # ------------------------------------------------------------------------------
@@ -38,6 +41,9 @@
   roles:
     - role: proxy
       tags: [proxy, haproxy, ssl, acme, certs, firewall]
+
+    - role: keepalived
+      tags: [keepalived, ha, vrrp]
 
 # ------------------------------------------------------------------------------
 # Play 3: Backend Webservers (Nginx, Default 404 Catch-All)
@@ -65,6 +71,9 @@
   roles:
     - role: prometheus_server
       tags: [monitoring, prometheus, firewall]
+
+    - role: grafana
+      tags: [grafana, monitoring, telemetry, dashboards]
 
 # ------------------------------------------------------------------------------
 # Play 5: Teleport Centralized Access & Auth/Proxy Server

@@ -1,0 +1,46 @@
+---
+# ==============================================================================
+# Grafana Package Installation
+# ==============================================================================
+
+- name: Install APT transport and gnupg prerequisites
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - software-properties-common
+      - gnupg
+      - curl
+    state: present
+  tags: [grafana, packages]
+
+- name: Ensure keyrings directory exists
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [grafana, packages]
+
+- name: Download Grafana GPG signing key
+  ansible.builtin.get_url:
+    url: "https://apt.grafana.com/gpg.key"
+    dest: /usr/share/keyrings/grafana.key
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [grafana, packages]
+
+- name: Configure Grafana APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/grafana.key] https://apt.grafana.com stable main"
+    state: present
+    filename: grafana
+    update_cache: true
+  tags: [grafana, packages]
+
+- name: Install Grafana package
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+  tags: [grafana, packages]

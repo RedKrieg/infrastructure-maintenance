@@ -1,0 +1,15 @@
+---
+# ==============================================================================
+# Handlers for grafana Role
+# ==============================================================================
+
+- name: Restart grafana-server
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted
+    daemon_reload: true
+
+- name: Reload grafana-server
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: reloaded

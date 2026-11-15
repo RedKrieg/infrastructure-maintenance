@@ -1,0 +1,40 @@
+---
+# ==============================================================================
+# Cluster Backup & Disaster Recovery Active Configuration
+# ==============================================================================
+# To configure offsite storage (SFTP, Rsync, or AWS S3 / MinIO), see
+# vars/backup_config.example.yml for full parameter specifications.
+# ==============================================================================
+
+# Temporary staging directory on target nodes during archiving
+backup_staging_dir: "/var/backups/ansible-cluster/staging"
+backup_retention_days: 30
+backup_compression: "gz"
+
+# Destination type: "local", "remote_ssh", or "s3"
+backup_destination_type: "local"
+
+# Local storage path on the Ansible controller / central storage host
+backup_local_dir: "/var/backups/ansible-cluster/archives"
+
+# Remote SSH / SFTP settings (when backup_destination_type is 'remote_ssh')
+backup_remote_ssh_host: "backup.internal.lan"
+backup_remote_ssh_port: 22
+backup_remote_ssh_user: "backup"
+backup_remote_ssh_key: "~/.ssh/id_ed25519"
+backup_remote_ssh_dir: "/srv/backups/cluster"
+
+# S3 / MinIO settings (when backup_destination_type is 's3')
+backup_s3_bucket: "cluster-backups"
+backup_s3_endpoint_url: ""
+backup_s3_region: "us-east-1"
+backup_s3_access_key: "{{ vault_backup_s3_access_key | default('') }}"
+backup_s3_secret_key: "{{ vault_backup_s3_secret_key | default('') }}"
+backup_s3_prefix: "cluster"
+
+# Component selectors
+backup_include_tls_and_acme: true
+backup_include_proxy_config: true
+backup_include_teleport_state: true
+backup_include_webserver_data: true
+backup_include_monitoring_state: true

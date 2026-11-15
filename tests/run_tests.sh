@@ -34,7 +34,23 @@ done
 
 echo ""
 echo "================================================================="
-echo " 3. Cloud Provisioning Playbook Syntax Checks"
+echo " 3. Operational Playbook Syntax Checks (Backup, Restore, Verify)"
+echo "================================================================="
+OPS_PLAYBOOKS=(
+  "backup_cluster.yml"
+  "restore_cluster.yml"
+  "verify_cluster.yml"
+)
+
+for op in "${OPS_PLAYBOOKS[@]}"; do
+  echo "  -> Checking $op..."
+  ansible-playbook -i inventory.ini "$op" --syntax-check > /dev/null
+  echo "     [✓] PASS"
+done
+
+echo ""
+echo "================================================================="
+echo " 4. Cloud Provisioning Playbook Syntax Checks"
 echo "================================================================="
 PROV_PLAYBOOKS=(
   "examples/provisioning/provision_aws.yml"

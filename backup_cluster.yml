@@ -1,0 +1,281 @@
+---
+# ==============================================================================
+# Cluster Backup Playbook - Automated Multi-Tier Disaster Recovery
+# ==============================================================================
+# Usage:
+#   ansible-playbook -i inventory.ini backup_cluster.yml
+#
+# Custom destination overrides:
+#   ansible-playbook -i inventory.ini backup_cluster.yml -e "backup_destination_type=remote_ssh"
+# ==============================================================================
+
+- name: Initialize Backup Run & Generate Execution Manifest
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/backup_config.yml
+  tasks:
+    - name: Set backup execution timestamp
+      ansible.builtin.set_fact:
+        backup_ts: "{{ lookup('pipe', 'date +%Y%m%d_%H%M%S') }}"
+
+    - name: Ensure local backup archive directory exists
+      ansible.builtin.file:
+        path: "{{ backup_local_dir }}/{{ backup_ts }}"
+        state: directory
+        mode: "0750"
+
+    - name: Display backup initiation banner
+      ansible.builtin.debug:
+        msg:
+          - "=================================================="
+          - "Starting Cluster Backup Execution"
+          - "Timestamp:    {{ backup_ts }}"
+          - "Destination:  {{ backup_destination_type }}"
+          - "Local Target: {{ backup_local_dir }}/{{ backup_ts }}"
+          - "=================================================="
+
+- name: Backup Frontend Load Balancers & Edge Proxies
+  hosts: proxies
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Check candidate proxy directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/haproxy
+        - /etc/keepalived
+        - /root/.acme.sh
+      register: proxy_stat_results
+
+    - name: Assemble existing candidate paths
+      ansible.builtin.set_fact:
+        proxy_backup_paths: "{{ proxy_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Archive proxy configurations and certificates
+      community.general.archive:
+        path: "{{ proxy_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/proxy_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: proxy_backup_paths | length > 0
+
+    - name: Fetch proxy archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/proxy_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: proxy_backup_paths | length > 0
+
+    - name: Remove temporary proxy staging archive
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}/proxy_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        state: absent
+
+- name: Backup Backend Webservers & Application Nodes
+  hosts: webservers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Check candidate webserver directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/nginx
+        - /etc/ssl/internal
+        - /var/www
+      register: web_stat_results
+
+    - name: Assemble existing webserver candidate paths
+      ansible.builtin.set_fact:
+        web_backup_paths: "{{ web_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Archive webserver configurations and site contents
+      community.general.archive:
+        path: "{{ web_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/webserver_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: web_backup_paths | length > 0
+
+    - name: Fetch webserver archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/webserver_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: web_backup_paths | length > 0
+
+    - name: Remove temporary webserver staging archive
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}/webserver_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        state: absent
+
+- name: Backup Teleport Zero-Trust Access Gateway & Storage
+  hosts: teleport_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Check candidate Teleport directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/teleport.yaml
+        - /var/lib/teleport
+      register: teleport_stat_results
+
+    - name: Assemble existing Teleport candidate paths
+      ansible.builtin.set_fact:
+        teleport_backup_paths: "{{ teleport_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Archive Teleport configuration and cryptographic state
+      community.general.archive:
+        path: "{{ teleport_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/teleport_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: teleport_backup_paths | length > 0
+
+    - name: Fetch Teleport archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/teleport_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/teleport_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: teleport_backup_paths | length > 0
+
+    - name: Remove temporary Teleport staging archive
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}/teleport_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        state: absent
+
+- name: Backup Prometheus & Grafana Monitoring Tier
+  hosts: monitoring
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Check candidate monitoring directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/prometheus
+        - /etc/grafana
+        - /var/lib/grafana/grafana.db
+      register: mon_stat_results
+
+    - name: Assemble existing monitoring candidate paths
+      ansible.builtin.set_fact:
+        mon_backup_paths: "{{ mon_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Archive monitoring configuration and dashboards
+      community.general.archive:
+        path: "{{ mon_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/monitoring_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: mon_backup_paths | length > 0
+
+    - name: Fetch monitoring archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/monitoring_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: mon_backup_paths | length > 0
+
+    - name: Remove temporary monitoring staging archive
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}/monitoring_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        state: absent
+
+- name: Finalize Backup Dispatch & Offsite Synchronization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Find collected backup archives on controller
+      ansible.builtin.find:
+        paths: "{{ backup_local_dir }}/{{ backup_ts }}"
+        patterns: "*.tar.*"
+      register: local_archives
+
+    - name: Dispatch archives to remote SSH / SFTP backup server
+      ansible.builtin.command:
+        cmd: >
+          scp -P {{ backup_remote_ssh_port }} -i {{ backup_remote_ssh_key }} -o StrictHostKeyChecking=no
+          {{ backup_local_dir }}/{{ backup_ts }}/*
+          {{ backup_remote_ssh_user }}@{{ backup_remote_ssh_host }}:{{ backup_remote_ssh_dir }}/
+      when:
+        - backup_destination_type == 'remote_ssh'
+        - local_archives.matched > 0
+      changed_when: true
+
+    - name: Upload archives to S3 / MinIO object storage
+      ansible.builtin.command:
+        cmd: >
+          aws s3 cp {{ backup_local_dir }}/{{ backup_ts }}/
+          s3://{{ backup_s3_bucket }}/{{ backup_s3_prefix }}/{{ backup_ts }}/
+          --recursive
+          {% if backup_s3_endpoint_url | length > 0 %}--endpoint-url {{ backup_s3_endpoint_url }}{% endif %}
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ backup_s3_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ backup_s3_secret_key }}"
+        AWS_DEFAULT_REGION: "{{ backup_s3_region }}"
+      when:
+        - backup_destination_type == 's3'
+        - backup_s3_access_key | length > 0
+        - local_archives.matched > 0
+      changed_when: true
+
+    - name: Display backup manifest summary
+      ansible.builtin.debug:
+        msg:
+          - "=================================================="
+          - "Backup Execution Successfully Completed!"
+          - "Archive Directory: {{ backup_local_dir }}/{{ backup_ts }}"
+          - "Total Archives:    {{ local_archives.matched }}"
+          - "Target Host Type:  {{ backup_destination_type }}"
+          - "=================================================="

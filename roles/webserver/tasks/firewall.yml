@@ -9,3 +9,11 @@
     port: "80"
     proto: tcp
   tags: [webserver, firewall, ufw]
+
+- name: Allow HTTPS (port 443) through UFW for internal TLS
+  community.general.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+  when: webserver_enable_ssl | bool
+  tags: [webserver, firewall, ufw]

@@ -53,6 +53,13 @@ jobs:
           ansible-playbook -i examples/inventories/inventory.oci.ini playbook.yml --syntax-check
           ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml --syntax-check
 
+      - name: Run Operational Playbooks Syntax Checks
+        run: |
+          echo "Testing operational playbooks (backup, restore, verify)..."
+          ansible-playbook -i inventory.ini backup_cluster.yml --syntax-check
+          ansible-playbook -i inventory.ini restore_cluster.yml --syntax-check
+          ansible-playbook -i inventory.ini verify_cluster.yml --syntax-check
+
       - name: Run Provisioning Playbooks Syntax Checks
         run: |
           echo "Testing provisioning playbooks..."

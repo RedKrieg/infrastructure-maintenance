@@ -6,6 +6,14 @@
 server {
     listen 80;
     listen [::]:80;
+{% if webserver_enable_ssl | default(false) | bool %}
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    ssl_certificate {{ webserver_ssl_cert }};
+    ssl_certificate_key {{ webserver_ssl_key }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+{% endif %}
 
     server_name {{ external_fqdn }};
 

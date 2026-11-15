@@ -108,6 +108,9 @@ Use Ansible tags to target specific layers or roles without running the entire p
 | `teleport_server` | Teleport Auth & Proxy | Sets up Teleport Auth/Proxy service, joins tokens, RBAC roles, and users. |
 | `teleport_node` | Teleport SSH Nodes | Installs Teleport Node service and connects reverse tunnels on cluster hosts. |
 | `logging` | Centralized Logging | Deploys central rsyslog ingestion server on monitoring host and shippers on nodes. |
+| `keepalived` | Bare Metal HA | Configures VRRP floating IP and HAProxy health checking on proxies. |
+| `node_exporter` | Host Telemetry | Installs prometheus-node-exporter across all cluster hosts on port 9100. |
+| `grafana` | Visualization | Deploys Grafana server with auto-provisioned dashboards on port 3000. |
 | `users` | User Accounts | Manages user creation, dotfiles, shell helpers, and Python venv tools. |
 
 ### Tagged Command Examples
@@ -174,7 +177,28 @@ For full details, see the [Ansible Vault Secrets Management Guide](security-vaul
 
 ---
 
-## 7. Local Test Suite & Linting
+## 7. Operational Playbooks (Backup, Restore, Verification)
+
+| Playbook | Purpose | Documentation |
+| :--- | :--- | :--- |
+| `backup_cluster.yml` | Snapshots configs, certs, and state; synchronizes to local, SFTP, or S3 targets. | [Backup & Disaster Recovery](backup-and-disaster-recovery.md) |
+| `restore_cluster.yml` | Restores cluster snapshots to nodes and restarts affected services. | [Backup & Disaster Recovery](backup-and-disaster-recovery.md) |
+| `verify_cluster.yml` | Executes automated post-deployment smoke tests and security compliance checks. | [Verification & Smoke Testing](verification.md) |
+
+```bash
+# Backup cluster:
+ansible-playbook -i inventory.ini backup_cluster.yml
+
+# Restore cluster:
+ansible-playbook -i inventory.ini restore_cluster.yml
+
+# Run smoke tests & compliance verification:
+ansible-playbook -i inventory.ini verify_cluster.yml
+```
+
+---
+
+## 8. Local Test Suite & Linting
 
 Run automated syntax validation across all inventories, provisioning playbooks, and shell scripts:
 

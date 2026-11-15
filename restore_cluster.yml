@@ -1,0 +1,177 @@
+---
+# ==============================================================================
+# Cluster Disaster Recovery Restore Playbook
+# ==============================================================================
+# Usage:
+#   ansible-playbook -i inventory.ini restore_cluster.yml
+#
+# Specific archive restoration:
+#   ansible-playbook -i inventory.ini restore_cluster.yml -e "backup_source_dir=/var/backups/ansible-cluster/archives/20261115_120000"
+# ==============================================================================
+
+- name: Determine Target Backup Archive for Restoration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/backup_config.yml
+  tasks:
+    - name: Locate available backup snapshots if backup_source_dir not specified
+      ansible.builtin.find:
+        paths: "{{ backup_local_dir }}"
+        file_type: directory
+      register: available_snapshots
+      when: backup_source_dir is not defined
+
+    - name: Fail if no backup snapshots found
+      ansible.builtin.fail:
+        msg: "No backup snapshots found in {{ backup_local_dir }}. Please provide backup_source_dir."
+      when:
+        - backup_source_dir is not defined
+        - available_snapshots.matched == 0
+
+    - name: Select latest snapshot directory
+      ansible.builtin.set_fact:
+        active_restore_dir: "{{ backup_source_dir | default((available_snapshots.files | sort(attribute='mtime') | last).path) }}"
+
+    - name: Display restore confirmation banner
+      ansible.builtin.debug:
+        msg:
+          - "=================================================="
+          - "Starting Cluster Disaster Recovery Restoration"
+          - "Source Archive Directory: {{ active_restore_dir }}"
+          - "=================================================="
+
+- name: Restore Frontend Load Balancers & Edge Proxies
+  hosts: proxies
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if proxy backup archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: proxy_archive_stat
+
+    - name: Unarchive proxy configuration and certificates to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+        owner: root
+        group: root
+      when: proxy_archive_stat.stat.exists
+      notify: Restart proxy services
+
+  handlers:
+    - name: Restart proxy services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - haproxy
+        - keepalived
+      failed_when: false
+
+- name: Restore Backend Webservers & Application Nodes
+  hosts: webservers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if webserver backup archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: web_archive_stat
+
+    - name: Unarchive webserver configuration and files to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+      when: web_archive_stat.stat.exists
+      notify: Restart nginx
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted
+      failed_when: false
+
+- name: Restore Teleport Zero-Trust Access Gateway
+  hosts: teleport_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if Teleport archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/teleport_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: tp_archive_stat
+
+    - name: Stop teleport service before state restoration
+      ansible.builtin.systemd:
+        name: teleport
+        state: stopped
+      when: tp_archive_stat.stat.exists
+      failed_when: false
+
+    - name: Unarchive Teleport configuration and cryptographic state to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/teleport_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+      when: tp_archive_stat.stat.exists
+
+    - name: Start teleport service after restoration
+      ansible.builtin.systemd:
+        name: teleport
+        state: started
+        enabled: true
+      when: tp_archive_stat.stat.exists
+
+- name: Restore Prometheus & Grafana Monitoring Tier
+  hosts: monitoring
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if monitoring archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: mon_archive_stat
+
+    - name: Unarchive monitoring configuration and dashboards to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+      when: mon_archive_stat.stat.exists
+      notify: Restart monitoring services
+
+  handlers:
+    - name: Restart monitoring services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - prometheus
+        - grafana-server
+      failed_when: false

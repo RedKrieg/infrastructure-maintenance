@@ -1,0 +1,53 @@
+# ==============================================================================
+# Keepalived VRRP Configuration - Managed by Ansible
+# Layer 4 Floating Virtual IP for Bare Metal / On-Prem Deployments
+# ==============================================================================
+
+global_defs {
+    router_id {{ inventory_hostname }}
+    enable_script_security
+    script_user root
+}
+
+vrrp_script chk_haproxy {
+    script "/usr/local/bin/check_haproxy.sh"
+    interval {{ keepalived_script_interval }}
+    weight {{ keepalived_script_weight }}
+    fall {{ keepalived_script_fall }}
+    rise {{ keepalived_script_rise }}
+}
+
+{% set proxy_list = groups['proxies'] | default([inventory_hostname]) %}
+{% set is_master = (inventory_hostname == proxy_list[0]) %}
+{% set my_index = proxy_list.index(inventory_hostname) if inventory_hostname in proxy_list else 1 %}
+{% set priority = 101 - my_index %}
+
+vrrp_instance VI_STATIC {
+    state {{ 'MASTER' if is_master else 'BACKUP' }}
+    interface {{ keepalived_interface }}
+    virtual_router_id {{ keepalived_virtual_router_id }}
+    priority {{ priority }}
+    advert_int 1
+
+    authentication {
+        auth_type PASS
+        auth_pass {{ keepalived_auth_pass }}
+    }
+
+{% if proxy_list | length > 1 %}
+    unicast_src_ip {{ hostvars[inventory_hostname]['ansible_host'] | default(inventory_hostname) }}
+    unicast_peer {
+{% for p in proxy_list if p != inventory_hostname %}
+        {{ hostvars[p]['ansible_host'] | default(p) }}
+{% endfor %}
+    }
+{% endif %}
+
+    virtual_ipaddress {
+        {{ keepalived_vip }}/{{ keepalived_vip_cidr }} dev {{ keepalived_interface }}
+    }
+
+    track_script {
+        chk_haproxy
+    }
+}

@@ -104,6 +104,10 @@ haproxy_check_inter: "3s"
 haproxy_check_fall: 3
 haproxy_check_rise: 2
 
+# Internal Backend SSL / Zero-Trust TLS to Webservers
+haproxy_backend_ssl: false
+haproxy_backend_ssl_verify: "none"
+
 # Logrotate Retention for Cluster Script Logs (60 days retention)
 haproxy_logrotate_interval: "daily"
 haproxy_logrotate_rotate: 60

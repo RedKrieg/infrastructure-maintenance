@@ -1,0 +1,69 @@
+---
+# ==============================================================================
+# Grafana Configuration & Provisioning Tasks
+# ==============================================================================
+
+- name: Ensure Grafana provisioning directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: grafana
+    mode: "0750"
+  loop:
+    - /etc/grafana
+    - /etc/grafana/provisioning
+    - /etc/grafana/provisioning/datasources
+    - /etc/grafana/provisioning/dashboards
+    - "{{ grafana_dashboards_dir }}"
+  tags: [grafana, config]
+
+- name: Deploy Grafana main configuration (grafana.ini)
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana-server
+  tags: [grafana, config]
+
+- name: Deploy Grafana Prometheus datasource provisioning
+  ansible.builtin.template:
+    src: provisioning-datasources.yaml.j2
+    dest: /etc/grafana/provisioning/datasources/prometheus.yaml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana-server
+  tags: [grafana, config]
+
+- name: Deploy Grafana dashboard provider configuration
+  ansible.builtin.template:
+    src: provisioning-dashboards.yaml.j2
+    dest: /etc/grafana/provisioning/dashboards/dashboards.yaml
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana-server
+  tags: [grafana, config]
+
+- name: Copy pre-configured dashboards to dashboard directory
+  ansible.builtin.copy:
+    src: "dashboards/{{ item }}"
+    dest: "{{ grafana_dashboards_dir }}/{{ item }}"
+    owner: root
+    group: grafana
+    mode: "0644"
+  loop:
+    - haproxy_waf_overview.json
+    - fleet_hardware_health.json
+  notify: Restart grafana-server
+  tags: [grafana, config]
+
+- name: Ensure grafana-server service is enabled and started
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: started
+    enabled: true
+  tags: [grafana, service]

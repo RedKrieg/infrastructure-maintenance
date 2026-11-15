@@ -20,5 +20,8 @@ vault_teleport_auth_token: "vault-protected-teleport-join-token-2026"
 # Prometheus Scrape Authentication Password
 vault_prometheus_password: "VaultProtectedPrometheusPassword2026!"
 
+# Grafana Administrator Password
+vault_grafana_admin_password: "VaultProtectedGrafanaPassword2026!"
+
 # Initial Admin User Default Password (if not individually overridden)
 vault_admin_default_password: "VaultProtectedInitialAdminPassword2026!"

@@ -32,6 +32,10 @@ prometheus_haproxy_metrics_path: "/metrics"
 prometheus_haproxy_user: "admin"
 prometheus_haproxy_password: "{{ vault_prometheus_password | default(vault_haproxy_stats_password | default('SecureAdminPassword123')) }}"
 
+# Target ingestion: Node Exporter across all nodes
+prometheus_scrape_node_exporter: true
+prometheus_node_exporter_port: 9100
+
 # Alerting Configuration
 prometheus_enable_alerts: true
 prometheus_alert_rules_file: "/etc/prometheus/alert.rules.yml"

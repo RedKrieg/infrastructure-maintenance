@@ -1,0 +1,32 @@
+# ==============================================================================
+# Grafana Configuration - Managed by Ansible
+# ==============================================================================
+
+[server]
+http_addr = 0.0.0.0
+http_port = {{ grafana_port | default(3000) }}
+domain = {{ grafana_domain | default('localhost') }}
+root_url = {{ grafana_root_url | default('%(protocol)s://%(domain)s:%(http_port)s/') }}
+
+[security]
+admin_user = {{ grafana_admin_user | default('admin') }}
+admin_password = {{ grafana_admin_password }}
+cookie_secure = false
+disable_gravatar = true
+
+[users]
+allow_sign_up = false
+auto_assign_org = true
+auto_assign_org_role = Viewer
+
+[auth.anonymous]
+enabled = false
+
+[analytics]
+reporting_enabled = false
+check_for_updates = false
+check_for_plugin_updates = false
+
+[log]
+mode = console file
+level = info

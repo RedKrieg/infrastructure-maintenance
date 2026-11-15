@@ -65,6 +65,21 @@ scrape_configs:
           cluster: 'haproxy-proxies'
 {% endif %}
 
+{% if prometheus_scrape_node_exporter | default(true) | bool and groups['all'] is defined and groups['all'] | length > 0 %}
+  # Scrape Node Exporter across all hosts
+  - job_name: 'node_exporter'
+    scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+    static_configs:
+      - targets:
+{% for host in groups['all'] %}
+{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_port = hostvars[host]['node_exporter_port'] | default(prometheus_node_exporter_port | default(9100)) %}
+          - "{{ target_ip }}:{{ target_port }}"
+{% endfor %}
+        labels:
+          role: 'fleet'
+{% endif %}
+
 {% if prometheus_custom_scrape_configs is defined and prometheus_custom_scrape_configs | length > 0 %}
 {{ prometheus_custom_scrape_configs | to_nice_yaml(indent=2) }}
 {% endif %}

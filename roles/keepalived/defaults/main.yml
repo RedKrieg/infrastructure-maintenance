@@ -1,0 +1,26 @@
+---
+# ==============================================================================
+# Default Variables for keepalived Role (Bare Metal / On-Prem HA)
+# ==============================================================================
+
+# Enable or disable Keepalived VRRP
+enable_keepalived: false
+
+# Floating Virtual IP (VIP) shared across proxies
+keepalived_vip: "10.0.1.5"
+keepalived_vip_cidr: 24
+
+# Network interface to bind the VIP (auto-detects default interface)
+keepalived_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+
+# VRRP Virtual Router ID (1-255)
+keepalived_virtual_router_id: 51
+
+# Health check script interval and fall/rise
+keepalived_script_interval: 2
+keepalived_script_fall: 2
+keepalived_script_rise: 2
+keepalived_script_weight: 2
+
+# VRRP Auth Password (managed by vault or default)
+keepalived_auth_pass: "{{ vault_keepalived_auth_pass | default('vrrpSecretPass123') }}"

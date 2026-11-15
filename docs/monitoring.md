@@ -74,3 +74,11 @@ Prometheus actively evaluates alerting rules defined in `/etc/prometheus/alert.r
 | **`HAProxyHigh5xxErrorRate`** | HTTP 5xx responses $> 5\%$ for 5m | `warning` | Warns if backend servers return elevated application error rates. |
 | **`HAProxyRateLimitSaturationSpike`** | Denied requests $> 50$ in 5m | `warning` | Detects volumetric spikes or DDoS attacks triggering the 300 req/10s rate limiter. |
 | **`ClusterNodeUnreachable`** | `up == 0` for 2m | `critical` | Fires when Prometheus is unable to scrape any cluster node for more than 2 minutes. |
+
+---
+
+## 4. Hardware Telemetry & Grafana Dashboards
+
+- **Node Exporter**: Every cluster node runs `node_exporter` on port `9100`, providing hardware, memory, disk, and network metrics.
+- **Grafana Server**: Running on port `3000` with pre-provisioned dashboards for HAProxy & Coraza WAF Overview and Fleet Hardware Health.
+- For complete setup and dashboard details, refer to [grafana-dashboards.md](file:///home/redkrieg/Projects/ansible-stuff/docs/grafana-dashboards.md).

@@ -168,6 +168,8 @@ backend be_acme
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
 {% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_port = 443 if (haproxy_backend_ssl | default(false) | bool) else 80 %}
+{% set ssl_opts = 'ssl verify none' if (haproxy_backend_ssl | default(false) | bool) else '' %}
 backend be_{{ clean_name }}
     mode http
     balance roundrobin
@@ -176,9 +178,9 @@ backend be_{{ clean_name }}
 {% if haproxy_backend_http_check | bool %}
     option httpchk GET / HTTP/1.1\r\nHost:\ {{ fqdn }}
     http-check expect rstatus (2..|3..)
-    server {{ host }} {{ target_ip }}:80 check inter {{ haproxy_check_inter }} fall {{ haproxy_check_fall }} rise {{ haproxy_check_rise }}
+    server {{ host }} {{ target_ip }}:{{ target_port }} {{ ssl_opts }} check inter {{ haproxy_check_inter }} fall {{ haproxy_check_fall }} rise {{ haproxy_check_rise }}
 {% else %}
-    server {{ host }} {{ target_ip }}:80 check
+    server {{ host }} {{ target_ip }}:{{ target_port }} {{ ssl_opts }} check
 {% endif %}
 
 {% endfor %}

@@ -1,0 +1,14 @@
+---
+# ==============================================================================
+# Handlers for keepalived Role
+# ==============================================================================
+
+- name: Restart keepalived
+  ansible.builtin.systemd:
+    name: keepalived
+    state: restarted
+
+- name: Reload keepalived
+  ansible.builtin.systemd:
+    name: keepalived
+    state: reloaded

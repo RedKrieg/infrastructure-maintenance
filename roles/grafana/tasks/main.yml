@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# Main Task Entry Point for grafana Role
+# ==============================================================================
+
+- name: Include package installation tasks
+  ansible.builtin.include_tasks: packages.yml
+  when: enable_grafana | default(true) | bool
+
+- name: Include configuration & dashboard provisioning tasks
+  ansible.builtin.include_tasks: config.yml
+  when: enable_grafana | default(true) | bool
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: enable_grafana | default(true) | bool

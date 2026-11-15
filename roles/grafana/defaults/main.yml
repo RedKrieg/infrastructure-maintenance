@@ -1,0 +1,30 @@
+---
+# ==============================================================================
+# Default Variables for grafana Role
+# ==============================================================================
+
+# Feature toggle
+enable_grafana: true
+
+# Network & Service Binding
+grafana_port: 3000
+grafana_domain: "localhost"
+grafana_root_url: "%(protocol)s://%(domain)s:%(http_port)s/"
+
+# Administrative Credentials (use Ansible Vault in production)
+grafana_admin_user: "admin"
+grafana_admin_password: "{{ vault_grafana_admin_password | default('SecureGrafanaPass123!') }}"
+
+# Upstream Prometheus Datasource URL
+grafana_prometheus_url: "http://127.0.0.1:{{ prometheus_port | default(9090) }}"
+grafana_prometheus_name: "Prometheus"
+
+# Dashboard provisioning directory on target node
+grafana_dashboards_dir: "/var/lib/grafana/dashboards"
+
+# Trusted CIDR subnets allowed to access Grafana UI on port 3000
+grafana_trusted_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1"
