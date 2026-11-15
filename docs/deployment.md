@@ -1,0 +1,118 @@
+# Deployment & Inventory Configuration Guide
+
+This guide details inventory design, dynamic host-to-FQDN mapping, cloud-specific setups, and Ansible execution commands.
+
+---
+
+## 1. Inventory & Dynamic 1:1 Mapping
+
+The only setting required per webserver is **`external_fqdn`** in your inventory file:
+
+```ini
+[proxies]
+proxy-01 ansible_host=10.0.1.10
+proxy-02 ansible_host=10.0.1.20
+proxy-03 ansible_host=10.0.1.30
+
+[webservers]
+web-01 ansible_host=10.0.1.11 external_fqdn=web1.example.com
+web-02 ansible_host=10.0.1.12 external_fqdn=web2.example.com
+web-03 ansible_host=10.0.1.13 external_fqdn=web3.example.com
+
+[monitoring]
+monitoring-01 ansible_host=10.0.1.50
+
+[teleport_servers]
+teleport-01 ansible_host=10.0.1.60
+
+[headless_nodes:children]
+proxies
+webservers
+monitoring
+teleport_servers
+```
+
+### Dynamic Routing Behavior
+HAProxy on all proxies dynamically generates:
+- `web1.example.com` ➔ routes to `10.0.1.11:80`
+- `web2.example.com` ➔ routes to `10.0.1.12:80`
+- `web3.example.com` ➔ routes to `10.0.1.13:80`
+- Unmapped hostnames / IPs ➔ **404 Not Found** (via Nginx default generic 404 server)
+
+---
+
+## 2. Cloud Inventory Templates
+
+Ready-to-use cloud-specific inventory templates are available in the `examples/inventories/` directory:
+
+| Environment | Inventory Path | Architecture Highlights |
+| :--- | :--- | :--- |
+| **AWS EC2** | [examples/inventories/inventory.aws.ini](../examples/inventories/inventory.aws.ini) | Multi-AZ placement (`us-east-1a`, `1b`, `1c`), AWS Network Load Balancer (NLB) fronting proxies. |
+| **Google Cloud (GCP)** | [examples/inventories/inventory.gcp.ini](../examples/inventories/inventory.gcp.ini) | Multi-zone Compute Engine (`us-central1-a`, `1-b`, `1-c`), Regional Passthrough Network Load Balancer. |
+| **OpenStack** | [examples/inventories/inventory.openstack.ini](../examples/inventories/inventory.openstack.ini) | Nova anti-affinity server groups across physical hypervisors, Octavia TCP listener. |
+| **OCI / Bare Metal** | [inventory.ini](../inventory.ini) | Standard RFC 1918 multi-rack or fault-domain deployment. |
+
+---
+
+## 3. How to Run
+
+### Pre-Flight Syntax Check
+Before running across your fleet, validate your playbooks and inventory:
+```bash
+ansible-playbook -i inventory.ini playbook.yml --syntax-check
+```
+
+### Full Fleet Provisioning
+```bash
+# Using the default inventory:
+ansible-playbook -i inventory.ini playbook.yml
+
+# Or deploying to AWS EC2:
+ansible-playbook -i examples/inventories/inventory.aws.ini playbook.yml
+
+# Or deploying to GCP Compute Engine:
+ansible-playbook -i examples/inventories/inventory.gcp.ini playbook.yml
+
+# Or deploying to OpenStack:
+ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml
+```
+
+---
+
+## 4. Targeted Execution Using Tags
+
+Use Ansible tags to target specific layers or roles without running the entire playbook:
+
+| Tag | Purpose | Description |
+| :--- | :--- | :--- |
+| `proxy` | HAProxy Ingress | Deploys HAProxy packages, firewall rules, stats whitelists, HTTP/2 & rate limit configs. |
+| `certs` | SSL Synchronization | Triggers primary issuance, cert distribution, standby watchdogs, and reconciliation. |
+| `webserver` | Backend Webservers | Installs Nginx, generic 404 handler, and virtual host blocks for assigned FQDNs. |
+| `monitoring` | Prometheus | Provisions the Prometheus monitoring server and scrapes proxies. |
+| `teleport_server` | Teleport Auth & Proxy | Sets up Teleport Auth/Proxy service, joins tokens, RBAC roles, and users. |
+| `teleport_node` | Teleport SSH Nodes | Installs Teleport Node service and connects reverse tunnels on cluster hosts. |
+| `users` | User Accounts | Manages user creation, dotfiles, shell helpers, and Python venv tools. |
+
+### Tagged Command Examples
+```bash
+# Provision or update HAProxy load balancers only:
+ansible-playbook -i inventory.ini playbook.yml --tags proxy
+
+# Synchronize certificates only:
+ansible-playbook -i inventory.ini playbook.yml --tags certs
+
+# Provision or update backend webservers only:
+ansible-playbook -i inventory.ini playbook.yml --tags webserver
+
+# Provision or update Prometheus monitoring server only:
+ansible-playbook -i inventory.ini playbook.yml --tags monitoring
+
+# Provision or update Teleport Auth/Proxy server only:
+ansible-playbook -i inventory.ini playbook.yml --tags teleport_server
+
+# Provision or update Teleport SSH node services only:
+ansible-playbook -i inventory.ini playbook.yml --tags teleport_node
+
+# Update user accounts, helper scripts, and dotfiles only:
+ansible-playbook -i inventory.ini playbook.yml --tags users
+```

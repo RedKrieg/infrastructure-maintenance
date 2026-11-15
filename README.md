@@ -1,6 +1,6 @@
 # Headless Ubuntu Initial Setup, Dynamic HAProxy & Webserver Suite
 
-An enterprise-grade, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Designed to be **100% backend and cloud agnostic**—running identically across **AWS EC2**, **Google Cloud Platform (GCP)**, **OpenStack**, **Oracle Cloud (OCI)**, and **bare-metal/on-premises** infrastructure.
+An enterprise-grade, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems (20.04, 22.04, 24.04 LTS). Designed to be **100% backend and cloud agnostic**—running identically across **AWS EC2**, **Google Cloud Platform (GCP)**, **OpenStack**, **Oracle Cloud (OCI)**, and **bare-metal/on-premises** infrastructure.
 
 Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4 redundancy, centralized SSL certificate issuance with cluster-wide deduplication via `acme.sh`, rank-based fallback line of succession with 1-day staggered renewal windows, self-healing boot-time certificate adoption, and backend Nginx webservers with strict generic 404 fallbacks.
 
@@ -13,457 +13,59 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 ├── ansible.cfg                      # Ansible defaults (pipelining, roles_path, YAML output)
 ├── inventory.ini                    # Active cluster inventory (proxies & webservers with external_fqdn)
 ├── playbook.yml                     # Main playbook orchestrating all plays and roles
+├── docs/                            # Modular architecture and operational documentation
+│   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
+│   ├── ssl-certificates.md          # Multi-node ACME line of succession, sync scripts & recovery
+│   ├── proxy-security.md            # HTTP/2, HSTS, rate limiting (300/10s), health checks & stats ACL
+│   ├── teleport-access.md           # Teleport JIT sudo access, RBAC roles & CLI helper scripts
+│   ├── monitoring.md                # Native HAProxy Prometheus metrics & dedicated Prometheus role
+│   └── deployment.md                # Inventory setup, cloud templates, and targeted Ansible tags
 ├── examples/
 │   └── inventories/                 # Cloud-specific example inventory templates
 │       ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
 │       ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
 │       └── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
 ├── vars/
-│   └── admin_users.yml              # Central users configuration file (add new admins here)
+│   └── admin_users.yml              # Central users configuration file (admins, credentials, public keys)
 ├── group_vars/
 │   ├── proxies.yml                  # Global proxy & acme.sh settings
 │   └── webservers.yml               # Webserver trusted proxy subnets
-├── roles/
-│   ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
-│   │   ├── defaults/main.yml
-│   │   ├── handlers/main.yml
-│   │   └── tasks/
-│   ├── security/                    # Host security, UFW rate limiting & SSH hardening
-│   │   ├── defaults/main.yml
-│   │   ├── handlers/main.yml
-│   │   └── tasks/
-│   ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
-│   │   ├── defaults/main.yml
-│   │   ├── files/                   # Dotfiles, shell addons & completions
-│   │   │   ├── bashrc_addons        # Custom bash additions, aliases, and loaders
-│   │   │   ├── gitconfig            # Git configuration with push.autoSetupRemote
-│   │   │   ├── screenrc             # GNU Screen configuration
-│   │   │   ├── tmux.conf            # Tmux keybindings and status bar
-│   │   │   ├── venv_helpers.bash    # Python virtual environment helpers (mkvenv, workon)
-│   │   │   ├── vimrc                # Vim configuration with pathogen.vim
-│   │   │   └── workon-completion.bash # Tab completion for workon, rmvenv, and cdp
-│   │   └── tasks/
-│   ├── proxy/                       # HAProxy role (terminates SSL & routes 1:1 to backends)
-│   │   ├── defaults/main.yml
-│   │   ├── handlers/main.yml
-│   │   ├── tasks/
-│   │   │   ├── main.yml             # Task dispatcher
-│   │   │   ├── packages.yml         # Installs haproxy, openssl, curl, socat, cron, logrotate
-│   │   │   ├── firewall.yml         # Opens 80, 443, 8404, and internal 8888 in UFW
-│   │   │   ├── certs.yml            # Primary issuance & cluster-wide certificate distribution
-│   │   │   ├── stats_whitelist.yml  # Stats & Prometheus access control (IP, CIDR & FQDN)
-│   │   │   ├── config.yml           # Deploys dynamic haproxy.cfg (HTTP/2, rate limit, HSTS)
-│   │   │   └── logrotate.yml        # Deploys cluster script log rotation
-│   │   └── templates/
-│   │       ├── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
-│   │       ├── check-and-adopt-cluster-certs.sh.j2 # Boot-time reconciliation & adoption
-│   │       ├── sync-haproxy-certs.sh.j2            # Cluster-wide certificate push script
-│   │       ├── acme-fallback-watchdog.sh.j2        # 1-day staggered standby renewal watchdog
-│   │       ├── stats_whitelist_sources.txt.j2      # Source list of allowed IPs/CIDRs/FQDNs
-│   │       ├── update-haproxy-stats-whitelist.sh.j2 # Dynamic FQDN resolution script
-│   │       ├── haproxy-stats-whitelist.timer.j2    # Background DNS refresh systemd timer
-│   │       └── logrotate-haproxy-scripts.j2        # Logrotate configuration for cluster logs
-│   ├── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
-│   │   ├── defaults/main.yml
-│   │   ├── handlers/main.yml
-│   │   ├── tasks/
-│   │   │   ├── main.yml             # Task dispatcher
-│   │   │   ├── packages.yml         # Installs nginx
-│   │   │   ├── firewall.yml         # Opens 80 in UFW
-│   │   │   └── config.yml           # Deploys generic 404, real_ip, and FQDN virtual host
-│   │   └── templates/
-│   │       ├── default_404.conf.j2  # Generic 404 catch-all default_server block
-│   │       ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
-│   │       └── site.conf.j2         # Virtual host for assigned external_fqdn
-│   ├── prometheus_server/           # Standalone Prometheus server role
-│   │   ├── defaults/main.yml        # Prometheus port (9090), retention, scrape intervals
-│   │   ├── handlers/main.yml        # Restart & reload prometheus handlers
-│   │   ├── tasks/
-│   │   │   ├── main.yml             # Task dispatcher
-│   │   │   ├── packages.yml         # Installs prometheus package
-│   │   │   ├── firewall.yml         # Restricts port 9090 to trusted subnets
-│   │   │   └── config.yml           # Deploys prometheus.yml with promtool validation
-│   │   └── templates/
-│   │       ├── prometheus-default.j2 # Retention time args in /etc/default/prometheus
-│   │       └── prometheus.yml.j2     # Scrapes HAProxy cluster metrics via basic_auth
-│   ├── teleport_server/             # Teleport Auth & Proxy Service role
-│   │   ├── defaults/main.yml        # Web/Proxy port (3080), tunnel (3024), join tokens
-│   │   ├── handlers/main.yml        # Restart & reload teleport handlers
-│   │   ├── tasks/
-│   │   │   ├── main.yml             # Task dispatcher
-│   │   │   ├── packages.yml         # Installs Teleport package via official repo
-│   │   │   ├── firewall.yml         # Opens 3080, 3023, 3024, and internal 3025 in UFW
-│   │   │   ├── config.yml           # Deploys /etc/teleport.yaml for Auth & Proxy
-│   │   │   └── rbac.yml             # Deploys RBAC roles & users (junior, lead-admin)
-│   │   └── templates/
-│   │       ├── teleport.yaml.j2     # Auth & Proxy configuration
-│   │       ├── roles.yaml.j2        # Roles (lead-admin, junior, elevated-sudo)
-│   │       └── users.yaml.j2        # Users (admin, junior)
-│   └── teleport_node/               # Teleport SSH Node Service role (all cluster nodes)
-│       ├── defaults/main.yml        # Auto-discovers Teleport server & join token
-│       ├── handlers/main.yml        # Restart teleport handler
-│       ├── tasks/
-│       │   ├── main.yml             # Task dispatcher
-│       │   ├── packages.yml         # Installs Teleport package
-│       │   └── config.yml           # Deploys /etc/teleport.yaml for SSH service
-│       └── templates/
-│           └── teleport-node.yaml.j2 # Outbound reverse tunnel & host user creation
-└── README.md                        # Documentation and usage guide
+└── roles/
+    ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
+    ├── security/                    # Host security, UFW rate limiting & SSH hardening (MaxAuthTries 10)
+    ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
+    ├── proxy/                       # HAProxy role (terminates SSL & routes 1:1 to backends)
+    ├── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
+    ├── prometheus_server/           # Standalone Prometheus server role (port 9090, 60d retention)
+    ├── teleport_server/             # Teleport Auth & Proxy Service role (ports 3080/3023/3024)
+    └── teleport_node/               # Teleport SSH Node Service role (reverse tunnels, JIT host users)
 ```
 
 ---
 
-## Cloud & Backend Agnostic High-Availability Architecture
+## Quickstart
 
-This architecture relies on a **generic Layer 4 (TCP passthrough) Ingress Load Balancer** distributing inbound HTTP/HTTPS traffic to a tier of headless Ubuntu HAProxy frontends.
-
-Because Layer 4 operates at the transport layer without terminating TLS or altering HTTP headers:
-- **Client Source IP addresses are preserved transparently** without proprietary headers or proxy protocols.
-- **SSL termination, certificates, and virtual routing stay 100% inside your control** within the HAProxy cluster.
-- **Zero Cloud Vendor Lock-In**: The same code runs on AWS, GCP, OpenStack, Azure, OCI, or bare metal with zero proprietary agent or cloud CLI dependencies.
-
-```
-                            Public Internet / Visitors
-                                        │
-                                        ▼
-                   ┌───────────────────────────────────────────┐
-                   │    Layer 4 Ingress Load Balancer (TCP)    │
-                   │  (AWS NLB / GCP Passthrough / Octavia /   │
-                   │      Keepalived VRRP / BGP Anycast)       │
-                   └─────────────────────┬─────────────────────┘
-                                         │ (Port 80 / 443)
-                        ┌────────────────┼────────────────┐
-                        ▼                ▼                ▼
-             ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
-             │      proxy-01      │ │      proxy-02      │ │      proxy-03      │
-             │   Zone A / Host 1  │ │   Zone B / Host 2  │ │   Zone C / Host 3  │
-             │ Primary Cert Node  │ │  Standby Rank 1    │ │  Standby Rank 2    │
-             │ HAProxy + acme.sh  │ │ HAProxy + Watchdog │ │ HAProxy + Watchdog │
-             └──────────┬─────────┘ └──────────┬─────────┘ └──────────┬─────────┘
-                        │                      │                      │
-                        └──────────────────────┼──────────────────────┘
-                                               │ (Plain HTTP / Port 80)
-                ┌──────────────────────────────┼──────────────────────────────┐
-                ▼                              ▼                              ▼
-       ┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
-       │      web-01      │          │      web-02      │          │      web-03      │
-       │ web1.example.com │          │ web2.example.com │          │ web3.example.com │
-       │ (Generic 404)    │          │ (Generic 404)    │          │ (Generic 404)    │
-       └──────────────────┘          └──────────────────┘          └──────────────────┘
-```
-
-### Provider Drop-in Mapping
-
-| Provider | Layer 4 Ingress Load Balancer | Fault Domain / Distribution | Private Subnet Example | Inventory Template |
-| :--- | :--- | :--- | :--- | :--- |
-| **AWS EC2** | **AWS Network Load Balancer (NLB)** (TCP 80/443 with cross-zone load balancing) | Multiple Availability Zones (`us-east-1a`, `1b`, `1c`) | `172.31.0.0/16` | [inventory.aws.ini](examples/inventories/inventory.aws.ini) |
-| **Google Cloud (GCP)** | **Regional External TCP/UDP Passthrough Network Load Balancer** | Multiple Compute Engine Zones (`us-central1-a`, `1-b`, `1-c`) | `10.128.0.0/20` | [inventory.gcp.ini](examples/inventories/inventory.gcp.ini) |
-| **OpenStack** | **Octavia Load Balancer** (TCP Amphora listener) or **Keepalived VIP** | Nova Server Group (`anti-affinity`) across hypervisors | `192.168.100.0/24` | [inventory.openstack.ini](examples/inventories/inventory.openstack.ini) |
-| **Oracle Cloud (OCI)** | **OCI Network Load Balancer (NLB)** (TCP listener) | Multiple Fault Domains (FD-1, FD-2, FD-3) | `10.0.0.0/16` | [inventory.ini](inventory.ini) |
-| **Bare Metal / On-Prem** | **Keepalived VRRP Floating IP** or **BGP Anycast (ECMP)** | Separate physical racks / PDUs | `10.x`, `172.16.x`, `192.168.x` | [inventory.ini](inventory.ini) |
-
-### Universal Network & Firewall Compatibility
-- **RFC 1918 Private Subnets**: Out of the box, UFW and Nginx `real_ip` trust all standard private subnets (`10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`), allowing seamless operation regardless of private VPC CIDR blocks.
-- **Zero Cloud Agent Dependencies**: The fleet provisions standard headless Ubuntu (20.04, 22.04, 24.04 LTS) images using standard SSH and sudo. No proprietary CLI tools, cloud agents, or IAM roles are required.
-
----
-
-## Shared SSL Certificates, Succession & Failover
-
-Requesting SSL certificates independently from multiple frontends causes **Let's Encrypt rate-limit bans** (5 duplicate certs/week) and causes **HTTP-01 challenge failures** when validation requests hit a proxy other than the one requesting the cert.
-
-This suite solves this using a **Rank-Based Line of Succession + Self-Healing Cluster Mesh**:
-
-### 1. Unified Challenge Forwarding with Succession
-- `proxy-01` (`groups['proxies'][0]`) is the designated **Primary Certificate Node**.
-- On **all** proxies, HAProxy routes `path_beg /.well-known/acme-challenge/` to `backend be_acme`.
-- `be_acme` lists all cluster proxies in rank order:
-  - Primary (`proxy-01`) is active.
-  - Replicas (`proxy-02`, `proxy-03`) are configured with `backup`.
-- **Result**: Whether Let's Encrypt hits `proxy-01`, `proxy-02`, or `proxy-03`, challenges route directly to the active certificate requester in succession order.
-
-### 2. Multi-Directional Cluster Certificate Synchronization
-- **Provisioning**: The primary proxy generates/issues certificates, and Ansible distributes the exact `.pem` bundles to all replica proxies in `/etc/haproxy/certs/`.
-- **Automatic Cron Renewals**:
-  - `acme.sh` renews certificates on the active node.
-  - The renewal hook executes `/usr/local/bin/sync-haproxy-certs.sh`.
-  - The script uses `rsync` over dedicated cluster SSH keys (`/root/.ssh/id_ed25519_certsync`) to mirror `/etc/haproxy/certs/` and `/root/.acme.sh/` to all online peer proxies, reloading HAProxy across the cluster.
-
-### 3. Rank-Based Line of Succession & 1-Day Staggered Windows
-What keeps `proxy-02` and `proxy-03` from trying to renew simultaneously if `proxy-01` is offline?
-- **1-Day Staggered Thresholds**:
-  Standby watchdogs calculate their renewal expiration threshold staggered by **1 day per rank**:
-  `Threshold = acme_fallback_renewal_days - (rank - 1)`
-  - `proxy-02` (Rank 1): triggers at **15 days** remaining.
-  - `proxy-03` (Rank 2): triggers at **14 days** remaining.
-  - `proxy-04` (Rank 3): triggers at **13 days** remaining.
-  `proxy-02` has a full 24-hour window to renew before `proxy-03` even considers checking.
-- **Rank Succession Reachability Check**:
-  Before attempting renewal, any standby proxy queries all higher-ranking proxies (e.g., `proxy-03` checks `proxy-01` and `proxy-02`). It performs network ICMP ping testing and verifies that the higher-ranking node's SSH service is **actively negotiating protocol exchange** (via `ssh-keyscan` key exchange and RFC 4253 banner verification). If the SSH service is confirmed negotiating, the standby stands down and yields renewal authority. If SSH negotiation fails, a warning is logged and the node proceeds in the line of succession.
-- **Pre-Check Cluster Reconciliation**:
-  Before testing expiration thresholds, each watchdog runs `/usr/local/bin/check-and-adopt-cluster-certs.sh`. If a peer already renewed, the local node adopts the newer certificate immediately, resetting its local certificate lifetime to 90 days.
-
-### 4. Node Recovery & Automatic Rank Resumption
-What happens when a higher-priority proxy (such as `proxy-01`) comes back online **after** a standby proxy renewed the certificate?
-1. **Boot-Time Systemd Reconciliation Service (`haproxy-cert-reconcile.service`)**:
-   - Runs `check-and-adopt-cluster-certs.sh` **before** `haproxy.service` starts.
-   - Compares certificate expiration epochs (`openssl x509 -enddate`) against all peer proxies.
-   - Discovers that a standby node has a newer certificate (validity difference > 1 day).
-   - Copies the newer `.pem` bundle and `acme.sh` store from the peer via `rsync`.
-   - HAProxy starts up with the fresh, renewed certificate.
-2. **Seamless Rank Resumption**:
-   - Because `proxy-01` is now online and has the renewed cert, standby watchdogs on `proxy-02` and `proxy-03` detect `proxy-01` as reachable and stand down.
-   - `proxy-01` automatically resumes its rank as the primary certificate authority for future scheduled renewals.
-
----
-
-## HTTP/2, Security Headers, HSTS & Volumetric Rate Limiting
-
-The HAProxy frontend provides enterprise-grade performance and defense-in-depth protections:
-
-### 1. HTTP/2 Negotiation (ALPN)
-ALPN negotiation automatically serves HTTP/2 (`h2`) with transparent fallback to `http/1.1` on the HTTPS frontend (port 443):
-```yaml
-# In roles/proxy/defaults/main.yml:
-haproxy_enable_http2: true
-```
-
-### 2. Security Headers & HSTS
-Comprehensive response headers are automatically injected to mitigate clickjacking, MIME sniffing, and downgrade attacks:
-```yaml
-haproxy_enable_security_headers: true
-haproxy_enable_hsts: true
-haproxy_hsts_max_age: 31536000          # 1 year
-haproxy_hsts_include_subdomains: true
-haproxy_hsts_preload: true
-haproxy_header_frame_options: "SAMEORIGIN"
-haproxy_header_referrer_policy: "strict-origin-when-cross-origin"
-```
-Injected headers:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: SAMEORIGIN`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-
-### 3. Layer 7 Volumetric Rate Limiting
-In-memory stick-table tracking limits brute-force attacks and abuse per client IP address. Excessive requests receive an immediate `429 Too Many Requests`:
-```yaml
-haproxy_enable_rate_limit: true
-haproxy_rate_limit_table_size: "100k"   # Max distinct IPs tracked in RAM
-haproxy_rate_limit_expire: "30s"        # Inactive table entry expiration
-haproxy_rate_limit_period: "10s"        # Rate measurement sliding window
-haproxy_rate_limit_req_rate: 300        # Max requests allowed in sliding window (300 req / 10s)
-haproxy_rate_limit_status: 429          # HTTP 429 Too Many Requests
-```
-
-### 4. HTTP Backend Health Checks
-Backend webservers are actively health checked using real HTTP requests with domain-specific `Host` headers rather than simple TCP handshakes:
-```yaml
-haproxy_backend_http_check: true
-haproxy_check_inter: "3s"               # Health check interval
-haproxy_check_fall: 3                   # Consecutive failures to mark down
-haproxy_check_rise: 2                   # Consecutive successes to mark healthy
-```
-HAProxy sends `GET / HTTP/1.1\r\nHost: <external_fqdn>` and expects a valid `2xx` or `3xx` response (`http-check expect rstatus (2..|3..)`).
-
-### 5. Automated Log Rotation (60-Day Retention)
-Cluster logs generated by certificate sync, standby fallback watchdogs, reconciliation, and ACL whitelist updaters are managed via `/etc/logrotate.d/haproxy-cluster-scripts`:
-- Targets: `/var/log/haproxy-*.log` and `/var/log/acme-*.log`
-- Frequency: Daily rotation, compressed, with **60-day retention** (`copytruncate`).
-- System Logs: `systemd-journald` disk usage is capped with `MaxRetentionSec=60day`.
-
----
-
-## Prometheus Monitoring & Native Metrics Exporter
-
-The suite includes native Prometheus integration with end-to-end access control:
-
-1. **HAProxy Native Exporter (Port 8404, URI `/metrics`)**:
-   - Built into HAProxy (`http-request use-service prometheus-exporter`).
-   - Protected by the **exact same ACL IP/CIDR/FQDN whitelist and HTTP basic authentication** as the statistics UI.
-   - User credentials are created directly from `admin_users` (in `vars/admin_users.yml`).
-   - Hosts defined in the `[monitoring]` inventory group are **automatically whitelisted** on all proxies without manual IP configuration.
-2. **Prometheus Server Role (`roles/prometheus_server`)**:
-   - Provisions a dedicated Prometheus server on Ubuntu.
-   - Restricts port `9090` in UFW to trusted CIDR subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.1`).
-   - Dynamically discovers all proxy targets from `groups['proxies']` and scrapes them using admin credentials.
-   - Includes config validation using `promtool check config` before reloading the service.
-   - Configurable retention time (default: `60d`) managed via `/etc/default/prometheus`.
-
----
-
-## Teleport Centralized Access & Dynamic Sudo Management
-
-The suite includes complete **[Teleport](https://goteleport.com/)** integration to eliminate credential desynchronization, static SSH keys, and static `/etc/sudoers` files across your cluster.
-
-### 1. Architecture Overview
-* **Teleport Auth & Proxy Server (`roles/teleport_server`)**:
-  - Acts as the cluster Certificate Authority and identity gateway.
-  - Hosts the Web UI / API on port `3080` (or 443), SSH proxy on port `3023`, and reverse tunnel on port `3024`.
-  - Manages centralized RBAC roles and user accounts.
-* **Teleport SSH Node Service (`roles/teleport_node`)**:
-  - Runs on all cluster nodes (`proxies`, `webservers`, `monitoring`).
-  - Establishes an outbound reverse tunnel back to the Teleport Proxy—nodes require **zero inbound open SSH ports** to the public internet.
-  - **Automatic Host User Provisioning (`create_host_user_mode: keep`)**: Target OS user accounts (like `junior` or `admin`) are automatically created on the fly when the user connects.
-
-### 2. Sudo Management with Just-In-Time (JIT) Access Requests
-
-Permissions are managed centrally through declarative Teleport roles without editing `/etc/sudoers` on individual hosts:
-
-| Role | Default Sudo | Escalation Capability | Description |
-| :--- | :--- | :--- | :--- |
-| **`lead-admin`** (`admin`) | `ALL = (ALL) NOPASSWD: ALL` | Approver | Persistent sudo across all nodes. Can review and approve access requests. |
-| **`junior`** (`junior`) | **None** (unprivileged) | Can request `elevated-sudo` | Zero sudo capability on initial login. Standard commands only. |
-| **`elevated-sudo`** | `ALL = (ALL) NOPASSWD: ALL` | 1-hour expiration | Temporary escalation target granted only upon approval. |
-
-### 3. Junior Sudo Workflow & Helper Scripts
-
-Pre-configured shell helpers and aliases are deployed to `/usr/local/bin` and `/etc/profile.d/teleport_helpers.sh` across all nodes so junior admins never need to memorize complex CLI flags:
-
-| Helper Command | Short Alias | Purpose |
-| :--- | :--- | :--- |
-| `teleport-login [user]` | `tlogin` | Connects and authenticates to the Teleport cluster with pre-configured proxy address. |
-| `teleport-request-sudo [reason]` | `tsudo` | Prompts for a justification reason, requests `elevated-sudo`, and waits for approval. |
-| `teleport-status` | `tstatus` | Checks active session, remaining certificate TTL, and access request status. |
-| `teleport-drop-sudo` | `tdrop` | Drops elevated role immediately and reverts to unprivileged status. |
-| `teleport-ssh [user@]node` | `tssh` | Connects to a cluster node via Teleport SSH proxy (runs `tsh ls` if no node specified). |
-| `teleport-approve-sudo [id]` | `tapprove` | *(Lead Admin)* Interactively reviews and approves pending access requests. |
-
-#### Complete Junior Admin Workflow:
-1. **Login**:
-   ```bash
-   tlogin junior
-   # Authenticates via SSO/credentials to the Teleport cluster
-   ```
-2. **Connect (Unprivileged)**:
-   ```bash
-   tssh web-01
-   # Normal user permissions only. Running `sudo` is rejected.
-   ```
-3. **Request Sudo Access**:
-   ```bash
-   tsudo "Need to restart HAProxy and verify SSL logs"
-   # Submits request and waits for lead admin approval:
-   # [*] Waiting for lead administrator approval (Press Ctrl+C to cancel wait)...
-   ```
-4. **Lead Admin Approves** (from another terminal or Web UI):
-   ```bash
-   tapprove
-   # Lists pending requests and approves the junior's ticket
-   ```
-5. **Junior Receives Immediate Sudo Access**:
-   Upon approval, `tsudo` automatically activates the elevated certificate!
-   ```bash
-   # [✓] Access request APPROVED! You now have temporary sudo privileges (1 hour expiration).
-   sudo systemctl restart haproxy    # Sudo works!
-   ```
-6. **Drop Sudo When Done**:
-   ```bash
-   tdrop
-   # [✓] Elevated sudo privileges successfully dropped. Reverted to standard unprivileged role.
-   ```
-
----
-
-## HAProxy Stats Access Control (IP, CIDR & Dynamic FQDNs)
-
-Access to the HAProxy statistics monitoring endpoint (port `8404`, URI `/stats`) can be restricted to authorized client sources supporting **plain IPv4/IPv6 addresses, CIDR blocks, and dynamic FQDN hostnames**:
-
-```yaml
-# In group_vars/proxies.yml or playbook vars:
-haproxy_stats_allowed_ips:
-  - "127.0.0.1"
-  - "10.0.0.0/8"
-  - "192.168.1.0/24"
-  - "admin.example.com"       # Fully qualified domain name
-  - "vpn.company.net"         # Dynamic DNS or corporate VPN gateway
-
-# Optional settings:
-haproxy_stats_deny_action: "403"          # '403' (HTTP 403 Forbidden) or 'silent-drop' (TCP drop)
-haproxy_stats_dns_refresh_minutes: 5      # Background DNS refresh frequency (default: 5 min)
-```
-
-### How FQDN Support Works
-1. **Zero Request-Time Latency**: HAProxy evaluates client source IPs using an in-memory Radix tree (`acl is_allowed_stats src -f /etc/haproxy/stats_whitelist.lst`). No blocking DNS queries occur during HTTP requests.
-2. **Dynamic Background DNS Refresh**: A dedicated systemd timer (`haproxy-stats-whitelist.timer`) executes `/usr/local/bin/update-haproxy-stats-whitelist.sh` every 5 minutes. If an administrator's Dynamic DNS IP changes, the script re-resolves the FQDN and updates HAProxy in real time via the runtime admin socket (`/run/haproxy/admin.sock`) without restarting the service or interrupting connections.
-3. **DNS Outage Resiliency**: If external DNS fails temporarily, existing resolved IP addresses in `/etc/haproxy/stats_whitelist.lst` are preserved, preventing accidental administrative lockouts.
-4. **Deny Actions**: Choose between standard HTTP `403 Forbidden` or `silent-drop` (silently drops unauthorized TCP connection attempts, appearing completely closed to port scanners).
-
----
-
-## Inventory & Dynamic 1:1 Mapping
-
-The only setting required per webserver is **`external_fqdn`** in your inventory file:
-
-```ini
-[proxies]
-proxy-01 ansible_host=10.0.1.10
-proxy-02 ansible_host=10.0.1.20
-proxy-03 ansible_host=10.0.1.30
-
-[webservers]
-web-01 ansible_host=10.0.1.11 external_fqdn=web1.example.com
-web-02 ansible_host=10.0.1.12 external_fqdn=web2.example.com
-web-03 ansible_host=10.0.1.13 external_fqdn=web3.example.com
-
-[monitoring]
-monitoring-01 ansible_host=10.0.1.50
-
-[teleport_servers]
-teleport-01 ansible_host=10.0.1.60
-
-[headless_nodes:children]
-proxies
-webservers
-monitoring
-teleport_servers
-```
-
-HAProxy on all proxies dynamically generates:
-- `web1.example.com` ➔ routes to `10.0.1.11:80`
-- `web2.example.com` ➔ routes to `10.0.1.12:80`
-- `web3.example.com` ➔ routes to `10.0.1.13:80`
-- Unmapped hostnames / IPs ➔ **404 Not Found**
-
----
-
-## How to Run
-
-### Full Fleet Provisioning
 ```bash
-# Using the default inventory:
+# Validate playbook syntax against active inventory:
+ansible-playbook -i inventory.ini playbook.yml --syntax-check
+
+# Provision the entire cluster:
 ansible-playbook -i inventory.ini playbook.yml
-
-# Or deploying to AWS EC2:
-ansible-playbook -i examples/inventories/inventory.aws.ini playbook.yml
-
-# Or deploying to GCP Compute Engine:
-ansible-playbook -i examples/inventories/inventory.gcp.ini playbook.yml
-
-# Or deploying to OpenStack:
-ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml
 ```
 
-### Targeted Execution Using Tags
-```bash
-# Provision or update HAProxy load balancers only:
-ansible-playbook -i inventory.ini playbook.yml --tags proxy
+For cloud-specific inventories (AWS, GCP, OpenStack) or targeted execution by tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`), see the [Deployment Guide](docs/deployment.md).
 
-# Synchronize certificates only:
-ansible-playbook -i inventory.ini playbook.yml --tags certs
+---
 
-# Provision or update backend webservers only:
-ansible-playbook -i inventory.ini playbook.yml --tags webserver
+## Documentation Index
 
-# Provision or update Prometheus monitoring server only:
-ansible-playbook -i inventory.ini playbook.yml --tags monitoring
+Comprehensive technical documentation is organized into modular guides in the [`docs/`](docs/) directory:
 
-# Provision or update Teleport Auth/Proxy server only:
-ansible-playbook -i inventory.ini playbook.yml --tags teleport_server
-
-# Provision or update Teleport SSH node services only:
-ansible-playbook -i inventory.ini playbook.yml --tags teleport_node
-
-# Update user accounts and dotfiles only:
-ansible-playbook -i inventory.ini playbook.yml --tags users
-```
+| Document | Description | Key Topics Included |
+| :--- | :--- | :--- |
+| **[Architecture](docs/architecture.md)** | Cloud-Agnostic High-Availability Architecture | • Generic Layer 4 Ingress Load Balancer (TCP Passthrough)<br>• Transparent client IP preservation with zero cloud lock-in<br>• Provider drop-in mapping table (AWS NLB, GCP Passthrough, Octavia, OCI, Bare Metal)<br>• RFC 1918 universal subnet compatibility & zero-cloud-agent model<br>• Dynamic 1:1 host-to-FQDN reverse proxy routing concept |
+| **[SSL Certificates & Failover](docs/ssl-certificates.md)** | Shared SSL Certificates, Succession & Recovery | • Cluster-wide HTTP-01 challenge routing via `backend be_acme`<br>• Automated `sync-haproxy-certs.sh` push over dedicated cluster SSH keys<br>• Rank-based fallback line of succession with 1-day staggered renewal windows<br>• Active SSH protocol negotiation checks (`ssh-keyscan` key exchange & RFC 4253 banner check)<br>• Boot-time reconciliation service (`haproxy-cert-reconcile.service`) & seamless rank resumption |
+| **[Proxy Security & Hardening](docs/proxy-security.md)** | Edge Hardening, Performance & Access Control | • HTTP/2 ALPN negotiation (`h2,http/1.1`) with HTTP/1.1 fallback<br>• Security response headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) & HSTS (1 year preload)<br>• In-memory stick-table volumetric rate limiting (300 req/10s $\rightarrow$ HTTP 429)<br>• Active HTTP backend health checks (`option httpchk` with Host header & regex rstatus)<br>• Dynamic stats & Prometheus ACL whitelist (IPs, CIDRs, dynamic FQDN resolution script & systemd timer)<br>• 60-day log retention via logrotate (`copytruncate`) and journald `MaxRetentionSec=60day` |
+| **[Teleport Access & Sudo Management](docs/teleport-access.md)** | Centralized Access & Dynamic Elevation | • Zero-trust access architecture: Auth/Proxy service and outbound reverse tunnels<br>• Automatic host user provisioning (`create_host_user_mode: keep`)<br>• RBAC role hierarchy: `lead-admin`, unprivileged `junior`, and temporary `elevated-sudo`<br>• Just-In-Time (JIT) access request and approval workflow<br>• Built-in CLI helper scripts and shell aliases (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`)<br>• End-to-end junior administrator workflow walkthrough |
+| **[Prometheus Monitoring](docs/monitoring.md)** | Metrics Scraping & Centralized Monitoring | • Native HAProxy Prometheus exporter (`/metrics` on port 8404)<br>• Unified ACL whitelist and HTTP basic authentication matching stats UI<br>• Automatic whitelisting of inventory `[monitoring]` group hosts<br>• Standalone Prometheus server role (`roles/prometheus_server` on port 9090)<br>• Dynamic proxy scrape target discovery and configuration<br>• Automated `promtool check config` validation, 60-day TSDB retention, and UFW isolation |
+| **[Deployment & Operations](docs/deployment.md)** | Inventory Setup & Execution Guide | • Inventory layout & dynamic 1:1 mapping syntax (`external_fqdn`)<br>• Cloud-specific inventory templates (AWS, GCP, OpenStack, OCI, bare-metal)<br>• Full fleet provisioning commands<br>• Granular execution reference with Ansible tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`)<br>• Pre-flight syntax validation instructions |
