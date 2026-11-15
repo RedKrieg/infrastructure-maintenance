@@ -30,5 +30,16 @@
     rule: allow
     port: "{{ acme_standalone_port }}"
     proto: tcp
-    from_ip: "{{ internal_proxy_subnet }}"
+    from_ip: "{{ item }}"
+  loop: "{{ internal_proxy_subnets | default([internal_proxy_subnet]) }}"
+  tags: [proxy, firewall, ufw]
+
+- name: Allow internal ACME challenge proxying from peer proxy IPs (port 8888)
+  community.general.ufw:
+    rule: allow
+    port: "{{ acme_standalone_port }}"
+    proto: tcp
+    from_ip: "{{ hostvars[item]['ansible_host'] | default(item) }}"
+  loop: "{{ groups['proxies'] | default([]) }}"
+  when: groups['proxies'] is defined
   tags: [proxy, firewall, ufw]

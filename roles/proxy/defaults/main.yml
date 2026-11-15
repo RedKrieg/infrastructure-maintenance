@@ -22,6 +22,16 @@ acme_standalone_port: 8888
 # Defaults to the first host in the [proxies] inventory group
 cert_primary_host: "{{ groups['proxies'][0] if (groups['proxies'] is defined and groups['proxies'] | length > 0) else inventory_hostname }}"
 enable_cert_sync_between_proxies: true
+
+# Internal subnets allowed to connect to the standalone ACME port (8888) for HTTP-01 challenges.
+# Defaults to all standard RFC 1918 private subnets for compatibility across AWS VPCs (172.16-31.x.x / 10.x),
+# GCP VPCs (10.128.0.0/9), OpenStack tenant subnets (192.168.x.x / 10.x), and private data centers.
+internal_proxy_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+
+# Single-subnet variable retained for backward compatibility
 internal_proxy_subnet: "10.0.0.0/8"
 
 # Standby renewal watchdog on replica proxies with staggered succession

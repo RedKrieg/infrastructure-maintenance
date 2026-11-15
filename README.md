@@ -1,6 +1,8 @@
 # Headless Ubuntu Initial Setup, Dynamic HAProxy & Webserver Suite
 
-An enterprise-grade, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Designed with dynamic 1:1 host-to-FQDN mapping, Oracle Cloud Infrastructure (OCI) multi-fault-domain redundancy, centralized SSL certificate issuance with cluster-wide deduplication via `acme.sh`, and backend Nginx webservers with strict generic 404 fallbacks.
+An enterprise-grade, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems. Designed to be **100% backend and cloud agnostic**—running identically across **AWS EC2**, **Google Cloud Platform (GCP)**, **OpenStack**, **Oracle Cloud (OCI)**, and **bare-metal/on-premises** infrastructure.
+
+Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4 redundancy, centralized SSL certificate issuance with cluster-wide deduplication via `acme.sh`, rank-based fallback line of succession with 1-day staggered renewal windows, self-healing boot-time certificate adoption, and backend Nginx webservers with strict generic 404 fallbacks.
 
 ---
 
@@ -9,8 +11,13 @@ An enterprise-grade, role-based Ansible suite to provision, harden, and orchestr
 ```
 .
 ├── ansible.cfg                      # Ansible defaults (pipelining, roles_path, YAML output)
-├── inventory.ini                    # Inventory defining proxies & webservers with external_fqdn
+├── inventory.ini                    # Active cluster inventory (proxies & webservers with external_fqdn)
 ├── playbook.yml                     # Main playbook orchestrating all plays and roles
+├── examples/
+│   └── inventories/                 # Cloud-specific example inventory templates
+│       ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
+│       ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
+│       └── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
 ├── vars/
 │   └── admin_users.yml              # Central users configuration file (add new admins here)
 ├── group_vars/
@@ -40,7 +47,9 @@ An enterprise-grade, role-based Ansible suite to provision, harden, and orchestr
 │   │   │   └── config.yml           # Deploys dynamic haproxy.cfg
 │   │   └── templates/
 │   │       ├── haproxy.cfg.j2       # Dynamic Jinja2 template iterating over webservers
-│   │       └── sync-haproxy-certs.sh.j2 # Automated cron renewal rsync hook
+│   │       ├── check-and-adopt-cluster-certs.sh.j2 # Boot-time reconciliation & adoption
+│   │       ├── sync-haproxy-certs.sh.j2            # Cluster-wide certificate push script
+│   │       └── acme-fallback-watchdog.sh.j2        # 1-day staggered standby renewal watchdog
 │   └── webserver/                   # Backend Nginx role (generic 404 & enabled FQDN site)
 │       ├── defaults/main.yml
 │       ├── handlers/main.yml
@@ -66,26 +75,30 @@ An enterprise-grade, role-based Ansible suite to provision, harden, and orchestr
 
 ---
 
-## High-Redundancy Oracle Cloud Infrastructure (OCI) Architecture
+## Cloud & Backend Agnostic High-Availability Architecture
 
-To achieve the **highest level of redundancy** on Oracle Cloud Infrastructure, the two HAProxy frontend nodes are deployed across distinct **Fault Domains** (or separate Availability Domains) behind an **OCI Network Load Balancer (NLB)**:
+This architecture relies on a **generic Layer 4 (TCP passthrough) Ingress Load Balancer** distributing inbound HTTP/HTTPS traffic to a tier of headless Ubuntu HAProxy frontends.
+
+Because Layer 4 operates at the transport layer without terminating TLS or altering HTTP headers:
+- **Client Source IP addresses are preserved transparently** without proprietary headers or proxy protocols.
+- **SSL termination, certificates, and virtual routing stay 100% inside your control** within the HAProxy cluster.
+- **Zero Cloud Vendor Lock-In**: The same code runs on AWS, GCP, OpenStack, Azure, OCI, or bare metal with zero proprietary agent or cloud CLI dependencies.
 
 ```
                             Public Internet / Visitors
                                         │
                                         ▼
-                  ┌───────────────────────────────────────────┐
-                  │       OCI Network Load Balancer (NLB)     │
-                  │        (Static Anycast Public IP)         │
-                  │   Multi-Fault-Domain High Availability    │
-                  └─────────────────────┬─────────────────────┘
-                                        │ (Port 80 / 443)
-                        ┌───────────────┼───────────────┐
-                        ▼               ▼               ▼
+                   ┌───────────────────────────────────────────┐
+                   │    Layer 4 Ingress Load Balancer (TCP)    │
+                   │  (AWS NLB / GCP Passthrough / Octavia /   │
+                   │      Keepalived VRRP / BGP Anycast)       │
+                   └─────────────────────┬─────────────────────┘
+                                         │ (Port 80 / 443)
+                        ┌────────────────┼────────────────┐
+                        ▼                ▼                ▼
              ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
              │      proxy-01      │ │      proxy-02      │ │      proxy-03      │
-             │  (Fault Domain 1)  │ │  (Fault Domain 2)  │ │  (Fault Domain 3)  │
-             │    (10.0.1.10)     │ │    (10.0.1.20)     │ │    (10.0.1.30)     │
+             │   Zone A / Host 1  │ │   Zone B / Host 2  │ │   Zone C / Host 3  │
              │ Primary Cert Node  │ │  Standby Rank 1    │ │  Standby Rank 2    │
              │ HAProxy + acme.sh  │ │ HAProxy + Watchdog │ │ HAProxy + Watchdog │
              └──────────┬─────────┘ └──────────┬─────────┘ └──────────┬─────────┘
@@ -96,16 +109,24 @@ To achieve the **highest level of redundancy** on Oracle Cloud Infrastructure, t
                 ▼                              ▼                              ▼
        ┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
        │      web-01      │          │      web-02      │          │      web-03      │
-       │   (10.0.1.11)    │          │   (10.0.1.12)    │          │   (10.0.1.13)    │
        │ web1.example.com │          │ web2.example.com │          │ web3.example.com │
        │ (Generic 404)    │          │ (Generic 404)    │          │ (Generic 404)    │
        └──────────────────┘          └──────────────────┘          └──────────────────┘
 ```
 
-### Why OCI Network Load Balancer (NLB)?
-1. **Zero Downtime Failover**: Operates at Layer 4 with sub-second health checks. If `proxy-01` undergoes kernel updates or maintenance, OCI NLB instantly directs 100% of traffic to the standby proxies.
-2. **Transparent Client IP Preservation**: Preserves the original visitor's source IP address without needing complex headers.
-3. **Multi-Fault Domain (FD) Resilience**: Spreading proxies across FD-1, FD-2, and FD-3 ensures that rack-level, power-unit, or hardware maintenance within an Oracle data center never interrupts availability.
+### Provider Drop-in Mapping
+
+| Provider | Layer 4 Ingress Load Balancer | Fault Domain / Distribution | Private Subnet Example | Inventory Template |
+| :--- | :--- | :--- | :--- | :--- |
+| **AWS EC2** | **AWS Network Load Balancer (NLB)** (TCP 80/443 with cross-zone load balancing) | Multiple Availability Zones (`us-east-1a`, `1b`, `1c`) | `172.31.0.0/16` | [inventory.aws.ini](file:///home/redkrieg/Projects/ansible-stuff/examples/inventories/inventory.aws.ini) |
+| **Google Cloud (GCP)** | **Regional External TCP/UDP Passthrough Network Load Balancer** | Multiple Compute Engine Zones (`us-central1-a`, `1-b`, `1-c`) | `10.128.0.0/20` | [inventory.gcp.ini](file:///home/redkrieg/Projects/ansible-stuff/examples/inventories/inventory.gcp.ini) |
+| **OpenStack** | **Octavia Load Balancer** (TCP Amphora listener) or **Keepalived VIP** | Nova Server Group (`anti-affinity`) across hypervisors | `192.168.100.0/24` | [inventory.openstack.ini](file:///home/redkrieg/Projects/ansible-stuff/examples/inventories/inventory.openstack.ini) |
+| **Oracle Cloud (OCI)** | **OCI Network Load Balancer (NLB)** (TCP listener) | Multiple Fault Domains (FD-1, FD-2, FD-3) | `10.0.0.0/16` | [inventory.ini](file:///home/redkrieg/Projects/ansible-stuff/inventory.ini) |
+| **Bare Metal / On-Prem** | **Keepalived VRRP Floating IP** or **BGP Anycast (ECMP)** | Separate physical racks / PDUs | `10.x`, `172.16.x`, `192.168.x` | [inventory.ini](file:///home/redkrieg/Projects/ansible-stuff/inventory.ini) |
+
+### Universal Network & Firewall Compatibility
+- **RFC 1918 Private Subnets**: Out of the box, UFW and Nginx `real_ip` trust all standard private subnets (`10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`), allowing seamless operation regardless of private VPC CIDR blocks.
+- **Zero Cloud Agent Dependencies**: The fleet provisions standard headless Ubuntu (20.04, 22.04, 24.04 LTS) images using standard SSH and sudo. No proprietary CLI tools, cloud agents, or IAM roles are required.
 
 ---
 
@@ -160,7 +181,7 @@ What happens when a higher-priority proxy (such as `proxy-01`) comes back online
 
 ## Inventory & Dynamic 1:1 Mapping
 
-The only setting required per webserver is **`external_fqdn`** in **`inventory.ini`**:
+The only setting required per webserver is **`external_fqdn`** in your inventory file:
 
 ```ini
 [proxies]
@@ -190,7 +211,17 @@ HAProxy on all proxies dynamically generates:
 
 ### Full Fleet Provisioning
 ```bash
+# Using the default inventory:
 ansible-playbook -i inventory.ini playbook.yml
+
+# Or deploying to AWS EC2:
+ansible-playbook -i examples/inventories/inventory.aws.ini playbook.yml
+
+# Or deploying to GCP Compute Engine:
+ansible-playbook -i examples/inventories/inventory.gcp.ini playbook.yml
+
+# Or deploying to OpenStack:
+ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml
 ```
 
 ### Targeted Execution Using Tags

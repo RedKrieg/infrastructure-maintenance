@@ -6,6 +6,10 @@
 # Web document root for this server's external FQDN
 webserver_root_dir: "/var/www/{{ external_fqdn | default('html') }}"
 
-# Trusted HAProxy subnets and fallback IPs for real_ip extraction
+# Trusted HAProxy subnets and fallback IPs for real_ip extraction.
+# Defaults to all standard RFC 1918 private IP ranges to work seamlessly across
+# AWS VPCs (172.31.0.0/16, 10.x), GCP VPCs (10.128.0.0/9), OpenStack, and private clouds.
 haproxy_trusted_subnets:
   - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
