@@ -1,7 +1,7 @@
 # ==============================================================================
 # HAProxy Dynamic Configuration - Managed by Ansible
 # SSL is terminated here; each external FQDN is dynamically mapped 1:1 to its webserver
-# Shared certificates: HTTP-01 challenges are forwarded to the Primary Proxy ({{ cert_primary_host }})
+# Shared certificates: HTTP-01 challenges forwarded to Primary with local backup failover
 # ==============================================================================
 
 global
@@ -85,13 +85,15 @@ frontend fe_https
     default_backend be_default_404
 
 # --- ACME Standalone Challenge Backend ---
-# Forwards challenges directly to the Primary Proxy ({{ cert_primary_host }}) so duplicate requests are never made
+# Forwards challenges directly to the Primary Proxy ({{ cert_primary_host }}).
+# On replicas, a local backup server activates automatically if the Primary is down.
 backend be_acme
     mode http
 {% if inventory_hostname == cert_primary_host %}
     server acme_primary 127.0.0.1:{{ acme_standalone_port }}
 {% else %}
-    server acme_primary {{ hostvars[cert_primary_host]['ansible_host'] | default(cert_primary_host) }}:{{ acme_standalone_port }} check
+    server acme_primary {{ hostvars[cert_primary_host]['ansible_host'] | default(cert_primary_host) }}:{{ acme_standalone_port }} check fall 2 rise 2
+    server acme_local 127.0.0.1:{{ acme_standalone_port }} check backup
 {% endif %}
 
 # --- Dynamic Backend Webservers (1:1 per external FQDN) ---

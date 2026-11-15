@@ -128,6 +128,21 @@ This suite solves this using a **Primary Issuer + Cluster Sharing** pattern:
   - The renewal hook executes `/usr/local/bin/sync-haproxy-certs.sh`.
   - The script uses `rsync` over dedicated internal SSH keys to mirror `/etc/haproxy/certs/` to `proxy-02` and reloads HAProxy on both nodes.
 
+### 3. Automated Zero-Touch Failover (If Primary Proxy Dies)
+What happens if `proxy-01` is permanently offline or dead during a renewal cycle?
+- **HAProxy Standby ACME Routing**:
+  In `haproxy.cfg`, replica proxies configure `backend be_acme` with a health-checked primary server and a local backup:
+  ```haproxy
+  server acme_primary 10.0.1.10:8888 check fall 2 rise 2
+  server acme_local 127.0.0.1:8888 check backup
+  ```
+  If `proxy-01` is down, HAProxy on replica proxies automatically routes incoming `/.well-known/acme-challenge/` requests to its own local port `8888`.
+- **Standby Watchdog Cron (`acme-fallback-watchdog.sh`)**:
+  - `acme.sh` is pre-installed on all replica proxies.
+  - A daily watchdog runs on replicas at 03:25 AM. It checks certificate expiration via `openssl x509 -checkend`.
+  - Under normal conditions (> 15 days remaining or Primary reachable), it takes no action.
+  - If `proxy-01` is unreachable **and** certificates are within 15 days of expiration (`acme_fallback_renewal_days: 15`), the replica proxy automatically takes over, requests renewals from Let's Encrypt via local port 8888, bundles the certificates, and reloads HAProxy. Certificates never expire even if the primary host is dead for months.
+
 ---
 
 ## Inventory & Dynamic 1:1 Mapping

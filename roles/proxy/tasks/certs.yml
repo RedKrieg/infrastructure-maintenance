@@ -1,8 +1,9 @@
 ---
 # ==============================================================================
-# SSL Certificate Management & Deduplication on Proxies
-# Only the Primary Proxy ({{ cert_primary_host }}) requests certificates from Let's Encrypt.
-# All replica proxies share the identical certificates.
+# SSL Certificate Management, Deduplication & Standby Failover on Proxies
+# Only the Primary Proxy ({{ cert_primary_host }}) performs normal renewals.
+# If Primary Proxy dies and certs are within {{ acme_fallback_renewal_days }} days of expiring,
+# Replica Proxies automatically execute emergency renewal via standby watchdog.
 # ==============================================================================
 
 - name: Ensure HAProxy certificates directory exists across all proxies
@@ -20,7 +21,30 @@
   tags: [proxy, ssl, certs]
 
 # ==============================================================================
-# Primary Proxy Tasks: Certificate Issuance and Management
+# Install acme.sh on ALL Proxies (Standby Ready)
+# ==============================================================================
+- name: Check if acme.sh is installed
+  ansible.builtin.stat:
+    path: "{{ acme_sh_install_dir }}/acme.sh"
+  register: acme_sh_stat
+  tags: [proxy, acme, ssl]
+
+- name: Install acme.sh client
+  ansible.builtin.shell:
+    cmd: "curl -sSL https://get.acme.sh | sh -s email={{ acme_email }}"
+  when: not acme_sh_stat.stat.exists
+  args:
+    creates: "{{ acme_sh_install_dir }}/acme.sh"
+  tags: [proxy, acme, ssl]
+
+- name: Configure acme.sh default CA to Let's Encrypt
+  ansible.builtin.command:
+    cmd: "{{ acme_sh_install_dir }}/acme.sh --set-default-ca --server {{ acme_default_ca }}"
+  changed_when: false
+  tags: [proxy, acme, ssl]
+
+# ==============================================================================
+# Primary Proxy Tasks: Certificate Issuance and Initial Setup
 # ==============================================================================
 - name: Primary Proxy Certificate Management Block
   when: inventory_hostname == cert_primary_host
@@ -44,23 +68,6 @@
           rm -f /tmp/{{ item.item }}.key /tmp/{{ item.item }}.crt
       when: not item.stat.exists
       loop: "{{ cert_stats_primary.results }}"
-
-    - name: Check if acme.sh is installed on Primary Proxy
-      ansible.builtin.stat:
-        path: "{{ acme_sh_install_dir }}/acme.sh"
-      register: acme_sh_stat
-
-    - name: Install acme.sh client on Primary Proxy
-      ansible.builtin.shell:
-        cmd: "curl -sSL https://get.acme.sh | sh -s email={{ acme_email }}"
-      when: not acme_sh_stat.stat.exists
-      args:
-        creates: "{{ acme_sh_install_dir }}/acme.sh"
-
-    - name: Configure acme.sh default CA to Let's Encrypt on Primary Proxy
-      ansible.builtin.command:
-        cmd: "{{ acme_sh_install_dir }}/acme.sh --set-default-ca --server {{ acme_default_ca }}"
-      changed_when: false
 
     # --- Real Let's Encrypt Certificate Issuance (when enabled) ---
     - name: Issue Let's Encrypt certificates on Primary Proxy
@@ -127,7 +134,7 @@
   tags: [proxy, ssl, certs]
 
 # ==============================================================================
-# Automated Cron Renewal Sync Hook Setup (Between Proxies)
+# Automated Cron Renewal Sync Hook Setup (Primary to Replicas)
 # ==============================================================================
 - name: Configure SSH Key for automated cert sync from Primary to Replicas
   when: enable_cert_sync_between_proxies | bool
@@ -163,3 +170,29 @@
         owner: root
         group: root
         mode: "0755"
+
+# ==============================================================================
+# Standby Fallback Renewal Watchdog Setup (On Replica Proxies)
+# ==============================================================================
+- name: Configure Standby Renewal Watchdog on Replica Proxies
+  when:
+    - inventory_hostname != cert_primary_host
+    - enable_fallback_watchdog | bool
+  tags: [proxy, ssl, certs, watchdog]
+  block:
+    - name: Deploy acme-fallback-watchdog.sh script on Replica Proxies
+      ansible.builtin.template:
+        src: acme-fallback-watchdog.sh.j2
+        dest: /usr/local/bin/acme-fallback-watchdog.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configure daily cron job for ACME fallback watchdog
+      ansible.builtin.cron:
+        name: "acme-fallback-renewal-watchdog"
+        minute: "25"
+        hour: "3"
+        user: root
+        job: "/usr/local/bin/acme-fallback-watchdog.sh >/dev/null 2>&1"
+        state: present

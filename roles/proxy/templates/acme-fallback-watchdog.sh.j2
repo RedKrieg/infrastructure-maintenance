@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Standby ACME Renewal Watchdog Script
+# Managed by Ansible - Executed on Replica Proxies
+# If Primary Proxy is dead and certificates are within {{ acme_fallback_renewal_days }} days of expiring,
+# this node automatically takes over renewal and reloads HAProxy.
+# ==============================================================================
+set -u
+
+LOG_FILE="/var/log/acme-fallback-watchdog.log"
+CERTS_DIR="{{ haproxy_certs_dir }}"
+PRIMARY_HOST="{{ cert_primary_host }}"
+PRIMARY_IP="{{ hostvars[cert_primary_host]['ansible_host'] | default(cert_primary_host) }}"
+THRESHOLD_DAYS="{{ acme_fallback_renewal_days }}"
+THRESHOLD_SECONDS=$(( THRESHOLD_DAYS * 86400 ))
+ACME_SH="{{ acme_sh_install_dir }}/acme.sh"
+HTTP_PORT="{{ acme_standalone_port }}"
+STAGING_FLAG="{% if acme_use_staging | bool %}--staging{% endif %}"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [watchdog] $*" | tee -a "$LOG_FILE"
+}
+
+# Check if primary proxy is reachable over SSH or ICMP ping
+is_primary_alive() {
+    if nc -z -w 3 "$PRIMARY_IP" 22 >/dev/null 2>&1; then
+        return 0
+    fi
+    if ping -c 2 -W 2 "$PRIMARY_IP" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+# Scan certificates for expiration
+NEED_RENEWAL=0
+EXPIRED_DOMAINS=()
+
+{% for host in groups['webservers'] | default([]) %}
+{% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
+CERT_FILE="${CERTS_DIR}/{{ fqdn }}.pem"
+if [ -f "$CERT_FILE" ]; then
+    if ! openssl x509 -checkend "$THRESHOLD_SECONDS" -noout -in "$CERT_FILE" >/dev/null 2>&1; then
+        log "Certificate for {{ fqdn }} expires in less than ${THRESHOLD_DAYS} days."
+        NEED_RENEWAL=1
+        EXPIRED_DOMAINS+=("{{ fqdn }}")
+    fi
+fi
+{% endfor %}
+
+if [ "$NEED_RENEWAL" -eq 0 ]; then
+    log "All certificates are healthy (> ${THRESHOLD_DAYS} days remaining). No action required."
+    exit 0
+fi
+
+log "Certificates nearing expiration: ${EXPIRED_DOMAINS[*]}"
+
+# Check if Primary is online to handle standard renewal
+if is_primary_alive; then
+    log "Primary proxy (${PRIMARY_HOST} at ${PRIMARY_IP}) is REACHABLE. Allowing Primary to perform standard renewal."
+    exit 0
+fi
+
+log "ALERT: Primary proxy (${PRIMARY_HOST} at ${PRIMARY_IP}) is UNREACHABLE and certificates are within ${THRESHOLD_DAYS} days of expiration!"
+log "Triggering automatic emergency fallback renewal on replica: $(hostname)..."
+
+RENEWED_ANY=0
+for domain in "${EXPIRED_DOMAINS[@]}"; do
+    log "Attempting emergency renewal for ${domain} via acme.sh standalone on port ${HTTP_PORT}..."
+    if "$ACME_SH" --issue -d "$domain" --standalone --httpport "$HTTP_PORT" --keylength ec-256 $STAGING_FLAG >> "$LOG_FILE" 2>&1; then
+        log "Successfully issued certificate for ${domain}."
+        "$ACME_SH" --install-cert -d "$domain" \
+            --fullchain-file "/tmp/${domain}_fullchain.crt" \
+            --key-file "/tmp/${domain}_key.key" >> "$LOG_FILE" 2>&1
+
+        cat "/tmp/${domain}_fullchain.crt" "/tmp/${domain}_key.key" > "${CERTS_DIR}/${domain}.pem"
+        chmod 600 "${CERTS_DIR}/${domain}.pem"
+        rm -f "/tmp/${domain}_"*
+        RENEWED_ANY=1
+        log "Installed renewed certificate bundle for ${domain} in ${CERTS_DIR}."
+    else
+        log "ERROR: Emergency renewal failed for ${domain}. See $LOG_FILE for details."
+    fi
+done
+
+if [ "$RENEWED_ANY" -eq 1 ]; then
+    log "Reloading local HAProxy with renewed certificates..."
+    systemctl reload haproxy
+    log "Emergency fallback renewal completed successfully on $(hostname)."
+fi
