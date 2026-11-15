@@ -41,6 +41,15 @@ acme_fallback_renewal_days: 15
 acme_issue_certs: false
 acme_use_staging: false
 
+# Wildcard & DNS-01 Challenge Configuration
+# When enable_wildcard_cert is true and acme_dns_provider is populated,
+# a single wildcard certificate (*.{{ domain_name }} and {{ domain_name }}) is requested via DNS-01.
+# When false or acme_dns_provider is empty, falls back to individual HTTP-01 certs per endpoint.
+enable_wildcard_cert: false
+acme_dns_provider: ""
+acme_dns_env: {}
+wildcard_cert_name: "wildcard.{{ domain_name | default('cluster.local') }}"
+
 # Stats listener configuration
 haproxy_enable_stats: true
 haproxy_stats_port: 8404

@@ -92,6 +92,20 @@ fi
 NEED_RENEWAL=0
 EXPIRED_DOMAINS=()
 
+{% if enable_wildcard_cert | default(false) | bool and acme_dns_provider | default('') | length > 0 %}
+CERT_FILE="${CERTS_DIR}/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}.pem"
+if [ -f "$CERT_FILE" ]; then
+    if ! openssl x509 -checkend "$THRESHOLD_SECONDS" -noout -in "$CERT_FILE" >/dev/null 2>&1; then
+        log "Wildcard certificate for *.{{ domain_name }} expires in less than ${THRESHOLD_DAYS} days (stagger offset: ${RANK_OFFSET}d)."
+        NEED_RENEWAL=1
+        EXPIRED_DOMAINS+=("{{ domain_name }}")
+    fi
+else
+    log "Wildcard certificate for *.{{ domain_name }} is missing locally."
+    NEED_RENEWAL=1
+    EXPIRED_DOMAINS+=("{{ domain_name }}")
+fi
+{% else %}
 {% for host in groups['webservers'] | default([]) %}
 {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
 CERT_FILE="${CERTS_DIR}/{{ fqdn }}.pem"
@@ -107,6 +121,7 @@ else
     EXPIRED_DOMAINS+=("{{ fqdn }}")
 fi
 {% endfor %}
+{% endif %}
 
 if [ "$NEED_RENEWAL" -eq 0 ]; then
     log "All certificates are healthy (> ${THRESHOLD_DAYS} days remaining). No renewal action required."
@@ -130,6 +145,26 @@ log "Triggering automatic emergency fallback renewal on $(hostname)..."
 
 # 4. Attempt emergency renewal for expiring domains
 RENEWED_ANY=0
+{% if enable_wildcard_cert | default(false) | bool and acme_dns_provider | default('') | length > 0 %}
+log "Attempting emergency wildcard renewal for *.{{ domain_name }} via DNS-01 (provider: {{ acme_dns_provider }})..."
+{% for k, v in (acme_dns_env | default({})).items() %}
+export {{ k }}="{{ v }}"
+{% endfor %}
+if "$ACME_SH" --issue -d "{{ domain_name }}" -d "*.{{ domain_name }}" --dns "{{ acme_dns_provider }}" --keylength ec-256 $STAGING_FLAG >> "$LOG_FILE" 2>&1; then
+    log "Successfully issued wildcard certificate for *.{{ domain_name }}."
+    "$ACME_SH" --install-cert -d "{{ domain_name }}" --ecc \
+        --fullchain-file "/tmp/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}_fullchain.crt" \
+        --key-file "/tmp/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}_key.key" >> "$LOG_FILE" 2>&1
+
+    cat "/tmp/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}_fullchain.crt" "/tmp/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}_key.key" > "${CERTS_DIR}/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}.pem"
+    chmod 600 "${CERTS_DIR}/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}.pem"
+    rm -f "/tmp/{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}_"*
+    RENEWED_ANY=1
+    log "Installed renewed wildcard certificate in ${CERTS_DIR}."
+else
+    log "ERROR: Emergency wildcard renewal failed for *.{{ domain_name }}. See $LOG_FILE for details."
+fi
+{% else %}
 for domain in "${EXPIRED_DOMAINS[@]}"; do
     log "Attempting emergency renewal for ${domain} via acme.sh standalone on port ${HTTP_PORT}..."
     if "$ACME_SH" --issue -d "$domain" --standalone --httpport "$HTTP_PORT" --keylength ec-256 $STAGING_FLAG >> "$LOG_FILE" 2>&1; then
@@ -147,6 +182,7 @@ for domain in "${EXPIRED_DOMAINS[@]}"; do
         log "ERROR: Emergency renewal failed for ${domain}. See $LOG_FILE for details."
     fi
 done
+{% endif %}
 
 # 5. Reload local HAProxy and propagate to peer proxies
 if [ "$RENEWED_ANY" -eq 1 ]; then

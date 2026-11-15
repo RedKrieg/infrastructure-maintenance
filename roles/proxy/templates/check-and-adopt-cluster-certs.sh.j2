@@ -56,8 +56,10 @@ PEER_PROXIES=(
 )
 
 TARGET_DOMAINS=(
-{% if groups['webservers'] is defined %}
-{% for host in groups['webservers'] %}
+{% if enable_wildcard_cert | default(false) | bool and acme_dns_provider | default('') | length > 0 %}
+    "{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}"
+{% else %}
+{% for host in groups['webservers'] | default([]) %}
 {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
     "{{ fqdn }}"
 {% endfor %}

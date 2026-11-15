@@ -40,15 +40,15 @@ if rsync -avz --delete \
     "root@${PEER_IP}" "systemctl reload haproxy" >> "$LOG_FILE" 2>&1; then
     log "SUCCESS: Synced and reloaded HAProxy on {{ proxy }} (${PEER_IP})"
 
-    # Sync acme.sh domain directories if they exist locally
-    {% for host in groups['webservers'] | default([]) %}
-    {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
-    if [ -d "${ACME_DIR}/{{ fqdn }}_ecc" ]; then
-        rsync -avz \
-            -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes" \
-            "${ACME_DIR}/{{ fqdn }}_ecc/" "root@${PEER_IP}:${ACME_DIR}/{{ fqdn }}_ecc/" >> "$LOG_FILE" 2>&1 || true
-    fi
-    {% endfor %}
+    # Sync acme.sh domain directories if they exist locally (wildcard or individual)
+    for d in "${ACME_DIR}"/*_ecc; do
+        if [ -d "$d" ]; then
+            d_base=$(basename "$d")
+            rsync -avz \
+                -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes" \
+                "${d}/" "root@${PEER_IP}:${ACME_DIR}/${d_base}/" >> "$LOG_FILE" 2>&1 || true
+        fi
+    done
 else
     log "WARNING: Could not sync certificates to {{ proxy }} (${PEER_IP}). Host may be unreachable or in maintenance."
 fi

@@ -34,6 +34,21 @@
       }}
   tags: [proxy, ssl, certs]
 
+- name: Determine certificate issuance strategy (wildcard via DNS-01 vs individual via HTTP-01)
+  ansible.builtin.set_fact:
+    use_wildcard_cert: >-
+      {{
+        (enable_wildcard_cert | default(false) | bool) and
+        (acme_dns_provider is defined and acme_dns_provider | length > 0)
+      }}
+    wildcard_cert_name: "wildcard.{{ domain_name }}"
+  tags: [proxy, ssl, certs]
+
+- name: Set certificate target list based on issuance strategy
+  ansible.builtin.set_fact:
+    cert_targets: "{{ [wildcard_cert_name] if (use_wildcard_cert | bool) else target_fqdns }}"
+  tags: [proxy, ssl, certs]
+
 # ==============================================================================
 # Install acme.sh on ALL Proxies (Standby Ready)
 # ==============================================================================
@@ -64,13 +79,40 @@
   when: inventory_hostname == cert_primary_host
   tags: [proxy, ssl, certs]
   block:
-    - name: Check existing certificates on Primary Proxy
+    # --- Wildcard Certificate Generation (When DNS service access is available) ---
+    - name: Check existing wildcard certificate on Primary Proxy
+      when: use_wildcard_cert | bool
+      ansible.builtin.stat:
+        path: "{{ haproxy_certs_dir }}/{{ wildcard_cert_name }}.pem"
+      register: wildcard_cert_stat
+
+    - name: Generate bootstrap self-signed wildcard SSL bundle on Primary Proxy
+      when:
+        - use_wildcard_cert | bool
+        - not wildcard_cert_stat.stat.exists
+      ansible.builtin.shell:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout /tmp/{{ wildcard_cert_name }}.key
+          -out /tmp/{{ wildcard_cert_name }}.crt
+          -subj "/CN=*.{{ domain_name }}"
+          -addext "subjectAltName=DNS:*.{{ domain_name }},DNS:{{ domain_name }}" &&
+          cat /tmp/{{ wildcard_cert_name }}.crt /tmp/{{ wildcard_cert_name }}.key > {{ haproxy_certs_dir }}/{{ wildcard_cert_name }}.pem &&
+          chmod 600 {{ haproxy_certs_dir }}/{{ wildcard_cert_name }}.pem &&
+          rm -f /tmp/{{ wildcard_cert_name }}.key /tmp/{{ wildcard_cert_name }}.crt
+
+    # --- Individual Certificate Generation (Fallback when DNS access is NOT available) ---
+    - name: Check existing individual certificates on Primary Proxy
+      when: not (use_wildcard_cert | bool)
       ansible.builtin.stat:
         path: "{{ haproxy_certs_dir }}/{{ item }}.pem"
       register: cert_stats_primary
       loop: "{{ target_fqdns }}"
 
-    - name: Generate bootstrap self-signed SSL bundles on Primary Proxy
+    - name: Generate bootstrap self-signed individual SSL bundles on Primary Proxy
+      when:
+        - not (use_wildcard_cert | bool)
+        - not item.stat.exists
       ansible.builtin.shell:
         cmd: >
           openssl req -x509 -nodes -days 365 -newkey rsa:2048
@@ -80,14 +122,43 @@
           cat /tmp/{{ item.item }}.crt /tmp/{{ item.item }}.key > {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
           chmod 600 {{ haproxy_certs_dir }}/{{ item.item }}.pem &&
           rm -f /tmp/{{ item.item }}.key /tmp/{{ item.item }}.crt
-      when: not item.stat.exists
-      loop: "{{ cert_stats_primary.results }}"
+      loop: "{{ cert_stats_primary.results | default([]) }}"
 
-    # --- Real Let's Encrypt Certificate Issuance (when enabled) ---
+    # --- Real Let's Encrypt Certificate Issuance (when acme_issue_certs is enabled) ---
     - name: Issue Let's Encrypt certificates on Primary Proxy
       when: acme_issue_certs | bool
       block:
-        - name: Request certificates via acme.sh standalone mode on Primary Proxy
+        # Case A: Wildcard Certificate via DNS-01 Challenge (DNS access available)
+        - name: Request wildcard certificate via acme.sh DNS-01 on Primary Proxy
+          when: use_wildcard_cert | bool
+          ansible.builtin.command:
+            cmd: >
+              {{ acme_sh_install_dir }}/acme.sh --issue
+              -d {{ domain_name }}
+              -d "*.{{ domain_name }}"
+              --dns {{ acme_dns_provider }}
+              --keylength ec-256
+              {% if acme_use_staging | bool %}--staging{% endif %}
+          environment: "{{ acme_dns_env | default({}) }}"
+          register: acme_wildcard_issue_result
+          failed_when: false
+          changed_when: "'Cert success' in acme_wildcard_issue_result.stdout"
+
+        - name: Bundle and install wildcard certificate into HAProxy format on Primary Proxy
+          when:
+            - use_wildcard_cert | bool
+            - acme_wildcard_issue_result is defined
+          ansible.builtin.shell:
+            cmd: >
+              {{ acme_sh_install_dir }}/acme.sh --install-cert -d {{ domain_name }} --ecc
+              --fullchain-file /tmp/{{ wildcard_cert_name }}_fullchain.crt
+              --key-file /tmp/{{ wildcard_cert_name }}_key.key
+              --reloadcmd "cat /tmp/{{ wildcard_cert_name }}_fullchain.crt /tmp/{{ wildcard_cert_name }}_key.key > {{ haproxy_certs_dir }}/{{ wildcard_cert_name }}.pem && chmod 600 {{ haproxy_certs_dir }}/{{ wildcard_cert_name }}.pem && rm -f /tmp/{{ wildcard_cert_name }}_* && /usr/local/bin/sync-haproxy-certs.sh"
+          changed_when: false
+
+        # Case B: Individual Certificates via HTTP-01 Standalone (DNS access NOT available)
+        - name: Request individual certificates via acme.sh standalone HTTP-01 on Primary Proxy
+          when: not (use_wildcard_cert | bool)
           ansible.builtin.command:
             cmd: >
               {{ acme_sh_install_dir }}/acme.sh --issue
@@ -101,7 +172,10 @@
           failed_when: false
           changed_when: "'Cert success' in acme_issue_result.stdout"
 
-        - name: Bundle and install certificates into HAProxy format on Primary Proxy
+        - name: Bundle and install individual certificates into HAProxy format on Primary Proxy
+          when:
+            - not (use_wildcard_cert | bool)
+            - acme_issue_result is defined
           ansible.builtin.shell:
             cmd: >
               {{ acme_sh_install_dir }}/acme.sh --install-cert -d {{ item }}
@@ -109,7 +183,6 @@
               --key-file /tmp/{{ item }}_key.key
               --reloadcmd "cat /tmp/{{ item }}_fullchain.crt /tmp/{{ item }}_key.key > {{ haproxy_certs_dir }}/{{ item }}.pem && chmod 600 {{ haproxy_certs_dir }}/{{ item }}.pem && rm -f /tmp/{{ item }}_* && /usr/local/bin/sync-haproxy-certs.sh"
           loop: "{{ target_fqdns }}"
-          when: acme_issue_result is defined
           changed_when: false
 
 # ==============================================================================
@@ -121,7 +194,7 @@
   delegate_to: "{{ cert_primary_host }}"
   run_once: true
   register: slurped_certs
-  loop: "{{ target_fqdns }}"
+  loop: "{{ cert_targets }}"
   tags: [proxy, ssl, certs]
 
 - name: Store slurped certificates in a structured map
@@ -143,7 +216,7 @@
     owner: root
     group: root
     mode: "0600"
-  loop: "{{ target_fqdns }}"
+  loop: "{{ cert_targets }}"
   notify: Reload haproxy
   tags: [proxy, ssl, certs]
 
