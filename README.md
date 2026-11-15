@@ -16,8 +16,14 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 ├── backup_cluster.yml               # Multi-tier cluster backup & disaster recovery export playbook
 ├── restore_cluster.yml              # Cluster disaster recovery restore & reconciliation playbook
 ├── verify_cluster.yml               # Automated post-deployment smoke test & compliance verification
+├── rolling_maintenance.yml          # Zero-downtime rolling OS & kernel upgrades with HAProxy socket draining
+├── chaos_drill.yml                  # Automated chaos resilience drills (VRRP failover, backend outage)
+├── inventories/                     # Multi-environment inventory topologies
+│   ├── staging/                     # Staging tier (Let's Encrypt Staging CA, isolated subnets)
+│   └── production/                  # Production tier (Production Let's Encrypt CA, 60d retention)
 ├── docs/                            # Modular architecture and operational documentation
 │   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
+│   ├── staging-production.md        # Staging vs. production environment strategy & ACME rate limit defense
 │   ├── keepalived-baremetal.md      # Bare Metal HA with Keepalived VRRP floating IP & health tracking
 │   ├── ssl-certificates.md          # Multi-node ACME line of succession, sync scripts & recovery
 │   ├── internal-tls.md              # Zero-Trust internal TLS encryption between HAProxy and Nginx
@@ -27,7 +33,10 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── centralized-logging.md       # Cluster log shipping via rsyslog with 60-day retention
 │   ├── teleport-access.md           # Teleport JIT sudo access, RBAC roles & CLI helper scripts
 │   ├── monitoring.md                # Native HAProxy Prometheus metrics, alert rules & retention
+│   ├── alertmanager.md              # Alertmanager admin email alerts, Slack, PagerDuty, Discord & Teams
 │   ├── grafana-dashboards.md        # Grafana & Node Exporter telemetry, dashboards & PromQL alerts
+│   ├── rolling-maintenance.md       # Zero-downtime rolling maintenance, socket draining & kernel reboots
+│   ├── chaos-engineering.md         # Automated chaos resilience drills & failover validation
 │   ├── backup-and-disaster-recovery.md # Multi-tier disaster recovery, remote targets & restore steps
 │   ├── verification.md              # Automated smoke testing, security assertions & compliance checks
 │   ├── deployment.md                # Inventory setup, cloud templates, and targeted Ansible tags
@@ -38,6 +47,12 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── oci-compute-setup.md         # OCI quickstart: oci CLI, VCN, Fault Domains & VM provisioning
 │   └── openstack-setup.md           # OpenStack quickstart: clouds.yaml, anti-affinity & Nova provisioning
 ├── examples/
+│   ├── alertmanager/                # Drop-in Alertmanager configuration templates
+│   │   ├── alertmanager-slack.yml   # Slack webhook notifications with channel routing
+│   │   ├── alertmanager-pagerduty.yml # PagerDuty Events API v2 on-call escalation
+│   │   ├── alertmanager-discord.yml # Discord webhook integration (Slack-compatible)
+│   │   ├── alertmanager-teams.yml   # Microsoft Teams webhook connector
+│   │   └── alertmanager-multi-channel.yml # Unified multi-tier routing tree
 │   ├── inventories/                 # Cloud-specific example inventory templates & dynamic plugins
 │   │   ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
 │   │   ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
@@ -105,13 +120,17 @@ Comprehensive technical documentation is organized into modular guides in the [`
 | Document | Description | Key Topics Included |
 | :--- | :--- | :--- |
 | **[Architecture](docs/architecture.md)** | Cloud-Agnostic High-Availability Architecture | • Generic Layer 4 Ingress Load Balancer (TCP Passthrough)<br>• Transparent client IP preservation with zero cloud lock-in<br>• Provider drop-in mapping table (AWS NLB, GCP Passthrough, Azure LB, OCI NLB, Octavia, Bare Metal)<br>• RFC 1918 universal subnet compatibility & zero-cloud-agent model<br>• Dynamic 1:1 host-to-FQDN reverse proxy routing concept |
+| **[Staging vs. Production](docs/staging-production.md)** | Multi-Environment Decoupling & Strategy | • Decoupled environment structures under `inventories/staging/` and `inventories/production/`<br>• Let's Encrypt Staging CA (`acme_use_staging: true`) to prevent API rate limiting<br>• Environment-specific TSDB metrics retention (7d staging vs 60d production)<br>• Staging vs production domain segregation and notification routing |
 | **[Bare Metal HA (Keepalived)](docs/keepalived-baremetal.md)** | Layer 4 VRRP Ingress Redundancy | • High availability on bare metal / private clouds without managed cloud load balancers<br>• Automated health-checking tracking script (`check_haproxy.sh`) with dynamic priority reduction<br>• Kernel sysctl tuning (`net.ipv4.ip_nonlocal_bind = 1`) & UFW protocol 112 rules<br>• Unicast peer discovery and non-preemptive failback protection |
 | **[SSL Certificates & Failover](docs/ssl-certificates.md)** | Shared SSL Certificates, Succession & Recovery | • Cluster-wide HTTP-01 challenge routing via `backend be_acme`<br>• Automated `sync-haproxy-certs.sh` push over dedicated cluster SSH keys<br>• Rank-based fallback line of succession with 1-day staggered renewal windows<br>• Active SSH protocol negotiation checks (`ssh-keyscan` key exchange & RFC 4253 banner check)<br>• Boot-time reconciliation service (`haproxy-cert-reconcile.service`) & seamless rank resumption |
 | **[Zero-Trust Internal TLS](docs/internal-tls.md)** | Backend Encryption & Certificate Provisioning | • Zero-trust end-to-end encryption between HAProxy edge load balancers and backend webservers<br>• Automated 4096-bit RSA key and internal TLS certificate provisioning for Nginx hosts<br>• HAProxy backend SSL re-encryption (`ssl verify none`) with modern cipher suites and HTTP/2 |
 | **[Proxy Security & Hardening](docs/proxy-security.md)** | Edge Hardening, Performance & Access Control | • HTTP/2 ALPN negotiation (`h2,http/1.1`) with HTTP/1.1 fallback<br>• Security response headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) & HSTS (1 year preload)<br>• In-memory stick-table volumetric rate limiting (300 req/10s $\rightarrow$ HTTP 429)<br>• Active HTTP backend health checks (`option httpchk` with Host header & regex rstatus)<br>• Dynamic stats & Prometheus ACL whitelist (IPs, CIDRs, dynamic FQDN resolution script & systemd timer)<br>• 60-day log retention via logrotate (`copytruncate`) and journald `MaxRetentionSec=60day` |
 | **[Teleport Access & Sudo Management](docs/teleport-access.md)** | Centralized Access & Dynamic Elevation | • Zero-trust access architecture: Auth/Proxy service and outbound reverse tunnels<br>• Automatic host user provisioning (`create_host_user_mode: keep`)<br>• RBAC role hierarchy: `lead-admin`, unprivileged `junior`, and temporary `elevated-sudo`<br>• Just-In-Time (JIT) access request and approval workflow<br>• Built-in CLI helper scripts and shell aliases (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`)<br>• End-to-end junior administrator workflow walkthrough |
 | **[Prometheus Monitoring](docs/monitoring.md)** | Metrics Scraping & Centralized Monitoring | • Native HAProxy Prometheus exporter (`/metrics` on port 8404)<br>• Unified ACL whitelist and HTTP basic authentication matching stats UI<br>• Automatic whitelisting of inventory `[monitoring]` group hosts<br>• Standalone Prometheus server role (`roles/prometheus_server` on port 9090)<br>• Dynamic proxy scrape target discovery and configuration<br>• Automated `promtool check config` validation, 60-day TSDB retention, and UFW isolation |
+| **[Alertmanager Notifications](docs/alertmanager.md)** | Alert Routing, Email & Chat Integrations | • Native Prometheus Alertmanager deployment (port 9093) with admin email notifications<br>• Dynamic admin recipient discovery from `vars/admin_users.yml`<br>• Ready-to-use configurations for Slack, PagerDuty, Discord, and Microsoft Teams<br>• Multi-tier severity routing with alert inhibition rules to prevent alarm floods |
 | **[Grafana & Hardware Telemetry](docs/grafana-dashboards.md)** | Visual Dashboards & Fleet Observability | • Grafana server deployment on port 3000 with auto-provisioned Prometheus datasource<br>• Universal Node Exporter deployment (port 9100) across all cluster hosts<br>• Pre-configured `HAProxy & Coraza WAF Overview` dashboard (traffic, errors, WAF blocks)<br>• Pre-configured `Fleet Hardware Health` dashboard (CPU, memory, disk, network throughput) |
+| **[Zero-Downtime Rolling Maintenance](docs/rolling-maintenance.md)** | Kernel Upgrades & Socket Connection Draining | • Automated `rolling_maintenance.yml` playbook executing across nodes with `serial: 1`<br>• HAProxy runtime administrative socket draining (`set server state drain` / `maint`)<br>• Configuration preservation (`force-confold`) during unattended package upgrades<br>• Automated kernel reboot detection (`/var/run/reboot-required`) & health check recovery |
+| **[Chaos & Resilience Drills](docs/chaos-engineering.md)** | Failure Injection & Failover Validation | • Automated `chaos_drill.yml` non-destructive resilience testing<br>• Backend server crash simulation and dynamic HAProxy health check rerouting<br>• Bare metal Keepalived VRRP Virtual IP migration verification<br>• Guaranteed 100% self-healing with automatic service state restoration |
 | **[Backup & Disaster Recovery](docs/backup-and-disaster-recovery.md)** | Multi-Tier Backup & Restoration | • Automated `backup_cluster.yml` and `restore_cluster.yml` playbooks<br>• Configurable targets: local controller disk, offsite SSH/SFTP server, or AWS S3 / MinIO<br>• Complete capture of HAProxy configs, ACME certs, Teleport state, Nginx sites, and Prometheus TSDB<br>• Verifiable restore execution with safety checks and automatic service recovery |
 | **[Cluster Verification & Smoke Tests](docs/verification.md)** | Post-Deployment Compliance Testing | • Automated non-destructive cluster health validation via `verify_cluster.yml`<br>• HTTP-to-HTTPS redirect validation and default 404 catch-all verification<br>• Coraza WAF synthetic SQLi injection block testing<br>• Prometheus, Grafana, and Node Exporter metrics endpoint assertion |
 | **[Deployment & Operations](docs/deployment.md)** | Inventory Setup & Execution Guide | • Inventory layout & dynamic 1:1 mapping syntax (`external_fqdn`)<br>• Cloud-specific inventory templates (AWS, GCP, Azure, OCI, OpenStack, bare-metal)<br>• Full fleet provisioning commands<br>• Granular execution reference with Ansible tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`)<br>• Pre-flight syntax validation instructions |

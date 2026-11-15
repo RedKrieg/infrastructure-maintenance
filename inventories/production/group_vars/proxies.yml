@@ -1,0 +1,15 @@
+---
+# ==============================================================================
+# Production Proxy Group Variables
+# ==============================================================================
+
+# Bare-metal HA toggle (enable on on-premise / non-cloud topologies)
+enable_keepalived: false
+keepalived_vip: "10.0.1.5"
+
+# Production internal subnets
+internal_proxy_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1"

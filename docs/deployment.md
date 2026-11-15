@@ -184,6 +184,8 @@ For full details, see the [Ansible Vault Secrets Management Guide](security-vaul
 | `backup_cluster.yml` | Snapshots configs, certs, and state; synchronizes to local, SFTP, or S3 targets. | [Backup & Disaster Recovery](backup-and-disaster-recovery.md) |
 | `restore_cluster.yml` | Restores cluster snapshots to nodes and restarts affected services. | [Backup & Disaster Recovery](backup-and-disaster-recovery.md) |
 | `verify_cluster.yml` | Executes automated post-deployment smoke tests and security compliance checks. | [Verification & Smoke Testing](verification.md) |
+| `rolling_maintenance.yml` | Drains backends via HAProxy socket, applies kernel/OS updates, reboots safely. | [Rolling Maintenance](rolling-maintenance.md) |
+| `chaos_drill.yml` | Injects non-destructive failures (backend outage, VRRP failover) to test recovery. | [Chaos & Resilience Drills](chaos-engineering.md) |
 
 ```bash
 # Backup cluster:
@@ -194,11 +196,27 @@ ansible-playbook -i inventory.ini restore_cluster.yml
 
 # Run smoke tests & compliance verification:
 ansible-playbook -i inventory.ini verify_cluster.yml
+
+# Run zero-downtime rolling maintenance:
+ansible-playbook -i inventory.ini rolling_maintenance.yml
+
+# Run automated chaos resilience drills:
+ansible-playbook -i inventory.ini chaos_drill.yml
 ```
 
 ---
 
-## 8. Local Test Suite & Linting
+## 8. Staging vs Production Environments
+
+The cluster provides decoupled inventories and variable tiers:
+- **Staging**: `inventories/staging/hosts.ini` (uses Let's Encrypt Staging CA to prevent rate limits).
+- **Production**: `inventories/production/hosts.ini` (uses Let's Encrypt Production CA and 60d retention).
+
+For detailed setup and variables, see the [Staging vs. Production Guide](staging-production.md).
+
+---
+
+## 9. Local Test Suite & Linting
 
 Run automated syntax validation across all inventories, provisioning playbooks, and shell scripts:
 

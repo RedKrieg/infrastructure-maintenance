@@ -12,3 +12,13 @@
   ansible.builtin.systemd:
     name: "{{ prometheus_service_name }}"
     state: reloaded
+
+- name: Restart alertmanager
+  ansible.builtin.systemd:
+    name: "{{ prometheus_alertmanager_service | default('prometheus-alertmanager') }}"
+    state: restarted
+
+- name: Reload alertmanager
+  ansible.builtin.systemd:
+    name: "{{ prometheus_alertmanager_service | default('prometheus-alertmanager') }}"
+    state: reloaded

@@ -19,6 +19,8 @@ echo " 2. Main Playbook Syntax Checks Across All Inventories"
 echo "================================================================="
 INVENTORIES=(
   "inventory.ini"
+  "inventories/staging/hosts.ini"
+  "inventories/production/hosts.ini"
   "examples/inventories/inventory.aws.ini"
   "examples/inventories/inventory.gcp.ini"
   "examples/inventories/inventory.azure.ini"
@@ -40,6 +42,8 @@ OPS_PLAYBOOKS=(
   "backup_cluster.yml"
   "restore_cluster.yml"
   "verify_cluster.yml"
+  "rolling_maintenance.yml"
+  "chaos_drill.yml"
 )
 
 for op in "${OPS_PLAYBOOKS[@]}"; do

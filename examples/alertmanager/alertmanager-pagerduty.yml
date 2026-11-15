@@ -1,0 +1,35 @@
+# ==============================================================================
+# Prometheus Alertmanager - PagerDuty Notification Configuration Example
+# ==============================================================================
+# Place or adapt this into /etc/prometheus/alertmanager.yml to dispatch critical
+# infrastructure incidents to PagerDuty Events API v2.
+#
+# Prerequisite: Create a Generic Events API v2 integration in PagerDuty
+# and obtain your 32-character Integration Key (Routing Key).
+# Store routing keys securely using Ansible Vault (e.g. vault_pagerduty_routing_key).
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'pagerduty-critical'
+
+receivers:
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - routing_key: 'YOUR_PAGERDUTY_32_CHAR_INTEGRATION_KEY'
+        send_resolved: true
+        severity: '{{ if eq .CommonLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
+        description: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        client: 'Cluster Alertmanager'
+        client_url: 'http://monitoring.internal:9090'
+        details:
+          cluster: '{{ .CommonLabels.cluster }}'
+          service: '{{ .CommonLabels.service }}'
+          summary: '{{ .CommonAnnotations.summary }}'
+          description: '{{ .CommonAnnotations.description }}'

@@ -7,6 +7,7 @@
   ansible.builtin.apt:
     name:
       - prometheus
+      - "{{ prometheus_alertmanager_package | default('prometheus-alertmanager') if (prometheus_alertmanager_enabled | bool) else 'curl' }}"
       - curl
     state: present
   tags: [monitoring, prometheus, packages]

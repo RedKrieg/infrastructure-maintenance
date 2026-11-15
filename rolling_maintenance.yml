@@ -1,0 +1,197 @@
+---
+# ==============================================================================
+# Playbook: Zero-Downtime Rolling Cluster Maintenance & Kernel Upgrades
+# ==============================================================================
+# Safely updates and reboots cluster nodes one at a time without dropping client
+# traffic. Communicates with HAProxy runtime socket to drain backend connections
+# and leverages Keepalived VRRP failover for proxy maintenance.
+#
+# Usage:
+#   ansible-playbook -i inventory.ini rolling_maintenance.yml
+#
+# Force reboot all nodes even if /var/run/reboot-required is absent:
+#   ansible-playbook -i inventory.ini rolling_maintenance.yml -e "force_reboot=true"
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Play 1: Rolling Maintenance across Backend Webservers (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Zero-Downtime Rolling Maintenance for Webservers
+  hosts: webservers
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    drain_wait_seconds: 10
+    health_check_timeout: 30
+    force_reboot: false
+  tasks:
+    - name: Compute backend and server identifiers for HAProxy
+      ansible.builtin.set_fact:
+        backend_name: "be_{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '_') }}"
+        server_name: "{{ inventory_hostname }}"
+
+    - name: Display webserver maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on webserver {{ inventory_hostname }} (Backend: {{ backend_name }}) <<<"
+
+    - name: Put webserver into DRAIN state on all proxies
+      ansible.builtin.command:
+        cmd: "socat stdio /run/haproxy/admin.sock"
+        stdin: "set server {{ backend_name }}/{{ server_name }} state drain\n"
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['proxies'] | default([]) }}"
+      when: groups['proxies'] is defined and groups['proxies'] | length > 0
+      failed_when: false
+      changed_when: true
+
+    - name: Wait for existing active TCP sessions to drain
+      ansible.builtin.pause:
+        seconds: "{{ drain_wait_seconds }}"
+
+    - name: Put webserver into MAINTENANCE (maint) state on all proxies
+      ansible.builtin.command:
+        cmd: "socat stdio /run/haproxy/admin.sock"
+        stdin: "set server {{ backend_name }}/{{ server_name }} state maint\n"
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['proxies'] | default([]) }}"
+      when: groups['proxies'] is defined and groups['proxies'] | length > 0
+      failed_when: false
+      changed_when: true
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: apt_cache_res
+      retries: 3
+      delay: 5
+      until: apt_cache_res is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+      register: apt_upgrade_res
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+
+    - name: Reboot webserver node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: reboot_required_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure Nginx webserver is running
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Verify local webserver health check endpoint
+      ansible.builtin.uri:
+        url: "{{ 'https://127.0.0.1:443/' if (webserver_enable_ssl | default(false) | bool) else 'http://127.0.0.1:80/' }}"
+        headers:
+          Host: "{{ hostvars[inventory_hostname]['external_fqdn'] | default(inventory_hostname) }}"
+        validate_certs: false
+        status_code: [200, 301, 302]
+        timeout: 5
+      register: web_health
+      retries: 6
+      delay: 5
+      until: web_health.status in [200, 301, 302]
+
+    - name: Restore webserver to READY state on all proxies
+      ansible.builtin.command:
+        cmd: "socat stdio /run/haproxy/admin.sock"
+        stdin: "set server {{ backend_name }}/{{ server_name }} state ready\n"
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['proxies'] | default([]) }}"
+      when: groups['proxies'] is defined and groups['proxies'] | length > 0
+      failed_when: false
+      changed_when: true
+
+    - name: Confirm webserver is back online and accepting traffic
+      ansible.builtin.debug:
+        msg: ">>> Webserver {{ inventory_hostname }} successfully updated and restored to active pool <<<"
+
+# ------------------------------------------------------------------------------
+# Play 2: Rolling Maintenance across Frontend Proxies (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Zero-Downtime Rolling Maintenance for HAProxy Proxies
+  hosts: proxies
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display proxy maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on proxy {{ inventory_hostname }} <<<"
+
+    - name: Gracefully step down Keepalived VRRP master state if active
+      ansible.builtin.systemd:
+        name: keepalived
+        state: stopped
+      when: enable_keepalived | default(false) | bool
+      failed_when: false
+
+    - name: Wait for peer proxy to claim VRRP VIP
+      ansible.builtin.pause:
+        seconds: 3
+      when: enable_keepalived | default(false) | bool
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: proxy_apt_cache
+      retries: 3
+      delay: 5
+      until: proxy_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: proxy_reboot_file
+
+    - name: Reboot proxy node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting proxy {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: proxy_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure HAProxy service is active and healthy
+      ansible.builtin.systemd:
+        name: haproxy
+        state: started
+        enabled: true
+
+    - name: Validate HAProxy configuration syntax
+      ansible.builtin.command:
+        cmd: haproxy -c -f /etc/haproxy/haproxy.cfg
+      changed_when: false
+
+    - name: Ensure Keepalived service is active (if bare-metal HA enabled)
+      ansible.builtin.systemd:
+        name: keepalived
+        state: started
+        enabled: true
+      when: enable_keepalived | default(false) | bool
+
+    - name: Confirm proxy is healthy and operational
+      ansible.builtin.debug:
+        msg: ">>> Proxy {{ inventory_hostname }} successfully updated and returned to service <<<"

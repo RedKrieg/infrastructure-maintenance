@@ -1,0 +1,79 @@
+# ==============================================================================
+# Prometheus Alertmanager - Multi-Tier Multi-Channel Routing Architecture
+# ==============================================================================
+# Routes alerts by severity and component across Email, PagerDuty, Slack,
+# Discord, and Microsoft Teams with inhibition rules and quiet periods.
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.sendgrid.net:587'
+  smtp_from: 'alerts@example.com'
+  smtp_auth_username: 'apikey'
+  smtp_auth_password: 'VAULT_PROTECTED_SENDGRID_KEY'
+  smtp_require_tls: true
+  slack_api_url: 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX'
+
+# Root Routing Tree
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'ops-team-email'
+
+  routes:
+    # 1. Critical infrastructure failures -> PagerDuty + Emergency Email
+    - match:
+        severity: critical
+      receiver: 'pagerduty-and-email-critical'
+      repeat_interval: 1h
+
+    # 2. Security & WAF events -> Dedicated Security Channel in Slack
+    - match_re:
+        alertname: '.*WAF.*|.*RateLimit.*'
+      receiver: 'slack-security'
+
+    # 3. Informational & Warnings -> Team Chat (Slack / Discord / Teams)
+    - match:
+        severity: warning
+      receiver: 'chat-warnings'
+
+inhibit_rules:
+  # Mute warning alerts if the entire node is reported down/unreachable
+  - source_match:
+      alertname: 'ClusterNodeUnreachable'
+    target_match_re:
+      alertname: 'HAProxyBackendServerDown|HAProxyHigh5xxErrorRate'
+    equal: ['instance']
+
+receivers:
+  - name: 'ops-team-email'
+    email_configs:
+      - to: 'admin@example.com'
+        send_resolved: true
+
+  - name: 'pagerduty-and-email-critical'
+    pagerduty_configs:
+      - routing_key: 'YOUR_PAGERDUTY_ROUTING_KEY'
+        send_resolved: true
+        severity: 'critical'
+    email_configs:
+      - to: 'oncall@example.com'
+        send_resolved: true
+
+  - name: 'slack-security'
+    slack_configs:
+      - channel: '#cluster-security'
+        send_resolved: true
+        icon_emoji: ':shield:'
+        title: '[SECURITY ALERT] {{ .CommonLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'chat-warnings'
+    slack_configs:
+      - channel: '#cluster-ops'
+        send_resolved: true
+        icon_emoji: ':warning:'
+        title: '[WARNING] {{ .CommonLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'

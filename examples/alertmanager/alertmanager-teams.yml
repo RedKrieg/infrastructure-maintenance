@@ -1,0 +1,24 @@
+# ==============================================================================
+# Prometheus Alertmanager - Microsoft Teams Notification Configuration Example
+# ==============================================================================
+# In Microsoft Teams, create an Incoming Webhook connector or Power Automate
+# workflow trigger ("When an HTTP request is received").
+# Alertmanager delivers alerts via webhook_configs with send_resolved enabled.
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'msteams-notifications'
+
+receivers:
+  - name: 'msteams-notifications'
+    webhook_configs:
+      - url: 'https://prod-XX.eastus.logic.azure.com:443/workflows/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+        send_resolved: true
+        max_alerts: 10

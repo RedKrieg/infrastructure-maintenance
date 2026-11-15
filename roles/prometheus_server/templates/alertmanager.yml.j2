@@ -1,0 +1,32 @@
+# ==============================================================================
+# Prometheus Alertmanager Configuration - Managed by Ansible
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+{% if alertmanager_smtp_smarthost is defined and alertmanager_smtp_smarthost | length > 0 %}
+  smtp_smarthost: '{{ alertmanager_smtp_smarthost }}'
+  smtp_from: '{{ alertmanager_email_from }}'
+{% if alertmanager_smtp_auth_username is defined and alertmanager_smtp_auth_username | length > 0 %}
+  smtp_auth_username: '{{ alertmanager_smtp_auth_username }}'
+  smtp_auth_password: '{{ alertmanager_smtp_auth_password }}'
+{% endif %}
+  smtp_require_tls: {{ alertmanager_smtp_require_tls | default(false) | bool | lower }}
+{% endif %}
+
+route:
+  group_by: {{ alertmanager_group_by | default(['alertname', 'cluster', 'service']) | to_json }}
+  group_wait: {{ alertmanager_group_wait | default('30s') }}
+  group_interval: {{ alertmanager_group_interval | default('5m') }}
+  repeat_interval: {{ alertmanager_repeat_interval | default('4h') }}
+  receiver: 'admin-email-notifications'
+
+receivers:
+  - name: 'admin-email-notifications'
+{% if alertmanager_email_enabled | default(true) | bool %}
+    email_configs:
+{% for recipient in (alertmanager_email_to if alertmanager_email_to is iterable and alertmanager_email_to is not string else [alertmanager_email_to]) %}
+      - to: '{{ recipient }}'
+        send_resolved: true
+{% endfor %}
+{% endif %}

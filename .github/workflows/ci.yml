@@ -46,6 +46,10 @@ jobs:
           echo "Testing main playbook against active inventory..."
           ansible-playbook -i inventory.ini playbook.yml --syntax-check
 
+          echo "Testing against staging and production inventories..."
+          ansible-playbook -i inventories/staging/hosts.ini playbook.yml --syntax-check
+          ansible-playbook -i inventories/production/hosts.ini playbook.yml --syntax-check
+
           echo "Testing against cloud example inventories..."
           ansible-playbook -i examples/inventories/inventory.aws.ini playbook.yml --syntax-check
           ansible-playbook -i examples/inventories/inventory.gcp.ini playbook.yml --syntax-check
@@ -55,10 +59,12 @@ jobs:
 
       - name: Run Operational Playbooks Syntax Checks
         run: |
-          echo "Testing operational playbooks (backup, restore, verify)..."
+          echo "Testing operational playbooks (backup, restore, verify, rolling maintenance, chaos drill)..."
           ansible-playbook -i inventory.ini backup_cluster.yml --syntax-check
           ansible-playbook -i inventory.ini restore_cluster.yml --syntax-check
           ansible-playbook -i inventory.ini verify_cluster.yml --syntax-check
+          ansible-playbook -i inventory.ini rolling_maintenance.yml --syntax-check
+          ansible-playbook -i inventory.ini chaos_drill.yml --syntax-check
 
       - name: Run Provisioning Playbooks Syntax Checks
         run: |

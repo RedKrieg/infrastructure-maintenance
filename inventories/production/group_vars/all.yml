@@ -1,0 +1,18 @@
+---
+# ==============================================================================
+# Production Global Group Variables
+# ==============================================================================
+
+environment_tier: "production"
+domain_name: "example.com"
+
+# Production Let's Encrypt CA
+acme_use_staging: false
+
+# Production TSDB Retention (60 days)
+prometheus_scrape_interval: "15s"
+prometheus_evaluation_interval: "15s"
+prometheus_retention_time: "60d"
+
+# Production email alerts
+alertmanager_email_from: "production-alerts@example.com"

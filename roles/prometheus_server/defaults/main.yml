@@ -39,10 +39,30 @@ prometheus_node_exporter_port: 9100
 # Alerting Configuration
 prometheus_enable_alerts: true
 prometheus_alert_rules_file: "/etc/prometheus/alert.rules.yml"
-prometheus_alertmanager_enabled: false
+prometheus_alertmanager_enabled: true
 prometheus_alertmanager_port: 9093
+prometheus_alertmanager_config_file: "/etc/prometheus/alertmanager.yml"
 prometheus_alertmanager_targets:
   - "127.0.0.1:9093"
+
+# Alertmanager Email Notification Settings to Admins
+alertmanager_email_enabled: true
+alertmanager_email_from: "alerts@example.com"
+# Defaults to emails of admin_users or fallback
+alertmanager_email_to: "{{ admin_users | map(attribute='email') | select('defined') | list if (admin_users is defined and admin_users | map(attribute='email') | select('defined') | list | length > 0) else ['admin@example.com'] }}"
+alertmanager_smtp_smarthost: "localhost:25"
+alertmanager_smtp_auth_username: ""
+alertmanager_smtp_auth_password: "{{ vault_alertmanager_smtp_password | default('') }}"
+alertmanager_smtp_require_tls: false
+
+# Alertmanager Grouping & Notification Timers
+alertmanager_group_by:
+  - 'alertname'
+  - 'cluster'
+  - 'service'
+alertmanager_group_wait: "30s"
+alertmanager_group_interval: "5m"
+alertmanager_repeat_interval: "4h"
 
 # Optional additional custom scrape jobs
 prometheus_custom_scrape_configs: []

@@ -45,6 +45,25 @@
   notify: Reload prometheus
   tags: [monitoring, prometheus, config]
 
+- name: Deploy Alertmanager configuration
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ prometheus_alertmanager_config_file | default('/etc/prometheus/alertmanager.yml') }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0640"
+  when: prometheus_alertmanager_enabled | bool
+  notify: Reload alertmanager
+  tags: [monitoring, prometheus, config, alertmanager]
+
+- name: Ensure Alertmanager service is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ prometheus_alertmanager_service | default('prometheus-alertmanager') }}"
+    state: started
+    enabled: true
+  when: prometheus_alertmanager_enabled | bool
+  tags: [monitoring, prometheus, service, alertmanager]
+
 - name: Ensure Prometheus service is enabled and started
   ansible.builtin.systemd:
     name: "{{ prometheus_service_name }}"

@@ -11,3 +11,13 @@
     from_ip: "{{ item }}"
   loop: "{{ prometheus_trusted_subnets }}"
   tags: [monitoring, prometheus, firewall, ufw]
+
+- name: Allow Alertmanager port (9093) through UFW from trusted subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ prometheus_alertmanager_port | default(9093) | string }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ prometheus_trusted_subnets }}"
+  when: prometheus_alertmanager_enabled | bool
+  tags: [monitoring, prometheus, firewall, ufw, alertmanager]
