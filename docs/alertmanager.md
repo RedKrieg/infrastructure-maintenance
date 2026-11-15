@@ -67,6 +67,7 @@ Ready-to-use template files are available in the [`examples/alertmanager/`](../e
 | **PagerDuty** | [`alertmanager-pagerduty.yml`](../examples/alertmanager/alertmanager-pagerduty.yml) | Integrates with PagerDuty Events API v2 via `routing_key` for on-call paging. |
 | **Discord** | [`alertmanager-discord.yml`](../examples/alertmanager/alertmanager-discord.yml) | Direct webhook delivery to Discord using Discord's Slack-compatible `/slack` endpoint. |
 | **Microsoft Teams** | [`alertmanager-teams.yml`](../examples/alertmanager/alertmanager-teams.yml) | Delivers alerts to MS Teams channels via Power Automate / Workflow HTTP webhook. |
+| **Google Chat** | [`alertmanager-google-chat.yml`](../examples/alertmanager/alertmanager-google-chat.yml) | Translates alerts to Google Chat Cards v2 via [google_chat_relay.py](../examples/alertmanager/google_chat_relay.py). See [Guide](google-chat-alerts.md). |
 | **Multi-Channel** | [`alertmanager-multi-channel.yml`](../examples/alertmanager/alertmanager-multi-channel.yml) | Unified severity routing: Critical $\rightarrow$ PagerDuty + Email, Warning $\rightarrow$ Chat. |
 
 ---

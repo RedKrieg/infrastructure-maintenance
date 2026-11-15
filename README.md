@@ -34,6 +34,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── teleport-access.md           # Teleport JIT sudo access, RBAC roles & CLI helper scripts
 │   ├── monitoring.md                # Native HAProxy Prometheus metrics, alert rules & retention
 │   ├── alertmanager.md              # Alertmanager admin email alerts, Slack, PagerDuty, Discord & Teams
+│   ├── google-chat-alerts.md        # Google Chat Cards v2 webhook alerts & Python relay daemon
 │   ├── grafana-dashboards.md        # Grafana & Node Exporter telemetry, dashboards & PromQL alerts
 │   ├── rolling-maintenance.md       # Zero-downtime rolling maintenance, socket draining & kernel reboots
 │   ├── chaos-engineering.md         # Automated chaos resilience drills & failover validation
@@ -52,6 +53,8 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │   ├── alertmanager-pagerduty.yml # PagerDuty Events API v2 on-call escalation
 │   │   ├── alertmanager-discord.yml # Discord webhook integration (Slack-compatible)
 │   │   ├── alertmanager-teams.yml   # Microsoft Teams webhook connector
+│   │   ├── alertmanager-google-chat.yml # Google Chat webhook routing template
+│   │   ├── google_chat_relay.py     # Zero-dependency Python 3 relay daemon for Google Chat Cards v2
 │   │   └── alertmanager-multi-channel.yml # Unified multi-tier routing tree
 │   ├── inventories/                 # Cloud-specific example inventory templates & dynamic plugins
 │   │   ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
@@ -128,6 +131,7 @@ Comprehensive technical documentation is organized into modular guides in the [`
 | **[Teleport Access & Sudo Management](docs/teleport-access.md)** | Centralized Access & Dynamic Elevation | • Zero-trust access architecture: Auth/Proxy service and outbound reverse tunnels<br>• Automatic host user provisioning (`create_host_user_mode: keep`)<br>• RBAC role hierarchy: `lead-admin`, unprivileged `junior`, and temporary `elevated-sudo`<br>• Just-In-Time (JIT) access request and approval workflow<br>• Built-in CLI helper scripts and shell aliases (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`)<br>• End-to-end junior administrator workflow walkthrough |
 | **[Prometheus Monitoring](docs/monitoring.md)** | Metrics Scraping & Centralized Monitoring | • Native HAProxy Prometheus exporter (`/metrics` on port 8404)<br>• Unified ACL whitelist and HTTP basic authentication matching stats UI<br>• Automatic whitelisting of inventory `[monitoring]` group hosts<br>• Standalone Prometheus server role (`roles/prometheus_server` on port 9090)<br>• Dynamic proxy scrape target discovery and configuration<br>• Automated `promtool check config` validation, 60-day TSDB retention, and UFW isolation |
 | **[Alertmanager Notifications](docs/alertmanager.md)** | Alert Routing, Email & Chat Integrations | • Native Prometheus Alertmanager deployment (port 9093) with admin email notifications<br>• Dynamic admin recipient discovery from `vars/admin_users.yml`<br>• Ready-to-use configurations for Slack, PagerDuty, Discord, and Microsoft Teams<br>• Multi-tier severity routing with alert inhibition rules to prevent alarm floods |
+| **[Google Chat Alert Webhooks](docs/google-chat-alerts.md)** | Cards v2 Translation & Delivery | • Incoming webhook integration for Google Workspace Spaces<br>• Zero-dependency Python 3 relay daemon ([google_chat_relay.py](examples/alertmanager/google_chat_relay.py))<br>• Translates Alertmanager schema to rich Google Chat Cards v2 with status badges |
 | **[Grafana & Hardware Telemetry](docs/grafana-dashboards.md)** | Visual Dashboards & Fleet Observability | • Grafana server deployment on port 3000 with auto-provisioned Prometheus datasource<br>• Universal Node Exporter deployment (port 9100) across all cluster hosts<br>• Pre-configured `HAProxy & Coraza WAF Overview` dashboard (traffic, errors, WAF blocks)<br>• Pre-configured `Fleet Hardware Health` dashboard (CPU, memory, disk, network throughput) |
 | **[Zero-Downtime Rolling Maintenance](docs/rolling-maintenance.md)** | Kernel Upgrades & Socket Connection Draining | • Automated `rolling_maintenance.yml` playbook executing across nodes with `serial: 1`<br>• HAProxy runtime administrative socket draining (`set server state drain` / `maint`)<br>• Configuration preservation (`force-confold`) during unattended package upgrades<br>• Automated kernel reboot detection (`/var/run/reboot-required`) & health check recovery |
 | **[Chaos & Resilience Drills](docs/chaos-engineering.md)** | Failure Injection & Failover Validation | • Automated `chaos_drill.yml` non-destructive resilience testing<br>• Backend server crash simulation and dynamic HAProxy health check rerouting<br>• Bare metal Keepalived VRRP Virtual IP migration verification<br>• Guaranteed 100% self-healing with automatic service state restoration |

@@ -1,0 +1,30 @@
+# ==============================================================================
+# Prometheus Alertmanager - Google Chat Notification Configuration Example
+# ==============================================================================
+# Google Chat incoming webhooks require payloads in {"text": "..."} or {"cardsV2": [...]}
+# format. Because Alertmanager sends its own native JSON schema, Alertmanager routes
+# to a lightweight local relay (google_chat_relay.py or calert) on port 5001.
+#
+# Prerequisite:
+# 1. In Google Chat -> Space settings -> Apps & integrations -> Webhooks -> Add Webhook
+#    Copy the webhook URL:
+#    https://chat.googleapis.com/v1/spaces/SPACE_ID/messages?key=KEY&token=TOKEN
+# 2. Run google_chat_relay.py with GCHAT_WEBHOOK_URL set.
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'google-chat-relay'
+
+receivers:
+  - name: 'google-chat-relay'
+    webhook_configs:
+      - url: 'http://127.0.0.1:5001/'
+        send_resolved: true
+        max_alerts: 10
