@@ -10,7 +10,7 @@
     port: "{{ grafana_port | default(3000) | string }}"
     from_ip: "{{ item }}"
     comment: "Allow Grafana UI from trusted subnet {{ item }}"
-  loop: "{{ grafana_trusted_subnets }}"
+  loop: "{{ ((grafana_trusted_subnets | default([])) + (internal_proxy_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1']))) | unique }}"
   when:
     - ufw_enabled | default(true) | bool
     - grafana_trusted_subnets is defined

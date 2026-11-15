@@ -183,7 +183,7 @@ backend be_acme
 {% if p == inventory_hostname %}
     server acme_{{ p_clean }} 127.0.0.1:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
 {% else %}
-    server acme_{{ p_clean }} {{ hostvars[p]['ansible_host'] | default(p) }}:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
+    server acme_{{ p_clean }} {{ hostvars[p]['internal_ip'] | default(hostvars[p]['ansible_host'] | default(p)) }}:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
 {% endif %}
 {% endfor %}
 {% endif %}

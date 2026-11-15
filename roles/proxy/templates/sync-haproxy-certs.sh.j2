@@ -30,7 +30,7 @@ fi
 {% if groups['proxies'] is defined %}
 {% for proxy in groups['proxies'] %}
 {% if proxy != inventory_hostname %}
-PEER_IP="{{ hostvars[proxy]['ansible_host'] | default(proxy) }}"
+PEER_IP="{{ hostvars[proxy]['internal_ip'] | default(hostvars[proxy]['ansible_host'] | default(proxy)) }}"
 log "Syncing certificates to peer proxy: {{ proxy }} (${PEER_IP})..."
 
 if rsync -avz --delete \

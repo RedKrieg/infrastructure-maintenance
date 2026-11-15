@@ -36,7 +36,7 @@ log() {
 
 HIGHER_PRIORITY_PROXIES=(
 {% for p in proxy_list[:my_index] %}
-    "{{ p }}:{{ hostvars[p]['ansible_host'] | default(p) }}"
+    "{{ p }}:{{ hostvars[p]['internal_ip'] | default(hostvars[p]['ansible_host'] | default(p)) }}"
 {% endfor %}
 )
 

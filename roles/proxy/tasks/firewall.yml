@@ -39,7 +39,7 @@
     rule: allow
     port: "{{ acme_standalone_port }}"
     proto: tcp
-    from_ip: "{{ hostvars[item]['ansible_host'] | default(item) }}"
+    from_ip: "{{ hostvars[item]['internal_ip'] | default(hostvars[item]['ansible_host'] | default(item)) }}"
   loop: "{{ groups['proxies'] | default([]) }}"
   when: groups['proxies'] is defined
   tags: [proxy, firewall, ufw]

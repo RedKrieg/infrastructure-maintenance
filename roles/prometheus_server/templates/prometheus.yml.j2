@@ -56,7 +56,7 @@ scrape_configs:
     static_configs:
       - targets:
 {% for host in groups['proxies'] %}
-{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
 {% set target_port = hostvars[host]['haproxy_stats_port'] | default(prometheus_haproxy_port | default(8404)) %}
           - "{{ target_ip }}:{{ target_port }}"
 {% endfor %}
@@ -72,7 +72,7 @@ scrape_configs:
     static_configs:
       - targets:
 {% for host in groups['all'] %}
-{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
 {% set target_port = hostvars[host]['node_exporter_port'] | default(prometheus_node_exporter_port | default(9100)) %}
           - "{{ target_ip }}:{{ target_port }}"
 {% endfor %}

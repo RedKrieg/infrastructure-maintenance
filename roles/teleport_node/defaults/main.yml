@@ -10,8 +10,8 @@ enable_teleport_node: true
 teleport_version: "16"
 
 # Teleport Server Discovery
-# Resolves the IP of the first host in [teleport_servers] group
-teleport_server_host: "{{ hostvars[groups['teleport_servers'][0]]['ansible_host'] if (groups['teleport_servers'] is defined and groups['teleport_servers'] | length > 0) else '127.0.0.1' }}"
+# Resolves the internal IP of the first host in [teleport_servers] group
+teleport_server_host: "{{ (hostvars[groups['teleport_servers'][0]]['internal_ip'] | default(hostvars[groups['teleport_servers'][0]]['ansible_host'])) if (groups['teleport_servers'] is defined and groups['teleport_servers'] | length > 0) else '127.0.0.1' }}"
 teleport_proxy_server: "{{ teleport_server_host }}:3080"
 
 # Node Join Token (managed by Ansible Vault, must match teleport_auth_token on server)

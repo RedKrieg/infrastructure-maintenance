@@ -25,6 +25,9 @@ proxy_service:
   tunnel_listen_addr: 0.0.0.0:{{ teleport_proxy_tunnel_port }}
   ssh_listen_addr: 0.0.0.0:{{ teleport_proxy_ssh_port }}
   public_addr: "{{ teleport_public_addr }}"
+{% if teleport_ssh_public_addr is defined and teleport_ssh_public_addr | length > 0 %}
+  ssh_public_addr: "{{ teleport_ssh_public_addr }}"
+{% endif %}
   https_keypairs: []
   acme:
     enabled: false

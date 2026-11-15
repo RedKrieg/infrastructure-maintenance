@@ -11,7 +11,7 @@ logging_port: 5140
 logging_protocol: "tcp"
 
 # Centralized server address (defaults to the first monitoring node)
-logging_server_host: "{{ hostvars[groups['monitoring'][0]]['ansible_host'] if (groups['monitoring'] is defined and groups['monitoring'] | length > 0) else '127.0.0.1' }}"
+logging_server_host: "{{ (hostvars[groups['monitoring'][0]]['internal_ip'] | default(hostvars[groups['monitoring'][0]]['ansible_host'])) if (groups['monitoring'] is defined and groups['monitoring'] | length > 0) else '127.0.0.1' }}"
 
 # Directory where remote node logs are aggregated on the logging server
 logging_storage_dir: "/var/log/remote"

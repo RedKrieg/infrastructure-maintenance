@@ -9,7 +9,7 @@
     port: "{{ prometheus_port | string }}"
     proto: tcp
     from_ip: "{{ item }}"
-  loop: "{{ prometheus_trusted_subnets }}"
+  loop: "{{ ((prometheus_trusted_subnets | default([])) + (internal_proxy_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1']))) | unique }}"
   tags: [monitoring, prometheus, firewall, ufw]
 
 - name: Allow Alertmanager port (9093) through UFW from trusted subnets
@@ -18,6 +18,6 @@
     port: "{{ prometheus_alertmanager_port | default(9093) | string }}"
     proto: tcp
     from_ip: "{{ item }}"
-  loop: "{{ prometheus_trusted_subnets }}"
+  loop: "{{ ((prometheus_trusted_subnets | default([])) + (internal_proxy_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1']))) | unique }}"
   when: prometheus_alertmanager_enabled | bool
   tags: [monitoring, prometheus, firewall, ufw, alertmanager]
