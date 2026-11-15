@@ -1,0 +1,162 @@
+---
+# ==============================================================================
+# Playbook: Provision Google Cloud Platform (GCP) Compute Engine Infrastructure
+# ==============================================================================
+# Provisions:
+#   1. Custom VPC Network & Subnetwork across Availability Zones
+#   2. Firewall rules (SSH, HTTP/S, internal communication, Teleport, Prometheus)
+#   3. Compute Engine Ubuntu 22.04 LTS instances for HAProxy, Web, Metrics & Teleport
+#   4. Dynamic inventory generation mapping to examples/inventories/inventory.gcp.ini
+# ==============================================================================
+
+- name: Provision GCP Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_gcp.yml
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Validation & Pre-flight
+    # --------------------------------------------------------------------------
+    - name: Validate GCP project ID is specified
+      ansible.builtin.fail:
+        msg: "Please set 'gcp_project_id' in vars_gcp.yml before running this playbook."
+      when: gcp_project_id == 'your-gcp-project-id' or gcp_project_id | length == 0
+
+    - name: Expand SSH public key path
+      ansible.builtin.set_fact:
+        resolved_ssh_key: "{{ lookup('file', gcp_ssh_pub_key_file | expanduser) }}"
+
+    # --------------------------------------------------------------------------
+    # 2. VPC Network & Subnetwork
+    # --------------------------------------------------------------------------
+    - name: Create Custom VPC Network
+      google.cloud.gcp_compute_network:
+        name: "{{ gcp_network_name }}"
+        auto_create_subnetworks: false
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+      register: network
+
+    - name: Create Regional Subnetwork
+      google.cloud.gcp_compute_subnetwork:
+        name: "{{ gcp_subnetwork_name }}"
+        region: "{{ gcp_region }}"
+        network: "{{ network }}"
+        ip_cidr_range: "{{ gcp_subnet_cidr }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+      register: subnetwork
+
+    # --------------------------------------------------------------------------
+    # 3. VPC Firewall Rules
+    # --------------------------------------------------------------------------
+    - name: Create Firewall Rule - Allow SSH Ingress (Port 22)
+      google.cloud.gcp_compute_firewall:
+        name: "{{ gcp_network_name }}-allow-ssh"
+        network: "{{ network }}"
+        allowed:
+          - ip_protocol: "tcp"
+            ports: ["22"]
+        source_ranges: ["0.0.0.0/0"]
+        target_tags: ["ssh-access", "proxy", "webserver", "monitoring", "teleport"]
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+
+    - name: Create Firewall Rule - Allow HTTP & HTTPS Ingress to Proxies (Ports 80, 443)
+      google.cloud.gcp_compute_firewall:
+        name: "{{ gcp_network_name }}-allow-http-https"
+        network: "{{ network }}"
+        allowed:
+          - ip_protocol: "tcp"
+            ports: ["80", "443"]
+        source_ranges: ["0.0.0.0/0"]
+        target_tags: ["proxy", "http-server", "https-server"]
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+
+    - name: Create Firewall Rule - Allow Internal Subnet Mesh Communication
+      google.cloud.gcp_compute_firewall:
+        name: "{{ gcp_network_name }}-allow-internal"
+        network: "{{ network }}"
+        allowed:
+          - ip_protocol: "tcp"
+          - ip_protocol: "udp"
+          - ip_protocol: "icmp"
+        source_ranges: ["{{ gcp_subnet_cidr }}"]
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+
+    - name: Create Firewall Rule - Allow Teleport Web, SSH & Reverse Tunnel
+      google.cloud.gcp_compute_firewall:
+        name: "{{ gcp_network_name }}-allow-teleport"
+        network: "{{ network }}"
+        allowed:
+          - ip_protocol: "tcp"
+            ports: ["3080", "3023", "3024"]
+        source_ranges: ["0.0.0.0/0"]
+        target_tags: ["teleport"]
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 4. Compute Engine VM Instances
+    # --------------------------------------------------------------------------
+    - name: Provision Compute Engine Instances
+      google.cloud.gcp_compute_instance:
+        name: "{{ item.name }}"
+        machine_type: "{{ gcp_machine_type }}"
+        zone: "{{ item.zone }}"
+        disks:
+          - auto_delete: true
+            boot: true
+            initialize_params:
+              disk_size_gb: "{{ gcp_disk_size_gb }}"
+              source_image: "{{ gcp_ubuntu_image }}"
+        network_interfaces:
+          - network: "{{ network }}"
+            subnetwork: "{{ subnetwork }}"
+            network_ip: "{{ item.ip }}"
+            access_configs:
+              - name: "External NAT"
+                type: "ONE_TO_ONE_NAT"
+        metadata:
+          ssh-keys: "{{ gcp_ssh_user }}:{{ resolved_ssh_key }}"
+        tags:
+          items: "{{ item.tags | default([]) + ['ssh-access'] }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+      loop: "{{ gcp_instances }}"
+      register: created_instances
+
+    # --------------------------------------------------------------------------
+    # 5. Inventory Generation & Summary
+    # --------------------------------------------------------------------------
+    - name: Display Provisioning Summary
+      ansible.builtin.debug:
+        msg:
+          - "Successfully provisioned cluster instances in project '{{ gcp_project_id }}':"
+          - "{% for inst in created_instances.results %}{{ inst.name }} (Zone: {{ inst.zone }}, Internal: {{ inst.networkInterfaces[0].networkIP }}, External: {{ inst.networkInterfaces[0].accessConfigs[0].natIP | default('N/A') }}){% if not loop.last %}\n{% endif %}{% endfor %}"
+
+    - name: Write Updated GCP Inventory File
+      ansible.builtin.template:
+        src: "inventory_gcp.ini.j2"
+        dest: "{{ playbook_dir }}/../inventories/inventory.gcp.ini"
+        mode: "0644"

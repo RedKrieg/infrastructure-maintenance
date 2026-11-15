@@ -45,12 +45,15 @@ HAProxy on all proxies dynamically generates:
 
 Ready-to-use cloud-specific inventory templates are available in the `examples/inventories/` directory:
 
-| Environment | Inventory Path | Architecture Highlights |
-| :--- | :--- | :--- |
-| **AWS EC2** | [examples/inventories/inventory.aws.ini](../examples/inventories/inventory.aws.ini) | Multi-AZ placement (`us-east-1a`, `1b`, `1c`), AWS Network Load Balancer (NLB) fronting proxies. |
-| **Google Cloud (GCP)** | [examples/inventories/inventory.gcp.ini](../examples/inventories/inventory.gcp.ini) | Multi-zone Compute Engine (`us-central1-a`, `1-b`, `1-c`), Regional Passthrough Network Load Balancer. |
-| **OpenStack** | [examples/inventories/inventory.openstack.ini](../examples/inventories/inventory.openstack.ini) | Nova anti-affinity server groups across physical hypervisors, Octavia TCP listener. |
-| **OCI / Bare Metal** | [inventory.ini](../inventory.ini) | Standard RFC 1918 multi-rack or fault-domain deployment. |
+| Environment | Inventory Path | Architecture Highlights | Setup Guide |
+| :--- | :--- | :--- | :--- |
+| **AWS EC2** | [examples/inventories/inventory.aws.ini](../examples/inventories/inventory.aws.ini) | Multi-AZ placement (`us-east-1a`, `1b`, `1c`), AWS Network Load Balancer (NLB) fronting proxies. | — |
+| **Google Cloud (GCP)** | [examples/inventories/inventory.gcp.ini](../examples/inventories/inventory.gcp.ini) | Multi-zone Compute Engine (`us-central1-a`, `1-b`, `1-c`), Regional Passthrough Network Load Balancer. | [GCP Compute Setup Guide](gcp-compute-setup.md) |
+| **OpenStack** | [examples/inventories/inventory.openstack.ini](../examples/inventories/inventory.openstack.ini) | Nova anti-affinity server groups across physical hypervisors, Octavia TCP listener. | — |
+| **OCI / Bare Metal** | [inventory.ini](../inventory.ini) | Standard RFC 1918 multi-rack or fault-domain deployment. | — |
+
+> [!TIP]
+> For new users starting on Google Cloud, see the complete [Google Cloud Platform (GCP) Compute Engine Quickstart & Provisioning Guide](gcp-compute-setup.md) for step-by-step instructions on installing the `gcloud` CLI, authenticating, and running the automated instance provisioning playbooks (`examples/provisioning/provision_gcp.yml`).
 
 ---
 

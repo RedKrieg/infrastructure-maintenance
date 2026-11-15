@@ -1,0 +1,68 @@
+---
+# ==============================================================================
+# Playbook: Teardown / Deprovision GCP Compute Engine Infrastructure
+# ==============================================================================
+# Deletes in reverse order:
+#   1. Compute Engine instances
+#   2. Firewall rules
+#   3. Regional Subnetwork
+#   4. Custom VPC Network
+# ==============================================================================
+
+- name: Deprovision GCP Cluster Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_gcp.yml
+
+  tasks:
+    - name: Validate GCP project ID is specified
+      ansible.builtin.fail:
+        msg: "Please set 'gcp_project_id' in vars_gcp.yml before running this playbook."
+      when: gcp_project_id == 'your-gcp-project-id' or gcp_project_id | length == 0
+
+    - name: Delete Compute Engine Instances
+      google.cloud.gcp_compute_instance:
+        name: "{{ item.name }}"
+        zone: "{{ item.zone }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: absent
+      loop: "{{ gcp_instances }}"
+
+    - name: Delete Firewall Rules
+      google.cloud.gcp_compute_firewall:
+        name: "{{ item }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: absent
+      loop:
+        - "{{ gcp_network_name }}-allow-ssh"
+        - "{{ gcp_network_name }}-allow-http-https"
+        - "{{ gcp_network_name }}-allow-internal"
+        - "{{ gcp_network_name }}-allow-teleport"
+
+    - name: Delete Regional Subnetwork
+      google.cloud.gcp_compute_subnetwork:
+        name: "{{ gcp_subnetwork_name }}"
+        region: "{{ gcp_region }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: absent
+
+    - name: Delete Custom VPC Network
+      google.cloud.gcp_compute_network:
+        name: "{{ gcp_network_name }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: absent
+
+    - name: Teardown Summary
+      ansible.builtin.debug:
+        msg: "GCP cluster resources in project '{{ gcp_project_id }}' successfully deprovisioned."

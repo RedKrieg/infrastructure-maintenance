@@ -1,0 +1,81 @@
+---
+# ==============================================================================
+# Google Cloud Platform (GCP) Provisioning Configuration Variables
+# ==============================================================================
+
+# GCP Project & Region Settings
+# Replace with your actual GCP Project ID from `gcloud config get-value project`
+gcp_project_id: "your-gcp-project-id"
+gcp_region: "us-central1"
+
+# Authentication method: 'application' (Application Default Credentials) or 'serviceaccount'
+gcp_auth_kind: "application"
+# If using 'serviceaccount', set the absolute path to your JSON service account key:
+gcp_cred_file: ""
+
+# Compute Engine VM Sizing & Image
+gcp_machine_type: "e2-medium"
+gcp_disk_size_gb: 30
+gcp_ubuntu_image: "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
+
+# SSH Authentication for Ubuntu Instances
+gcp_ssh_user: "ubuntu"
+gcp_ssh_pub_key_file: "~/.ssh/id_ed25519.pub"
+
+# VPC Network & Subnetwork Configuration
+gcp_network_name: "cluster-vpc"
+gcp_subnetwork_name: "cluster-subnet"
+gcp_subnet_cidr: "10.128.0.0/20"
+
+# Cluster Node Topology & Allocation Across Availability Zones
+gcp_instances:
+  - name: "proxy-01"
+    zone: "us-central1-a"
+    ip: "10.128.0.10"
+    group: "proxies"
+    tags: ["proxy", "http-server", "https-server"]
+
+  - name: "proxy-02"
+    zone: "us-central1-b"
+    ip: "10.128.0.20"
+    group: "proxies"
+    tags: ["proxy", "http-server", "https-server"]
+
+  - name: "proxy-03"
+    zone: "us-central1-c"
+    ip: "10.128.0.30"
+    group: "proxies"
+    tags: ["proxy", "http-server", "https-server"]
+
+  - name: "web-01"
+    zone: "us-central1-a"
+    ip: "10.128.0.11"
+    group: "webservers"
+    external_fqdn: "web1.example.com"
+    tags: ["webserver"]
+
+  - name: "web-02"
+    zone: "us-central1-b"
+    ip: "10.128.0.21"
+    group: "webservers"
+    external_fqdn: "web2.example.com"
+    tags: ["webserver"]
+
+  - name: "web-03"
+    zone: "us-central1-c"
+    ip: "10.128.0.31"
+    group: "webservers"
+    external_fqdn: "web3.example.com"
+    tags: ["webserver"]
+
+  - name: "monitoring-01"
+    zone: "us-central1-a"
+    ip: "10.128.0.50"
+    group: "monitoring"
+    tags: ["monitoring"]
+
+  - name: "teleport-01"
+    zone: "us-central1-a"
+    ip: "10.128.0.60"
+    group: "teleport_servers"
+    tags: ["teleport"]

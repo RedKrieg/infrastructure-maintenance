@@ -19,12 +19,19 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── proxy-security.md            # HTTP/2, HSTS, rate limiting (300/10s), health checks & stats ACL
 │   ├── teleport-access.md           # Teleport JIT sudo access, RBAC roles & CLI helper scripts
 │   ├── monitoring.md                # Native HAProxy Prometheus metrics & dedicated Prometheus role
-│   └── deployment.md                # Inventory setup, cloud templates, and targeted Ansible tags
+│   ├── deployment.md                # Inventory setup, cloud templates, and targeted Ansible tags
+│   └── gcp-compute-setup.md         # GCP quickstart: gcloud CLI, auth & automated VM provisioning
 ├── examples/
-│   └── inventories/                 # Cloud-specific example inventory templates
-│       ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
-│       ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
-│       └── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
+│   ├── inventories/                 # Cloud-specific example inventory templates
+│   │   ├── inventory.aws.ini        # AWS EC2 multi-AZ example (VPC 172.31.0.0/16)
+│   │   ├── inventory.gcp.ini        # GCP Compute Engine multi-zone example (VPC 10.128.0.0/20)
+│   │   └── inventory.openstack.ini  # OpenStack anti-affinity example (192.168.100.0/24)
+│   └── provisioning/                # Cloud VM and network provisioning automation
+│       ├── vars_gcp.yml             # GCP project, region, and instance variables
+│       ├── provision_gcp.yml        # Ansible playbook provisioning GCP VPC, firewalls & VMs
+│       ├── deprovision_gcp.yml      # Ansible playbook to teardown GCP resources
+│       ├── create_gcp_instances.sh  # Direct gcloud CLI script to provision instances
+│       └── delete_gcp_instances.sh  # Direct gcloud CLI script to clean up instances
 ├── vars/
 │   └── admin_users.yml              # Central users configuration file (admins, credentials, public keys)
 ├── group_vars/
@@ -69,3 +76,4 @@ Comprehensive technical documentation is organized into modular guides in the [`
 | **[Teleport Access & Sudo Management](docs/teleport-access.md)** | Centralized Access & Dynamic Elevation | • Zero-trust access architecture: Auth/Proxy service and outbound reverse tunnels<br>• Automatic host user provisioning (`create_host_user_mode: keep`)<br>• RBAC role hierarchy: `lead-admin`, unprivileged `junior`, and temporary `elevated-sudo`<br>• Just-In-Time (JIT) access request and approval workflow<br>• Built-in CLI helper scripts and shell aliases (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`)<br>• End-to-end junior administrator workflow walkthrough |
 | **[Prometheus Monitoring](docs/monitoring.md)** | Metrics Scraping & Centralized Monitoring | • Native HAProxy Prometheus exporter (`/metrics` on port 8404)<br>• Unified ACL whitelist and HTTP basic authentication matching stats UI<br>• Automatic whitelisting of inventory `[monitoring]` group hosts<br>• Standalone Prometheus server role (`roles/prometheus_server` on port 9090)<br>• Dynamic proxy scrape target discovery and configuration<br>• Automated `promtool check config` validation, 60-day TSDB retention, and UFW isolation |
 | **[Deployment & Operations](docs/deployment.md)** | Inventory Setup & Execution Guide | • Inventory layout & dynamic 1:1 mapping syntax (`external_fqdn`)<br>• Cloud-specific inventory templates (AWS, GCP, OpenStack, OCI, bare-metal)<br>• Full fleet provisioning commands<br>• Granular execution reference with Ansible tags (`proxy`, `certs`, `webserver`, `monitoring`, `teleport_server`, `teleport_node`, `users`)<br>• Pre-flight syntax validation instructions |
+| **[GCP Compute Setup Guide](docs/gcp-compute-setup.md)** | Google Cloud Quickstart & Instance Provisioning | • Complete beginner guide for Google Cloud Platform (GCP)<br>• Installing `gcloud` CLI (Linux, macOS, Windows) & authentication (`gcloud auth login`, ADC)<br>• Automated instance provisioning with Ansible (`examples/provisioning/provision_gcp.yml`)<br>• Custom VPC, subnet (`10.128.0.0/20`), firewalls, and multi-zone VM placement<br>• Direct CLI provisioning script (`create_gcp_instances.sh`) & teardown commands<br>• Regional External TCP Passthrough Network Load Balancer setup |
