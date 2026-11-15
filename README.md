@@ -34,7 +34,15 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   │   └── tasks/
 │   ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
 │   │   ├── defaults/main.yml
-│   │   ├── files/
+│   │   ├── files/                   # Dotfiles, shell addons, completions & authorized keys
+│   │   │   ├── authorized_keys      # Backup public key for redkrieg
+│   │   │   ├── bashrc_addons        # Custom bash additions, aliases, and loaders
+│   │   │   ├── gitconfig            # Git configuration with push.autoSetupRemote
+│   │   │   ├── screenrc             # GNU Screen configuration
+│   │   │   ├── tmux.conf            # Tmux keybindings and status bar
+│   │   │   ├── venv_helpers.bash    # Python virtual environment helpers (mkvenv, workon)
+│   │   │   ├── vimrc                # Vim configuration with pathogen.vim
+│   │   │   └── workon-completion.bash # Tab completion for workon, rmvenv, and cdp
 │   │   └── tasks/
 │   ├── proxy/                       # HAProxy role (terminates SSL & routes 1:1 to backends)
 │   │   ├── defaults/main.yml
@@ -62,14 +70,6 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │           ├── default_404.conf.j2  # Generic 404 catch-all default_server block
 │           ├── real_ip.conf.j2      # set_real_ip_from trusting HAProxy proxies
 │           └── site.conf.j2         # Virtual host for assigned external_fqdn
-├── authorized_keys                  # Default public key for redkrieg
-├── bashrc_addons                    # Root copy of shell addons
-├── gitconfig                        # Root copy of global git defaults
-├── screenrc                         # Root copy of screen config
-├── tmux.conf                        # Root copy of tmux config
-├── venv_helpers.bash                # Root copy of venv tooling helpers
-├── vimrc                            # Root copy of Vim configuration
-├── workon-completion.bash           # Root copy of tab completion script
 └── README.md                        # Documentation and usage guide
 ```
 
