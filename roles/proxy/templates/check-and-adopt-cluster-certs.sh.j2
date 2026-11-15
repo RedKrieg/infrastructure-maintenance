@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Cluster Certificate Reconciliation Script
+# Managed by Ansible - Executed on startup / recovery across all proxies
+# Compares local certificates against peer proxies in the cluster.
+# If any peer has a newer certificate, copies it locally, syncs acme.sh store,
+# and reloads HAProxy (if active).
+# ==============================================================================
+set -u
+
+LOG_FILE="/var/log/haproxy-cert-reconcile.log"
+CERTS_DIR="{{ haproxy_certs_dir }}"
+SSH_KEY="/root/.ssh/id_ed25519_certsync"
+ACME_DIR="{{ acme_sh_install_dir }}"
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [reconcile] $*" | tee -a "$LOG_FILE"
+}
+
+get_cert_epoch() {
+    local cert_file="$1"
+    if [ ! -f "$cert_file" ]; then
+        echo 0
+        return
+    fi
+    local end_date
+    end_date=$(openssl x509 -enddate -noout -in "$cert_file" 2>/dev/null | cut -d= -f2)
+    if [ -n "$end_date" ]; then
+        date -d "$end_date" +%s 2>/dev/null || echo 0
+    else
+        echo 0
+    fi
+}
+
+get_remote_cert_epoch() {
+    local peer_ip="$1"
+    local cert_file="$2"
+    local end_date
+    end_date=$(ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o BatchMode=yes \
+        "root@${peer_ip}" "openssl x509 -enddate -noout -in ${cert_file} 2>/dev/null" 2>/dev/null | cut -d= -f2)
+    if [ -n "$end_date" ]; then
+        date -d "$end_date" +%s 2>/dev/null || echo 0
+    else
+        echo 0
+    fi
+}
+
+PEER_PROXIES=(
+{% if groups['proxies'] is defined %}
+{% for proxy in groups['proxies'] %}
+{% if proxy != inventory_hostname %}
+    "{{ proxy }}:{{ hostvars[proxy]['ansible_host'] | default(proxy) }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+)
+
+TARGET_DOMAINS=(
+{% if groups['webservers'] is defined %}
+{% for host in groups['webservers'] %}
+{% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
+    "{{ fqdn }}"
+{% endfor %}
+{% endif %}
+)
+
+if [ {% raw %}${#PEER_PROXIES[@]}{% endraw %} -eq 0 ]; then
+    log "No peer proxies configured in cluster. Nothing to reconcile."
+    exit 0
+fi
+
+log "Checking cluster peers for newer certificates..."
+
+ADOPTED_ANY=0
+
+for domain in "${TARGET_DOMAINS[@]}"; do
+    LOCAL_CERT="${CERTS_DIR}/${domain}.pem"
+    LOCAL_EPOCH=$(get_cert_epoch "$LOCAL_CERT")
+
+    BEST_PEER_IP=""
+    BEST_PEER_NAME=""
+    BEST_REMOTE_EPOCH="$LOCAL_EPOCH"
+
+    for peer in "${PEER_PROXIES[@]}"; do
+        PEER_NAME="${peer%%:*}"
+        PEER_IP="${peer##*:}"
+
+        REMOTE_EPOCH=$(get_remote_cert_epoch "$PEER_IP" "${CERTS_DIR}/${domain}.pem")
+
+        # Check if remote certificate is at least 1 day (86400s) newer
+        if [ "$REMOTE_EPOCH" -gt $(( BEST_REMOTE_EPOCH + 86400 )) ]; then
+            BEST_REMOTE_EPOCH="$REMOTE_EPOCH"
+            BEST_PEER_IP="$PEER_IP"
+            BEST_PEER_NAME="$PEER_NAME"
+        fi
+    done
+
+    if [ -n "$BEST_PEER_IP" ]; then
+        log "Found newer certificate for ${domain} on peer ${BEST_PEER_NAME} (${BEST_PEER_IP})."
+        log "Adopting newer certificate from ${BEST_PEER_NAME}..."
+
+        if rsync -avz \
+            -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes" \
+            "root@${BEST_PEER_IP}:${CERTS_DIR}/${domain}.pem" "${CERTS_DIR}/${domain}.pem" >> "$LOG_FILE" 2>&1; then
+            chmod 600 "${CERTS_DIR}/${domain}.pem"
+            ADOPTED_ANY=1
+            log "Successfully adopted newer certificate for ${domain}."
+
+            # Sync acme.sh domain dir if present on peer so local client database is updated
+            if ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o BatchMode=yes \
+                "root@${BEST_PEER_IP}" "[ -d ${ACME_DIR}/${domain}_ecc ]" 2>/dev/null; then
+                mkdir -p "${ACME_DIR}/${domain}_ecc"
+                rsync -avz \
+                    -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes" \
+                    "root@${BEST_PEER_IP}:${ACME_DIR}/${domain}_ecc/" "${ACME_DIR}/${domain}_ecc/" >> "$LOG_FILE" 2>&1 || true
+            fi
+        else
+            log "WARNING: Failed to rsync newer certificate for ${domain} from ${BEST_PEER_NAME}."
+        fi
+    fi
+done
+
+if [ "$ADOPTED_ANY" -eq 1 ]; then
+    if systemctl is-active --quiet haproxy; then
+        systemctl reload haproxy
+        log "Reloaded local HAProxy with adopted newer certificates."
+    fi
+    log "Reconciliation complete: Node adopted updated certificates and resumed normal rank."
+else
+    log "Reconciliation complete: Local certificates are up-to-date with cluster peers."
+fi

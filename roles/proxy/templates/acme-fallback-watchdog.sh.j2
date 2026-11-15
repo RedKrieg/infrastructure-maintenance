@@ -1,38 +1,72 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Standby ACME Renewal Watchdog Script
-# Managed by Ansible - Executed on Replica Proxies
-# If Primary Proxy is dead and certificates are within {{ acme_fallback_renewal_days }} days of expiring,
-# this node automatically takes over renewal and reloads HAProxy.
+# Managed by Ansible - Executed on Standby / Replica Proxies
+# Staggered 1-day fallback window and rank-based line of succession.
+#
+# If all higher-priority proxies are unreachable and certificates are within
+# the rank-staggered threshold days of expiring, this node automatically takes
+# over certificate renewal, reloads HAProxy, and propagates certs to peers.
 # ==============================================================================
 set -u
 
 LOG_FILE="/var/log/acme-fallback-watchdog.log"
 CERTS_DIR="{{ haproxy_certs_dir }}"
-PRIMARY_HOST="{{ cert_primary_host }}"
-PRIMARY_IP="{{ hostvars[cert_primary_host]['ansible_host'] | default(cert_primary_host) }}"
-THRESHOLD_DAYS="{{ acme_fallback_renewal_days }}"
-THRESHOLD_SECONDS=$(( THRESHOLD_DAYS * 86400 ))
+BASE_THRESHOLD_DAYS="{{ acme_fallback_renewal_days }}"
 ACME_SH="{{ acme_sh_install_dir }}/acme.sh"
 HTTP_PORT="{{ acme_standalone_port }}"
 STAGING_FLAG="{% if acme_use_staging | bool %}--staging{% endif %}"
 
+{% set proxy_list = groups['proxies'] | default([inventory_hostname]) %}
+{% set my_index = proxy_list.index(inventory_hostname) if inventory_hostname in proxy_list else 1 %}
+{% set rank_offset = my_index - 1 %}
+RANK_INDEX="{{ my_index }}"
+RANK_OFFSET="{{ rank_offset }}"
+
+# Stagger fallback threshold by 1 day per replica rank
+THRESHOLD_DAYS=$(( BASE_THRESHOLD_DAYS - RANK_OFFSET ))
+if [ "$THRESHOLD_DAYS" -lt 1 ]; then
+    THRESHOLD_DAYS=1
+fi
+THRESHOLD_SECONDS=$(( THRESHOLD_DAYS * 86400 ))
+
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [watchdog] $*" | tee -a "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [watchdog-rank-${RANK_INDEX}] $*" | tee -a "$LOG_FILE"
 }
 
-# Check if primary proxy is reachable over SSH or ICMP ping
-is_primary_alive() {
-    if nc -z -w 3 "$PRIMARY_IP" 22 >/dev/null 2>&1; then
-        return 0
-    fi
-    if ping -c 2 -W 2 "$PRIMARY_IP" >/dev/null 2>&1; then
-        return 0
-    fi
+HIGHER_PRIORITY_PROXIES=(
+{% for p in proxy_list[:my_index] %}
+    "{{ p }}:{{ hostvars[p]['ansible_host'] | default(p) }}"
+{% endfor %}
+)
+
+is_higher_priority_proxy_alive() {
+    for peer in "${HIGHER_PRIORITY_PROXIES[@]}"; do
+        [ -z "$peer" ] && continue
+        local p_name="${peer%%:*}"
+        local p_ip="${peer##*:}"
+
+        # Check SSH port 22 via native bash /dev/tcp
+        if timeout 3 bash -c "</dev/tcp/${p_ip}/22" 2>/dev/null; then
+            log "Higher-priority proxy ${p_name} (${p_ip}) is REACHABLE via SSH."
+            return 0
+        fi
+        # Check ICMP ping fallback
+        if ping -c 2 -W 2 "$p_ip" >/dev/null 2>&1; then
+            log "Higher-priority proxy ${p_name} (${p_ip}) is REACHABLE via ICMP ping."
+            return 0
+        fi
+    done
     return 1
 }
 
-# Scan certificates for expiration
+# 1. First run cluster reconciliation to adopt any newer certs renewed by peers
+if [ -x /usr/local/bin/check-and-adopt-cluster-certs.sh ]; then
+    log "Running cluster certificate reconciliation prior to threshold checks..."
+    /usr/local/bin/check-and-adopt-cluster-certs.sh >> "$LOG_FILE" 2>&1 || true
+fi
+
+# 2. Scan certificates for expiration against rank-staggered threshold
 NEED_RENEWAL=0
 EXPIRED_DOMAINS=()
 
@@ -41,29 +75,38 @@ EXPIRED_DOMAINS=()
 CERT_FILE="${CERTS_DIR}/{{ fqdn }}.pem"
 if [ -f "$CERT_FILE" ]; then
     if ! openssl x509 -checkend "$THRESHOLD_SECONDS" -noout -in "$CERT_FILE" >/dev/null 2>&1; then
-        log "Certificate for {{ fqdn }} expires in less than ${THRESHOLD_DAYS} days."
+        log "Certificate for {{ fqdn }} expires in less than ${THRESHOLD_DAYS} days (stagger offset: ${RANK_OFFSET}d)."
         NEED_RENEWAL=1
         EXPIRED_DOMAINS+=("{{ fqdn }}")
     fi
+else
+    log "Certificate for {{ fqdn }} is missing locally."
+    NEED_RENEWAL=1
+    EXPIRED_DOMAINS+=("{{ fqdn }}")
 fi
 {% endfor %}
 
 if [ "$NEED_RENEWAL" -eq 0 ]; then
-    log "All certificates are healthy (> ${THRESHOLD_DAYS} days remaining). No action required."
+    log "All certificates are healthy (> ${THRESHOLD_DAYS} days remaining). No renewal action required."
     exit 0
 fi
 
-log "Certificates nearing expiration: ${EXPIRED_DOMAINS[*]}"
+log "Certificates nearing expiration for threshold (${THRESHOLD_DAYS} days): ${EXPIRED_DOMAINS[*]}"
 
-# Check if Primary is online to handle standard renewal
-if is_primary_alive; then
-    log "Primary proxy (${PRIMARY_HOST} at ${PRIMARY_IP}) is REACHABLE. Allowing Primary to perform standard renewal."
-    exit 0
+# 3. Check if any higher-priority proxy in the succession line is online
+if [ {% raw %}${#HIGHER_PRIORITY_PROXIES[@]}{% endraw %} -gt 0 ]; then
+    log "Evaluating reachability of higher-priority proxies..."
+    if is_higher_priority_proxy_alive; then
+        log "A higher-priority proxy is ONLINE. Standing down to allow higher-ranked node to manage renewal."
+        exit 0
+    fi
+    log "All higher-priority proxies are UNREACHABLE."
 fi
 
-log "ALERT: Primary proxy (${PRIMARY_HOST} at ${PRIMARY_IP}) is UNREACHABLE and certificates are within ${THRESHOLD_DAYS} days of expiration!"
-log "Triggering automatic emergency fallback renewal on replica: $(hostname)..."
+log "ALERT: This node (Rank ${RANK_INDEX}) is the highest available proxy and certificates are within ${THRESHOLD_DAYS} days of expiration!"
+log "Triggering automatic emergency fallback renewal on $(hostname)..."
 
+# 4. Attempt emergency renewal for expiring domains
 RENEWED_ANY=0
 for domain in "${EXPIRED_DOMAINS[@]}"; do
     log "Attempting emergency renewal for ${domain} via acme.sh standalone on port ${HTTP_PORT}..."
@@ -83,8 +126,13 @@ for domain in "${EXPIRED_DOMAINS[@]}"; do
     fi
 done
 
+# 5. Reload local HAProxy and propagate to peer proxies
 if [ "$RENEWED_ANY" -eq 1 ]; then
     log "Reloading local HAProxy with renewed certificates..."
     systemctl reload haproxy
+    if [ -x /usr/local/bin/sync-haproxy-certs.sh ]; then
+        log "Propagating renewed certificates to cluster peer proxies..."
+        /usr/local/bin/sync-haproxy-certs.sh >> "$LOG_FILE" 2>&1 || true
+    fi
     log "Emergency fallback renewal completed successfully on $(hostname)."
 fi

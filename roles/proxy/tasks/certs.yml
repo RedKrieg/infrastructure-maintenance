@@ -1,9 +1,15 @@
 ---
 # ==============================================================================
 # SSL Certificate Management, Deduplication & Standby Failover on Proxies
-# Only the Primary Proxy ({{ cert_primary_host }}) performs normal renewals.
-# If Primary Proxy dies and certs are within {{ acme_fallback_renewal_days }} days of expiring,
-# Replica Proxies automatically execute emergency renewal via standby watchdog.
+#
+# Primary Proxy ({{ cert_primary_host }}) performs normal renewals and pushes to replicas.
+# Replicas maintain a rank-based line of succession with 1-day staggered fallback windows:
+#   Rank 1 (proxy-02): triggers at 15 days
+#   Rank 2 (proxy-03): triggers at 14 days
+#   Rank 3 (proxy-04): triggers at 13 days
+# If a higher-ranking proxy recovers after renewal, its systemd boot service
+# (haproxy-cert-reconcile.service) checks all peers, adopts the newer certificate,
+# reloads HAProxy, and resumes its normal rank in the succession system.
 # ==============================================================================
 
 - name: Ensure HAProxy certificates directory exists across all proxies
@@ -134,42 +140,112 @@
   tags: [proxy, ssl, certs]
 
 # ==============================================================================
-# Automated Cron Renewal Sync Hook Setup (Primary to Replicas)
+# Cluster SSH Key Pair & Mutual Synchronization Setup (Across ALL Proxies)
 # ==============================================================================
-- name: Configure SSH Key for automated cert sync from Primary to Replicas
+- name: Configure Cluster SSH Key & Mutual Synchronization
   when: enable_cert_sync_between_proxies | bool
   tags: [proxy, ssl, certs]
   block:
-    - name: Generate SSH key on Primary Proxy for cert synchronization
+    - name: Generate SSH keypair on Primary Proxy for cluster cert synchronization
       when: inventory_hostname == cert_primary_host
       community.crypto.openssh_keypair:
         path: /root/.ssh/id_ed25519_certsync
         type: ed25519
+        owner: root
+        group: root
+        mode: "0600"
         state: present
       register: primary_sync_key
 
-    - name: Read Primary Proxy public sync key
+    - name: Slurp private sync key from Primary Proxy
+      ansible.builtin.slurp:
+        src: /root/.ssh/id_ed25519_certsync
+      delegate_to: "{{ cert_primary_host }}"
+      run_once: true
+      register: cluster_sync_privkey
+
+    - name: Slurp public sync key from Primary Proxy
       ansible.builtin.slurp:
         src: /root/.ssh/id_ed25519_certsync.pub
       delegate_to: "{{ cert_primary_host }}"
       run_once: true
-      register: primary_sync_pubkey
+      register: cluster_sync_pubkey
 
-    - name: Authorize Primary Proxy sync key on all Replica Proxies
+    - name: Ensure /root/.ssh directory exists on all proxies
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Deploy private sync key to all Replica Proxies
       when: inventory_hostname != cert_primary_host
+      ansible.builtin.copy:
+        dest: /root/.ssh/id_ed25519_certsync
+        content: "{{ cluster_sync_privkey.content | b64decode }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Deploy public sync key to all Replica Proxies
+      when: inventory_hostname != cert_primary_host
+      ansible.builtin.copy:
+        dest: /root/.ssh/id_ed25519_certsync.pub
+        content: "{{ cluster_sync_pubkey.content | b64decode }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Authorize cluster sync public key across ALL Proxies
       ansible.posix.authorized_key:
         user: root
-        key: "{{ primary_sync_pubkey.content | b64decode }}"
+        key: "{{ cluster_sync_pubkey.content | b64decode }}"
         state: present
 
-    - name: Deploy sync-haproxy-certs.sh script on Primary Proxy
-      when: inventory_hostname == cert_primary_host
+    - name: Deploy sync-haproxy-certs.sh script on ALL Proxies
       ansible.builtin.template:
         src: sync-haproxy-certs.sh.j2
         dest: /usr/local/bin/sync-haproxy-certs.sh
         owner: root
         group: root
         mode: "0755"
+
+    - name: Deploy check-and-adopt-cluster-certs.sh script on ALL Proxies
+      ansible.builtin.template:
+        src: check-and-adopt-cluster-certs.sh.j2
+        dest: /usr/local/bin/check-and-adopt-cluster-certs.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy HAProxy cluster cert reconciliation systemd service on ALL Proxies
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/haproxy-cert-reconcile.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=HAProxy Cluster Certificate Reconciliation and Adoption
+          Before=haproxy.service
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/check-and-adopt-cluster-certs.sh
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target haproxy.service
+      notify: Reload systemd daemon
+
+    - name: Enable HAProxy cert reconciliation service on ALL Proxies
+      ansible.builtin.systemd:
+        name: haproxy-cert-reconcile.service
+        enabled: true
 
 # ==============================================================================
 # Standby Fallback Renewal Watchdog Setup (On Replica Proxies)

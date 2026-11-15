@@ -80,68 +80,81 @@ To achieve the **highest level of redundancy** on Oracle Cloud Infrastructure, t
                   │   Multi-Fault-Domain High Availability    │
                   └─────────────────────┬─────────────────────┘
                                         │ (Port 80 / 443)
-                        ┌───────────────┴───────────────┐
-                        ▼                               ▼
-             ┌────────────────────┐           ┌────────────────────┐
-             │      proxy-01      │           │      proxy-02      │
-             │   (Fault Domain 1) │           │   (Fault Domain 2) │
-             │    (10.0.1.10)     │           │    (10.0.1.20)     │
-             │  Primary Cert Node │           │   Replica Proxy    │
-             │ HAProxy + acme.sh  │           │      HAProxy       │
-             └──────────┬─────────┘           └──────────┬─────────┘
-                        │                                │
-                        └───────────────┬────────────────┘
-                                        │ (Plain HTTP / Port 80)
-               ┌────────────────────────┼────────────────────────┐
-               ▼                        ▼                        ▼
-      ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-      │      web-01      │    │      web-02      │    │      web-03      │
-      │   (10.0.1.11)    │    │   (10.0.1.12)    │    │   (10.0.1.13)    │
-      │ web1.example.com │    │ web2.example.com │    │ web3.example.com │
-      │ (Generic 404)    │    │ (Generic 404)    │    │ (Generic 404)    │
-      └──────────────────┘    └──────────────────┘    └──────────────────┘
+                        ┌───────────────┼───────────────┐
+                        ▼               ▼               ▼
+             ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
+             │      proxy-01      │ │      proxy-02      │ │      proxy-03      │
+             │  (Fault Domain 1)  │ │  (Fault Domain 2)  │ │  (Fault Domain 3)  │
+             │    (10.0.1.10)     │ │    (10.0.1.20)     │ │    (10.0.1.30)     │
+             │ Primary Cert Node  │ │  Standby Rank 1    │ │  Standby Rank 2    │
+             │ HAProxy + acme.sh  │ │ HAProxy + Watchdog │ │ HAProxy + Watchdog │
+             └──────────┬─────────┘ └──────────┬─────────┘ └──────────┬─────────┘
+                        │                      │                      │
+                        └──────────────────────┼──────────────────────┘
+                                               │ (Plain HTTP / Port 80)
+                ┌──────────────────────────────┼──────────────────────────────┐
+                ▼                              ▼                              ▼
+       ┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
+       │      web-01      │          │      web-02      │          │      web-03      │
+       │   (10.0.1.11)    │          │   (10.0.1.12)    │          │   (10.0.1.13)    │
+       │ web1.example.com │          │ web2.example.com │          │ web3.example.com │
+       │ (Generic 404)    │          │ (Generic 404)    │          │ (Generic 404)    │
+       └──────────────────┘          └──────────────────┘          └──────────────────┘
 ```
 
 ### Why OCI Network Load Balancer (NLB)?
-1. **Zero Downtime Failover**: Operates at Layer 4 with sub-second health checks. If `proxy-01` undergoes kernel updates or hardware maintenance, OCI NLB instantly directs 100% of traffic to `proxy-02`.
+1. **Zero Downtime Failover**: Operates at Layer 4 with sub-second health checks. If `proxy-01` undergoes kernel updates or maintenance, OCI NLB instantly directs 100% of traffic to the standby proxies.
 2. **Transparent Client IP Preservation**: Preserves the original visitor's source IP address without needing complex headers.
-3. **Multi-Fault Domain (FD) Resilience**: `proxy-01` in FD-1 and `proxy-02` in FD-2 ensures that a rack-level, power-unit, or hardware failure within an Oracle data center never brings down your frontends.
+3. **Multi-Fault Domain (FD) Resilience**: Spreading proxies across FD-1, FD-2, and FD-3 ensures that rack-level, power-unit, or hardware maintenance within an Oracle data center never interrupts availability.
 
 ---
 
-## Shared SSL Certificates & Deduplication
+## Shared SSL Certificates, Succession & Failover
 
-Requesting SSL certificates independently from multiple frontends causes **Let's Encrypt rate-limit bans** (5 duplicate certs/week) and causes **50% of HTTP-01 challenges to fail** when the challenge request hits `proxy-02` while `proxy-01` is verifying.
+Requesting SSL certificates independently from multiple frontends causes **Let's Encrypt rate-limit bans** (5 duplicate certs/week) and causes **HTTP-01 challenge failures** when validation requests hit a proxy other than the one requesting the cert.
 
-This suite solves this using a **Primary Issuer + Cluster Sharing** pattern:
+This suite solves this using a **Rank-Based Line of Succession + Self-Healing Cluster Mesh**:
 
-### 1. Unified Challenge Forwarding
+### 1. Unified Challenge Forwarding with Succession
 - `proxy-01` (`groups['proxies'][0]`) is the designated **Primary Certificate Node**.
-- On **all** proxies (`proxy-01`, `proxy-02`), HAProxy routes `path_beg /.well-known/acme-challenge/` to `be_acme`.
-- `be_acme` on `proxy-02` forwards the challenge over the internal `10.0.0.0/8` subnet directly to `proxy-01:8888`.
-- **Result**: Whether Let's Encrypt hits `proxy-01` or `proxy-02`, the challenge is answered by `proxy-01:8888`. Challenges succeed 100% of the time with zero rate-limit waste.
+- On **all** proxies, HAProxy routes `path_beg /.well-known/acme-challenge/` to `backend be_acme`.
+- `be_acme` lists all cluster proxies in rank order:
+  - Primary (`proxy-01`) is active.
+  - Replicas (`proxy-02`, `proxy-03`) are configured with `backup`.
+- **Result**: Whether Let's Encrypt hits `proxy-01`, `proxy-02`, or `proxy-03`, challenges route directly to the active certificate requester in succession order.
 
-### 2. Cluster Certificate Synchronization
-- **During Provisioning**: The primary proxy generates/issues the certificates, and Ansible distributes the exact `.pem` bundles to all replica proxies in `/etc/haproxy/certs/`.
-- **During Automatic Cron Renewals**:
-  - `acme.sh` automatically renews certificates on `proxy-01` twice daily.
+### 2. Multi-Directional Cluster Certificate Synchronization
+- **Provisioning**: The primary proxy generates/issues certificates, and Ansible distributes the exact `.pem` bundles to all replica proxies in `/etc/haproxy/certs/`.
+- **Automatic Cron Renewals**:
+  - `acme.sh` renews certificates on the active node.
   - The renewal hook executes `/usr/local/bin/sync-haproxy-certs.sh`.
-  - The script uses `rsync` over dedicated internal SSH keys to mirror `/etc/haproxy/certs/` to `proxy-02` and reloads HAProxy on both nodes.
+  - The script uses `rsync` over dedicated cluster SSH keys (`/root/.ssh/id_ed25519_certsync`) to mirror `/etc/haproxy/certs/` and `/root/.acme.sh/` to all online peer proxies, reloading HAProxy across the cluster.
 
-### 3. Automated Zero-Touch Failover (If Primary Proxy Dies)
-What happens if `proxy-01` is permanently offline or dead during a renewal cycle?
-- **HAProxy Standby ACME Routing**:
-  In `haproxy.cfg`, replica proxies configure `backend be_acme` with a health-checked primary server and a local backup:
-  ```haproxy
-  server acme_primary 10.0.1.10:8888 check fall 2 rise 2
-  server acme_local 127.0.0.1:8888 check backup
-  ```
-  If `proxy-01` is down, HAProxy on replica proxies automatically routes incoming `/.well-known/acme-challenge/` requests to its own local port `8888`.
-- **Standby Watchdog Cron (`acme-fallback-watchdog.sh`)**:
-  - `acme.sh` is pre-installed on all replica proxies.
-  - A daily watchdog runs on replicas at 03:25 AM. It checks certificate expiration via `openssl x509 -checkend`.
-  - Under normal conditions (> 15 days remaining or Primary reachable), it takes no action.
-  - If `proxy-01` is unreachable **and** certificates are within 15 days of expiration (`acme_fallback_renewal_days: 15`), the replica proxy automatically takes over, requests renewals from Let's Encrypt via local port 8888, bundles the certificates, and reloads HAProxy. Certificates never expire even if the primary host is dead for months.
+### 3. Rank-Based Line of Succession & 1-Day Staggered Windows
+What keeps `proxy-02` and `proxy-03` from trying to renew simultaneously if `proxy-01` is offline?
+- **1-Day Staggered Thresholds**:
+  Standby watchdogs calculate their renewal expiration threshold staggered by **1 day per rank**:
+  `Threshold = acme_fallback_renewal_days - (rank - 1)`
+  - `proxy-02` (Rank 1): triggers at **15 days** remaining.
+  - `proxy-03` (Rank 2): triggers at **14 days** remaining.
+  - `proxy-04` (Rank 3): triggers at **13 days** remaining.
+  `proxy-02` has a full 24-hour window to renew before `proxy-03` even considers checking.
+- **Rank Succession Reachability Check**:
+  Before attempting renewal, any standby proxy queries all higher-ranking proxies (e.g., `proxy-03` checks `proxy-01` and `proxy-02`). If any higher-ranking node is reachable over SSH or ICMP ping, the standby stands down and yields renewal authority.
+- **Pre-Check Cluster Reconciliation**:
+  Before testing expiration thresholds, each watchdog runs `/usr/local/bin/check-and-adopt-cluster-certs.sh`. If a peer already renewed, the local node adopts the newer certificate immediately, resetting its local certificate lifetime to 90 days.
+
+### 4. Node Recovery & Automatic Rank Resumption
+What happens when a higher-priority proxy (such as `proxy-01`) comes back online **after** a standby proxy renewed the certificate?
+1. **Boot-Time Systemd Reconciliation Service (`haproxy-cert-reconcile.service`)**:
+   - Runs `check-and-adopt-cluster-certs.sh` **before** `haproxy.service` starts.
+   - Compares certificate expiration epochs (`openssl x509 -enddate`) against all peer proxies.
+   - Discovers that a standby node has a newer certificate (validity difference > 1 day).
+   - Copies the newer `.pem` bundle and `acme.sh` store from the peer via `rsync`.
+   - HAProxy starts up with the fresh, renewed certificate.
+2. **Seamless Rank Resumption**:
+   - Because `proxy-01` is now online and has the renewed cert, standby watchdogs on `proxy-02` and `proxy-03` detect `proxy-01` as reachable and stand down.
+   - `proxy-01` automatically resumes its rank as the primary certificate authority for future scheduled renewals.
 
 ---
 
@@ -153,6 +166,7 @@ The only setting required per webserver is **`external_fqdn`** in **`inventory.i
 [proxies]
 proxy-01 ansible_host=10.0.1.10
 proxy-02 ansible_host=10.0.1.20
+proxy-03 ansible_host=10.0.1.30
 
 [webservers]
 web-01 ansible_host=10.0.1.11 external_fqdn=web1.example.com
@@ -164,7 +178,7 @@ proxies
 webservers
 ```
 
-HAProxy on both proxies dynamically generates:
+HAProxy on all proxies dynamically generates:
 - `web1.example.com` ➔ routes to `10.0.1.11:80`
 - `web2.example.com` ➔ routes to `10.0.1.12:80`
 - `web3.example.com` ➔ routes to `10.0.1.13:80`

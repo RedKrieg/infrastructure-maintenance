@@ -85,15 +85,21 @@ frontend fe_https
     default_backend be_default_404
 
 # --- ACME Standalone Challenge Backend ---
-# Forwards challenges directly to the Primary Proxy ({{ cert_primary_host }}).
-# On replicas, a local backup server activates automatically if the Primary is down.
+# Forwards Let's Encrypt HTTP-01 challenges according to cluster line of succession.
+# The primary proxy (rank 0) handles challenges normally; standby replicas act as backup
+# in succession order if higher-ranking proxies are offline during renewal.
 backend be_acme
     mode http
-{% if inventory_hostname == cert_primary_host %}
-    server acme_primary 127.0.0.1:{{ acme_standalone_port }}
+{% if groups['proxies'] is defined %}
+{% for p in groups['proxies'] %}
+{% set p_clean = p | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set is_backup = not loop.first %}
+{% if p == inventory_hostname %}
+    server acme_{{ p_clean }} 127.0.0.1:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
 {% else %}
-    server acme_primary {{ hostvars[cert_primary_host]['ansible_host'] | default(cert_primary_host) }}:{{ acme_standalone_port }} check fall 2 rise 2
-    server acme_local 127.0.0.1:{{ acme_standalone_port }} check backup
+    server acme_{{ p_clean }} {{ hostvars[p]['ansible_host'] | default(p) }}:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
+{% endif %}
+{% endfor %}
 {% endif %}
 
 # --- Dynamic Backend Webservers (1:1 per external FQDN) ---
