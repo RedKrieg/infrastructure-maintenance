@@ -11,7 +11,7 @@ root_url = {{ grafana_root_url | default('%(protocol)s://%(domain)s:%(http_port)
 [security]
 admin_user = {{ grafana_admin_user | default('admin') }}
 admin_password = {{ grafana_admin_password }}
-cookie_secure = false
+cookie_secure = {{ grafana_cookie_secure | default(false) | bool | lower }}
 disable_gravatar = true
 
 [users]

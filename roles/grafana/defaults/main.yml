@@ -14,6 +14,7 @@ grafana_root_url: "%(protocol)s://%(domain)s:%(http_port)s/"
 # Administrative Credentials (use Ansible Vault in production)
 grafana_admin_user: "admin"
 grafana_admin_password: "{{ vault_grafana_admin_password | default('SecureGrafanaPass123!') }}"
+grafana_cookie_secure: false
 
 # Upstream Prometheus Datasource URL
 grafana_prometheus_url: "http://127.0.0.1:{{ prometheus_port | default(9090) }}"
