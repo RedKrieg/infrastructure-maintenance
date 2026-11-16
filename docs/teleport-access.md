@@ -102,3 +102,85 @@ sudo systemctl restart haproxy    # Sudo works!
 tdrop
 # [✓] Elevated sudo privileges successfully dropped. Reverted to standard unprivileged role.
 ```
+
+---
+
+## 5. GitHub Single Sign-On (SSO) Integration (Community Edition)
+
+Teleport Community Edition provides native Single Sign-On via **GitHub OAuth 2.0**. This eliminates local password and TOTP management in favor of your existing GitHub identity.
+
+### Prerequisites & GitHub Setup
+
+Teleport's GitHub connector maps **GitHub Organization Teams** to Teleport RBAC roles.
+
+#### Step 1: Create a GitHub Organization & Team
+If you do not already have an organization on GitHub:
+1. In GitHub, click your profile icon -> **Your organizations** -> **New organization**.
+2. Choose the **Free** plan and select a name (e.g. `my-infra-org`).
+3. Inside the organization, navigate to **Teams** -> **New team**, name it `admins`, and add your GitHub user account to this team.
+
+#### Step 2: Register a GitHub OAuth App
+1. Inside your GitHub Organization, go to **Settings** -> **Developer settings** (bottom left) -> **OAuth Apps** -> **New OAuth App** (or `https://github.com/organizations/<org>/settings/applications/new`).
+2. Complete the form:
+   - **Application name**: `Teleport Access`
+   - **Homepage URL**: `https://teleport.example.com` (or your Teleport domain)
+   - **Authorization callback URL** / **Redirect URIs**:
+     ```text
+     https://teleport.example.com/v1/webapi/github/callback
+     ```
+     > [!IMPORTANT]
+     > Ensure there is **no trailing slash** after `callback`. Do **not** enable "Device Flow" (Teleport uses the standard Web Authorization Code flow).
+3. Click **Register application**, then click **Generate a new client secret**.
+
+#### Step 3: Configure Ansible Variables
+
+In your deployment variables (e.g., `vars/gcp_config.yml` or group vars):
+
+```yaml
+# Teleport GitHub SSO Authentication
+enable_teleport_github_sso: true
+teleport_github_client_id: "Ov23liG45uNc7a01XvdZ"
+teleport_github_client_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+teleport_github_organization: "my-infra-org"   # Exact GitHub organization slug
+teleport_github_team: "admins"                 # GitHub team slug mapping to lead-admin
+```
+
+*(Tip: In production, store `teleport_github_client_secret` in an Ansible Vault).*
+
+### Automated Deployment & Role Mapping
+
+When `enable_teleport_github_sso: true` is set, Ansible automates:
+1. Configuring `/etc/teleport/teleport.yaml` with `authentication.type: github`.
+2. Deploying `/etc/teleport/resources/github.yaml` (`kind: github`, version `v3`) with `teams_to_roles` mapping your GitHub organization team directly to the `lead-admin` role.
+3. Enabling `{{external.username}}` and `{{external.logins}}` in the `lead-admin` role so GitHub users inherit full cluster administrative rights and passwordless sudo.
+4. Applying the connector to the cluster via `tctl create -f /etc/teleport/resources/github.yaml`.
+
+### Logging In with GitHub
+
+#### 1. Interactive Web UI
+Visit `https://teleport.example.com` in your web browser. Click the **Login with GitHub** button to authorize via GitHub and enter the web terminal.
+
+#### 2. Terminal CLI (`tsh`)
+Authenticate directly from your workstation terminal:
+```bash
+tsh login --proxy=teleport.example.com:443 --auth=github
+```
+This automatically launches your local browser to complete GitHub authentication, issues short-lived SSH certificates, and saves your session:
+
+```bash
+tsh ls
+tsh ssh root@web-01
+```
+
+### Local Fallback & Emergency Access
+
+If GitHub is unreachable or you need emergency administrative access:
+1. Local access via the auth server CLI is always available to root:
+   ```bash
+   ssh -J admin@proxy-01 admin@<teleport-internal-ip>
+   sudo tctl status
+   ```
+2. You can generate a temporary local admin user at any time:
+   ```bash
+   sudo tctl users add emergency-admin --roles=lead-admin --logins=root,ubuntu
+   ```
