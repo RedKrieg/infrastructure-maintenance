@@ -20,6 +20,7 @@ group_vars/
 ### Managed Vault Secrets:
 * `vault_haproxy_stats_password`: Password protecting HAProxy `/stats` and `/metrics`.
 * `vault_teleport_auth_token`: Static node join token shared between `teleport_server` and `teleport_node`.
+* `vault_teleport_github_client_secret`: Client secret for GitHub OAuth Single Sign-On in Teleport.
 * `vault_prometheus_password`: Basic auth password used by Prometheus to scrape proxy metrics.
 * `vault_admin_default_password`: Initial administrative account password fallback.
 
@@ -34,10 +35,22 @@ To avoid typing the vault password on every playbook execution, create a `.vault
 # Generate a random 32-character passphrase:
 openssl rand -base64 24 > ~/.vault_pass
 chmod 600 ~/.vault_pass
+
+# Or write your existing vault password directly:
+echo "YOUR_VAULT_PASSWORD" > ~/.vault_pass
+chmod 600 ~/.vault_pass
 ```
 
 > [!NOTE]
-> `.vault_pass`, `.vault_pass.*`, and `*.vault_pass` are already included in `.gitignore` to prevent accidental credential commits.
+> `.vault_pass`, `.vault_pass.*`, and `*.vault_pass` are already included in `.gitignore` across the project to prevent accidental credential commits.
+
+### Step 2.2: Configure `ansible.cfg` for Automatic Decryption
+Add the password file path to your `ansible.cfg`:
+```ini
+[defaults]
+vault_password_file = ~/.vault_pass
+```
+With this configured, Ansible commands (`ansible-playbook`, `ansible-vault view`) automatically decrypt vault variables in the background without requiring manual CLI flags.
 
 ### Step 2.2: Encrypting the Vault File
 ```bash

@@ -88,16 +88,23 @@ HAProxy sends `GET / HTTP/1.1\r\nHost: <external_fqdn>` and expects a valid `2xx
 
 ## 5. HAProxy Stats & Prometheus Access Control (IP, CIDR & Dynamic FQDNs)
 
-Access to the HAProxy statistics monitoring endpoint (port `8404`, URI `/stats`) and Prometheus metrics endpoint (`/metrics`) is restricted to authorized client sources supporting **plain IPv4/IPv6 addresses, CIDR blocks, and dynamic FQDN hostnames**:
+Access to the HAProxy statistics monitoring endpoint (port `8404`, URI `/stats`) and Prometheus metrics endpoint (`/metrics`) is restricted to authorized client sources supporting **plain IPv4/IPv6 addresses, CIDR blocks, and dynamic FQDN hostnames**.
+
+> [!NOTE]
+> **Single Source of Truth (SSOT)**: By default, `haproxy_stats_allowed_ips` dynamically inherits from `admin_trusted_cidrs` (e.g. in `vars/gcp_config.yml`), ensuring a single unified list secures the GCP firewall, HAProxy stats, Teleport, Grafana, and Prometheus.
 
 ```yaml
-# In group_vars/proxies.yml or playbook vars:
-haproxy_stats_allowed_ips:
-  - "127.0.0.1"
+# In vars/gcp_config.yml (as SSOT):
+admin_trusted_cidrs:
+  - "149.154.37.115/32"       # Admin workstation public IP
   - "10.0.0.0/8"
-  - "192.168.1.0/24"
-  - "admin.example.com"       # Fully qualified domain name
-  - "vpn.company.net"         # Dynamic DNS or corporate VPN gateway
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1"
+
+# Or override specifically in group_vars/proxies.yml:
+haproxy_stats_allowed_ips: "{{ admin_trusted_cidrs }}"
+```
 
 # Optional settings:
 haproxy_stats_deny_action: "403"          # '403' (HTTP 403 Forbidden) or 'silent-drop' (TCP drop)

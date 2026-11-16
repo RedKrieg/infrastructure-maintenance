@@ -90,3 +90,46 @@ What happens when a higher-priority proxy (such as `proxy-01`) comes back online
 2. **Seamless Rank Resumption**:
    - Because `proxy-01` is now online and has the renewed cert, standby watchdogs on `proxy-02` and `proxy-03` detect `proxy-01` as reachable and stand down.
    - `proxy-01` automatically resumes its rank as the primary certificate authority for future scheduled renewals.
+
+---
+
+## 5. Certificate Strategies: Wildcard (DNS-01) vs. Individual Endpoints (HTTP-01)
+
+The cluster supports dual certificate issuance strategies depending on whether DNS API access is available to automate DNS TXT records.
+
+### Strategy Comparison
+
+| Feature | Wildcard Mode (`enable_wildcard_cert: true`) | Individual Mode (`enable_wildcard_cert: false`) |
+| :--- | :--- | :--- |
+| **Challenge Type** | **DNS-01** (via Cloud DNS / Route 53 / Cloudflare) | **HTTP-01** (via standalone port 8888) |
+| **Certificate Scope** | Single cert covering `*.domain.com` and `domain.com` | Separate individual cert per endpoint (`app1`, `app2`) |
+| **Endpoint Scaling** | Instant; new subdomains use existing wildcard cert | Requires issuing a new certificate per new endpoint |
+| **Prerequisites** | Cloud DNS API access (`acme_dns_provider`) | Port 80 ingress routed to HAProxy |
+| **Rate Limit Impact** | Minimal (1 certificate renewal for entire domain) | Uses 1 certificate slot per subdomain |
+| **Cluster Sync** | Synced across all proxies via `sync-haproxy-certs.sh` | Synced across all proxies via `sync-haproxy-certs.sh` |
+
+### Configuring Wildcard Certificates (DNS-01)
+
+When Cloud DNS API access is available (e.g. GCP Cloud DNS, AWS Route 53), set:
+
+```yaml
+# In vars/gcp_config.yml or group_vars/proxies.yml:
+enable_wildcard_cert: true
+acme_dns_provider: "dns_gcloud"
+acme_dns_env:
+  CLOUDSDK_CORE_PROJECT: "your-gcp-project-id"
+  GCP_PROJECT: "your-gcp-project-id"
+```
+
+The primary proxy uses `acme.sh` with `--dns dns_gcloud` to dynamically create the required `_acme-challenge` TXT records, issues `wildcard.<domain>.pem`, and mirrors it across the proxy cluster.
+
+### Automatic Fallback to Individual Certificates (HTTP-01)
+
+When DNS API credentials are not available, or when running on bare-metal or private environments without DNS API control:
+
+```yaml
+enable_wildcard_cert: false
+acme_dns_provider: ""
+```
+
+The automation automatically falls back to requesting individual certificates per endpoint using the HTTP-01 reverse challenge proxying described in Section 1. Both strategies utilize the exact same rank-based succession and self-healing cluster sync.
