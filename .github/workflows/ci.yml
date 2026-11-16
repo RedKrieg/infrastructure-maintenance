@@ -24,7 +24,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core ansible-lint shellcheck-py boto3 botocore google-auth requests openstacksdk azure-mgmt-compute azure-mgmt-network azure-identity
+          pip install -r requirements.txt
 
       - name: Install Ansible Collections
         run: |
@@ -56,6 +56,7 @@ jobs:
           ansible-playbook -i examples/inventories/inventory.azure.ini playbook.yml --syntax-check
           ansible-playbook -i examples/inventories/inventory.oci.ini playbook.yml --syntax-check
           ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml --syntax-check
+          ansible-playbook -i examples/inventories/inventory.freeipa.ini playbook.yml --syntax-check
 
       - name: Run Operational Playbooks Syntax Checks
         run: |
@@ -65,6 +66,12 @@ jobs:
           ansible-playbook -i inventory.ini verify_cluster.yml --syntax-check
           ansible-playbook -i inventory.ini rolling_maintenance.yml --syntax-check
           ansible-playbook -i inventory.ini chaos_drill.yml --syntax-check
+
+      - name: Run FreeIPA Playbooks Syntax Checks
+        run: |
+          echo "Testing FreeIPA standup and client enrollment playbooks..."
+          ansible-playbook -i examples/freeipa/inventory.standup.ini examples/freeipa/standup_freeipa_cluster.yml --syntax-check
+          ansible-playbook -i examples/freeipa/inventory.existing.ini examples/freeipa/enroll_existing_freeipa.yml --syntax-check
 
       - name: Run Provisioning Playbooks Syntax Checks
         run: |

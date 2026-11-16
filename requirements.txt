@@ -1,0 +1,15 @@
+# Core Ansible & Validation
+ansible-core>=2.15.0
+ansible-lint>=6.0.0
+shellcheck-py
+pyyaml
+requests
+
+# Cloud Provider SDKs (for modules and dynamic inventories)
+boto3
+botocore
+google-auth
+openstacksdk
+azure-mgmt-compute
+azure-mgmt-network
+azure-identity
