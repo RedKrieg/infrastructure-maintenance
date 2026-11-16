@@ -108,17 +108,40 @@ The cluster supports dual certificate issuance strategies depending on whether D
 | **Rate Limit Impact** | Minimal (1 certificate renewal for entire domain) | Uses 1 certificate slot per subdomain |
 | **Cluster Sync** | Synced across all proxies via `sync-haproxy-certs.sh` | Synced across all proxies via `sync-haproxy-certs.sh` |
 
-### Configuring Wildcard Certificates (DNS-01)
+### Configuring Wildcard Certificates (DNS-01) Across Cloud Providers & Bare Metal
 
-When Cloud DNS API access is available (e.g. GCP Cloud DNS, AWS Route 53), set:
+When DNS API access is available, wildcard certificates (`*.yourdomain.com` and `yourdomain.com`) are automatically issued and renewed via DNS-01 TXT record automation:
 
 ```yaml
-# In vars/gcp_config.yml or group_vars/proxies.yml:
+# --- Google Cloud DNS (GCP) ---
 enable_wildcard_cert: true
 acme_dns_provider: "dns_gcloud"
 acme_dns_env:
   CLOUDSDK_CORE_PROJECT: "your-gcp-project-id"
   GCP_PROJECT: "your-gcp-project-id"
+
+# --- AWS Route 53 (AWS) ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_aws"
+acme_dns_env:
+  AWS_ACCESS_KEY_ID: "AKIA..."
+  AWS_SECRET_ACCESS_KEY: "..."
+
+# --- Azure DNS (Microsoft Azure) ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_azure"
+acme_dns_env:
+  AZURE_CLIENT_ID: "..."
+  AZURE_CLIENT_SECRET: "..."
+  AZURE_TENANT_ID: "..."
+  AZURE_SUBSCRIPTION_ID: "..."
+
+# --- Cloudflare (Works with Bare Metal, On-Premises, or any Cloud) ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_cf"
+acme_dns_env:
+  CF_Token: "your-cloudflare-api-token"
+  CF_Account_ID: "your-cloudflare-account-id"
 ```
 
 The primary proxy uses `acme.sh` with `--dns dns_gcloud` to dynamically create the required `_acme-challenge` TXT records, issues `wildcard.<domain>.pem`, and mirrors it across the proxy cluster.

@@ -97,3 +97,18 @@ ip addr show dev eth0 | grep 10.0.1.5
 # View real-time failover syslog events
 journalctl -u keepalived -f
 ```
+
+---
+
+## 7. Bare Metal SSL Certificate Orchestration & VRRP Ingress
+
+On bare metal clusters without cloud-managed load balancers, the Keepalived Virtual IP (VIP) seamlessly orchestrates Let's Encrypt SSL issuance and renewals:
+
+1. **Inbound HTTP-01 Validation**:
+   - Inbound ACME verification requests (`/.well-known/acme-challenge/*`) resolve to the Keepalived VIP (`keepalived_vip:80`).
+   - The active MASTER proxy receives the connection and forwards the request to `backend be_acme` (pointing to the primary certificate node on port `8888`).
+2. **Failover Resilience**:
+   - If `proxy-01` fails, Keepalived transfers ownership of the VIP to `proxy-02` with zero packet loss.
+   - If an SSL certificate expires while `proxy-01` is offline, `proxy-02`'s standby watchdog takes over renewal authority after its 1-day staggered grace period, renewals succeed through the VIP, and `sync-haproxy-certs.sh` distributes the fresh `.pem` bundle across the local subnet.
+3. **Optional Wildcard Certificates via Cloudflare**:
+   - For bare-metal environments with public domains managed on DNS providers like Cloudflare, you can enable DNS-01 wildcard certificates (`*.domain.com`) without opening port 8888 by configuring `acme_dns_provider: "dns_cf"` and `CF_Token`.

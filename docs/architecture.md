@@ -27,7 +27,7 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
               └──────────┬─────────┘ └──────────┬─────────┘ └──────────┬─────────┘
                          │                      │                      │
                          └──────────────────────┼──────────────────────┘
-                                                │ (Plain HTTP / Port 80)
+                                                │ (Port 80 Plaintext or Port 443 Zero-Trust Internal TLS)
                  ┌──────────────────────────────┼──────────────────────────────┐
                  ▼                              ▼                              ▼
         ┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
