@@ -81,4 +81,4 @@ Prometheus actively evaluates alerting rules defined in `/etc/prometheus/alert.r
 
 - **Node Exporter**: Every cluster node runs `node_exporter` on port `9100`, providing hardware, memory, disk, and network metrics.
 - **Grafana Server**: Running on port `3000` with pre-provisioned dashboards for HAProxy & Coraza WAF Overview and Fleet Hardware Health.
-- For complete setup and dashboard details, refer to [grafana-dashboards.md](file:///home/redkrieg/Projects/ansible-stuff/docs/grafana-dashboards.md).
+- For complete setup and dashboard details, refer to [grafana-dashboards.md](grafana-dashboards.md).

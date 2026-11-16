@@ -113,4 +113,4 @@ On bare metal clusters without cloud-managed load balancers, the Keepalived Virt
 3. **Optional Wildcard Certificates via DNS APIs (Cloudflare, DNSimple, RFC 2136)**:
    - For bare-metal or on-premises environments with public domains managed on DNS providers like **Cloudflare** (`dns_cf`), **DNSimple** (`dns_dnsimple`), or **Porkbun** (`dns_porkbun`), you can enable DNS-01 wildcard certificates (`*.domain.com`) without opening port 8888.
    - For private air-gapped or internal enterprise networks, configure RFC 2136 (`dns_nsupdate`) pointing to your internal **BIND9** or **PowerDNS** server with TSIG keys.
-   - See [ssl-certificates.md](file:///home/redkrieg/Projects/ansible-stuff/infrastructure-maintenance/docs/ssl-certificates.md) for full configuration snippets.
+   - See [ssl-certificates.md](ssl-certificates.md) for full configuration snippets.
