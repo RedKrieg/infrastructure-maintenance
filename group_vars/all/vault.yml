@@ -25,3 +25,6 @@ vault_grafana_admin_password: "VaultProtectedGrafanaPassword2026!"
 
 # Initial Admin User Default Password (if not individually overridden)
 vault_admin_default_password: "VaultProtectedInitialAdminPassword2026!"
+
+# Teleport GitHub SSO OAuth Client Secret
+vault_teleport_github_client_secret: "de4727a71a1497dabb476f9c59cd5cc490f3a475"

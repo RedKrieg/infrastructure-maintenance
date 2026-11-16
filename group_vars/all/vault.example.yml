@@ -18,3 +18,6 @@ vault_prometheus_password: "ReplaceWithYourPrometheusPassword"
 
 # Initial Admin User Default Password (if not individually overridden)
 vault_admin_default_password: "ReplaceWithYourAdminPassword"
+
+# Teleport GitHub SSO OAuth Client Secret
+vault_teleport_github_client_secret: "ReplaceWithYourGitHubOAuthClientSecret"
