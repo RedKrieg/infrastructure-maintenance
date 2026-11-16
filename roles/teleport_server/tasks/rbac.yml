@@ -43,3 +43,25 @@
     cmd: "tctl create -f /etc/teleport/resources/users.yaml"
   when: teleport_users_file.changed
   tags: [teleport, teleport_server, rbac]
+
+- name: Deploy Teleport GitHub SSO auth connector
+  ansible.builtin.template:
+    src: github.yaml.j2
+    dest: /etc/teleport/resources/github.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - enable_teleport_github_sso | default(false) | bool
+    - teleport_github_client_id is defined and teleport_github_client_id | length > 0
+  register: teleport_github_file
+  tags: [teleport, teleport_server, rbac, sso]
+
+- name: Apply Teleport GitHub SSO auth connector into cluster
+  ansible.builtin.command:
+    cmd: "tctl create -f /etc/teleport/resources/github.yaml"
+  when:
+    - enable_teleport_github_sso | default(false) | bool
+    - teleport_github_client_id is defined and teleport_github_client_id | length > 0
+    - teleport_github_file.changed
+  tags: [teleport, teleport_server, rbac, sso]

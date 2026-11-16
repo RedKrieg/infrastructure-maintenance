@@ -26,6 +26,8 @@ spec:
       - ubuntu
       - root
       - '{% raw %}{{internal.logins}}{% endraw %}'
+      - '{% raw %}{{external.logins}}{% endraw %}'
+      - '{% raw %}{{external.username}}{% endraw %}'
     node_labels:
       '*': '*'
     host_sudoers:

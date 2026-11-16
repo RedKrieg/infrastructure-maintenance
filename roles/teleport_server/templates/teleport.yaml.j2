@@ -15,6 +15,11 @@ auth_service:
   enabled: true
   cluster_name: "{{ teleport_cluster_name }}"
   listen_addr: 0.0.0.0:{{ teleport_auth_service_port }}
+{% if enable_teleport_github_sso | default(false) | bool and teleport_github_client_id is defined and teleport_github_client_id | length > 0 %}
+  authentication:
+    type: github
+    second_factor: {{ teleport_second_factor | default('on') }}
+{% endif %}
   tokens:
     - "node:{{ teleport_auth_token }}"
 

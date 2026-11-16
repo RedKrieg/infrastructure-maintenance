@@ -36,3 +36,18 @@ teleport_admin_email: "{{ (admin_users[0].email) if (admin_users is defined and 
 
 # Example Junior Admin user (requires JIT request for sudo elevation)
 teleport_example_user: "junior"
+
+# GitHub Single Sign-On (SSO) Authentication (Teleport Community Edition)
+enable_teleport_github_sso: false
+teleport_second_factor: "on"
+teleport_github_client_id: "{{ vault_teleport_github_client_id | default('') }}"
+teleport_github_client_secret: "{{ vault_teleport_github_client_secret | default('') }}"
+teleport_github_display: "GitHub"
+teleport_github_organization: "{{ github_organization | default('') }}"
+teleport_github_team: "{{ github_team | default('admins') }}"
+teleport_github_roles:
+  - lead-admin
+teleport_github_teams_to_roles:
+  - organization: "{{ teleport_github_organization }}"
+    team: "{{ teleport_github_team }}"
+    roles: "{{ teleport_github_roles }}"
