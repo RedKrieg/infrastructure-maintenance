@@ -9,7 +9,7 @@ spec:
   display: "{{ teleport_github_display | default('GitHub') }}"
   client_id: "{{ teleport_github_client_id }}"
   client_secret: "{{ teleport_github_client_secret }}"
-  redirect_url: "{{ teleport_github_redirect_url | default('https://' ~ (teleport_public_addr | regex_replace(':443$', '')) ~ '/v1/webapi/github/callback') }}"
+  redirect_url: "{{ teleport_github_redirect_url | default('https://' ~ (teleport_fqdn | default('teleport.' ~ (domain_name | default('cluster.local')))) ~ '/v1/webapi/github/callback') }}"
   teams_to_roles:
 {% for mapping in teleport_github_teams_to_roles %}
     - organization: "{{ mapping.organization }}"
