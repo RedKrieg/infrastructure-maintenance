@@ -28,12 +28,12 @@ jobs:
 
       - name: Install Ansible Collections
         run: |
-          ansible-galaxy collection install amazon.aws google.cloud azure.azcollection openstack.cloud community.general
+          ansible-galaxy collection install amazon.aws google.cloud azure.azcollection openstack.cloud community.general community.crypto ansible.posix
 
       - name: Run Bash Script Syntax Check (bash -n)
         run: |
           echo "Validating syntax of shell scripts..."
-          find . -name "*.sh" -exec bash -n {} +
+          find . -name "*.sh" -not -path "*/.git/*" -exec bash -n {} +
           echo "All shell scripts passed syntax checks."
 
       - name: Run ShellCheck
