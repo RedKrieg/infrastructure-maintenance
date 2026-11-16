@@ -142,9 +142,49 @@ acme_dns_provider: "dns_cf"
 acme_dns_env:
   CF_Token: "your-cloudflare-api-token"
   CF_Account_ID: "your-cloudflare-account-id"
+
+# --- DNSimple (SaaS / Bare Metal / Cloud) ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_dnsimple"
+acme_dns_env:
+  DNSimple_OAUTH_TOKEN: "your-dnsimple-api-token"
+
+# --- DigitalOcean ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_dgon"
+acme_dns_env:
+  DO_API_KEY: "your-digitalocean-api-token"
+
+# --- Porkbun ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_porkbun"
+acme_dns_env:
+  PORKBUN_API_KEY: "pk1_..."
+  PORKBUN_SECRET_API_KEY: "sk1_..."
+
+# --- Hetzner ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_hetzner"
+acme_dns_env:
+  HETZNER_Token: "your-hetzner-api-token"
+
+# --- OVH ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_ovh"
+acme_dns_env:
+  OVH_AK: "your-ovh-application-key"
+  OVH_AS: "your-ovh-application-secret"
+  OVH_CK: "your-ovh-consumer-key"
+
+# --- RFC 2136 Dynamic DNS (Self-Hosted BIND9 / PowerDNS / On-Premises) ---
+enable_wildcard_cert: true
+acme_dns_provider: "dns_nsupdate"
+acme_dns_env:
+  NSUPDATE_SERVER: "ns1.internal.example.com"
+  NSUPDATE_KEY: "/etc/bind/keys/acme-tsig.key"
 ```
 
-The primary proxy uses `acme.sh` with `--dns dns_gcloud` to dynamically create the required `_acme-challenge` TXT records, issues `wildcard.<domain>.pem`, and mirrors it across the proxy cluster.
+The primary proxy uses `acme.sh` with the designated provider to dynamically create the required `_acme-challenge` TXT records, issues `wildcard.<domain>.pem`, and mirrors it across the proxy cluster.
 
 ### Automatic Fallback to Individual Certificates (HTTP-01)
 

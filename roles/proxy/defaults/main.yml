@@ -45,6 +45,8 @@ acme_use_staging: false
 # When enable_wildcard_cert is true and acme_dns_provider is populated,
 # a single wildcard certificate (*.{{ domain_name }} and {{ domain_name }}) is requested via DNS-01.
 # When false or acme_dns_provider is empty, falls back to individual HTTP-01 certs per endpoint.
+# Supported acme_dns_provider plugins include: dns_gcloud, dns_aws, dns_azure, dns_cf (Cloudflare),
+# dns_dnsimple (DNSimple), dns_dgon (DigitalOcean), dns_porkbun, dns_hetzner, dns_ovh, dns_nsupdate (RFC 2136 / BIND)
 enable_wildcard_cert: false
 acme_dns_provider: ""
 acme_dns_env: {}

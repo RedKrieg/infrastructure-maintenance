@@ -110,5 +110,7 @@ On bare metal clusters without cloud-managed load balancers, the Keepalived Virt
 2. **Failover Resilience**:
    - If `proxy-01` fails, Keepalived transfers ownership of the VIP to `proxy-02` with zero packet loss.
    - If an SSL certificate expires while `proxy-01` is offline, `proxy-02`'s standby watchdog takes over renewal authority after its 1-day staggered grace period, renewals succeed through the VIP, and `sync-haproxy-certs.sh` distributes the fresh `.pem` bundle across the local subnet.
-3. **Optional Wildcard Certificates via Cloudflare**:
-   - For bare-metal environments with public domains managed on DNS providers like Cloudflare, you can enable DNS-01 wildcard certificates (`*.domain.com`) without opening port 8888 by configuring `acme_dns_provider: "dns_cf"` and `CF_Token`.
+3. **Optional Wildcard Certificates via DNS APIs (Cloudflare, DNSimple, RFC 2136)**:
+   - For bare-metal or on-premises environments with public domains managed on DNS providers like **Cloudflare** (`dns_cf`), **DNSimple** (`dns_dnsimple`), or **Porkbun** (`dns_porkbun`), you can enable DNS-01 wildcard certificates (`*.domain.com`) without opening port 8888.
+   - For private air-gapped or internal enterprise networks, configure RFC 2136 (`dns_nsupdate`) pointing to your internal **BIND9** or **PowerDNS** server with TSIG keys.
+   - See [ssl-certificates.md](file:///home/redkrieg/Projects/ansible-stuff/infrastructure-maintenance/docs/ssl-certificates.md) for full configuration snippets.
