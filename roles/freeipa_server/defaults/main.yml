@@ -1,0 +1,52 @@
+---
+# ==============================================================================
+# Default Variables for freeipa_server Role
+# ==============================================================================
+
+# Kerberos Realm and Domain Configuration
+freeipa_domain: "{{ domain_name | default('example.com') }}"
+freeipa_realm: "{{ (domain_name | default('example.com')) | upper }}"
+freeipa_server_fqdn: "ipa.{{ freeipa_domain }}"
+
+# FreeIPA Server Passwords (managed by Ansible Vault)
+freeipa_admin_password: "{{ vault_freeipa_admin_password | default('FreeIPAAdminPassword2026!') }}"
+freeipa_ds_password: "{{ vault_freeipa_ds_password | default('FreeIPADirectoryManagerPassword2026!') }}"
+
+# DNS Configuration
+# When set to true, installs freeipa-server-dns and configures integrated BIND9 DNS
+freeipa_setup_dns: false
+freeipa_forwarders:
+  - "8.8.8.8"
+  - "8.8.4.4"
+freeipa_no_host_dns: true
+
+# Time Synchronization
+# Set to false to preserve systemd-timesyncd or existing cluster NTP
+freeipa_setup_ntp: false
+
+# Firewall & Access Control
+# Subnets permitted to access Kerberos (88, 464) and LDAP (389, 636)
+freeipa_trusted_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+  - "127.0.0.1"
+
+# Administrator CIDR subnets allowed to access the FreeIPA Web UI (HTTPS port 443 / HTTP 80)
+freeipa_admin_trusted_cidrs: "{{ admin_trusted_cidrs | default(['0.0.0.0/0']) }}"
+
+# Core FreeIPA Server Firewall Ports
+freeipa_server_ports:
+  - { port: "80", proto: "tcp", comment: "FreeIPA HTTP Web UI redirect" }
+  - { port: "443", proto: "tcp", comment: "FreeIPA HTTPS Web UI" }
+  - { port: "389", proto: "tcp", comment: "FreeIPA LDAP" }
+  - { port: "636", proto: "tcp", comment: "FreeIPA LDAPS" }
+  - { port: "88", proto: "tcp", comment: "FreeIPA Kerberos KDC TCP" }
+  - { port: "88", proto: "udp", comment: "FreeIPA Kerberos KDC UDP" }
+  - { port: "464", proto: "tcp", comment: "FreeIPA Kerberos kpasswd TCP" }
+  - { port: "464", proto: "udp", comment: "FreeIPA Kerberos kpasswd UDP" }
+
+# DNS Ports (only opened when freeipa_setup_dns is true)
+freeipa_dns_ports:
+  - { port: "53", proto: "tcp", comment: "FreeIPA BIND9 DNS TCP" }
+  - { port: "53", proto: "udp", comment: "FreeIPA BIND9 DNS UDP" }

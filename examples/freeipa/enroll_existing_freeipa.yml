@@ -1,0 +1,49 @@
+---
+# ==============================================================================
+# Playbook: Enroll Cluster Nodes into an Existing Enterprise FreeIPA Domain
+# ==============================================================================
+# Usage:
+#   ansible-playbook -i examples/freeipa/inventory.existing.ini \
+#     examples/freeipa/enroll_existing_freeipa.yml \
+#     --ask-vault-pass
+# ==============================================================================
+
+- name: Enroll Cluster Nodes into External FreeIPA Domain
+  hosts: headless_nodes
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: freeipa_client
+      tags: [freeipa, freeipa_client, identity, sssd, auth]
+
+  post_tasks:
+    - name: Verify SSSD service status
+      ansible.builtin.systemd:
+        name: sssd
+        state: started
+      check_mode: true
+      register: sssd_status
+      failed_when: sssd_status.changed
+
+    - name: Verify FreeIPA enrollment configuration exists
+      ansible.builtin.stat:
+        path: /etc/ipa/default.conf
+      register: ipa_conf
+      failed_when: not ipa_conf.stat.exists
+
+    - name: Display enrollment verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "      FREEIPA CLIENT ENROLLMENT SUCCESSFUL               "
+          - "=========================================================="
+          - "Node:            {{ inventory_hostname }}"
+          - "FreeIPA Server:  {{ freeipa_server_fqdn }}"
+          - "Kerberos Realm:  {{ freeipa_realm }}"
+          - "SSSD Status:     Active and Running"
+          - "SSH Keys:        Retrieved dynamically from FreeIPA LDAP"
+          - "Sudo Rules:      Centrally enforced via SSSD"
+          - "=========================================================="

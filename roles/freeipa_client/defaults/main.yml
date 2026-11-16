@@ -1,0 +1,43 @@
+---
+# ==============================================================================
+# Default Variables for freeipa_client Role
+# ==============================================================================
+
+# Enable or disable FreeIPA client enrollment
+enable_freeipa_client: true
+
+# Packages required for FreeIPA client and SSSD integration
+freeipa_client_packages:
+  - freeipa-client
+  - sssd
+  - sssd-tools
+  - oddjob-mkhomedir
+  - libpam-sss
+  - libnss-sss
+
+# FreeIPA Server Discovery
+# If freeipa_servers group is present in inventory, resolves its internal or ansible host IP
+freeipa_server_host: "{{ (hostvars[groups['freeipa_servers'][0]]['internal_ip'] | default(hostvars[groups['freeipa_servers'][0]]['ansible_host'])) if (groups['freeipa_servers'] is defined and groups['freeipa_servers'] | length > 0) else '' }}"
+
+# FreeIPA Server FQDN, Realm and Domain
+freeipa_server_fqdn: "ipa.{{ domain_name | default('example.com') }}"
+freeipa_domain: "{{ domain_name | default('example.com') }}"
+freeipa_realm: "{{ (domain_name | default('example.com')) | upper }}"
+
+# Authentication Options for Enrollment
+# Option 1: One-Time Password (OTP) generated via `ipa host-add <host> --password=<otp>`
+freeipa_client_otp: "{{ vault_freeipa_client_otp | default('') }}"
+
+# Option 2: Administrative credentials for automatic host registration
+freeipa_admin_user: "admin"
+freeipa_admin_password: "{{ vault_freeipa_admin_password | default('') }}"
+
+# Client Enrollment Flags
+freeipa_force_join: false
+freeipa_enable_mkhomedir: true
+freeipa_enable_dns_updates: false
+freeipa_client_no_ntp: true
+
+# SSSD, SSH and Sudo Integrations
+freeipa_enable_ssh_keys: true
+freeipa_enable_sudo: true

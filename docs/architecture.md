@@ -66,3 +66,11 @@ In this architecture, HAProxy serves as an intelligent reverse proxy that routes
 - Each backend node specifies an `external_fqdn` in the inventory.
 - HAProxy dynamically compiles ACL rules matching each `Host` header to its exact backend server.
 - Non-matching or unmapped hostnames/IPs are caught by a strict generic 404 fallback on the backend, preventing information disclosure or unintended virtual host leakage.
+
+---
+
+## Centralized Identity & Access Management (Teleport vs. FreeIPA)
+
+The cluster provides modular choices for identity and access management configured via `identity_provider`:
+- **Teleport** (`identity_provider: "teleport"`): Zero-Trust modern SSH, short-lived certificates, and browser-based access console. See [teleport-access.md](teleport-access.md).
+- **FreeIPA** (`identity_provider: "freeipa"`): Enterprise Linux identity management featuring Kerberos KDC, LDAP 389 Directory Server, SSSD integration, centralized sudo rules, and centralized SSH key lookup. See [freeipa-identity.md](freeipa-identity.md).

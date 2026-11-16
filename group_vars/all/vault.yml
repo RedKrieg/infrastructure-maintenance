@@ -28,3 +28,8 @@ vault_admin_default_password: "VaultProtectedInitialAdminPassword2026!"
 
 # Teleport GitHub SSO OAuth Client Secret
 vault_teleport_github_client_secret: "de4727a71a1497dabb476f9c59cd5cc490f3a475"
+
+# FreeIPA Identity Management Passwords & Enrollment OTP
+vault_freeipa_admin_password: "VaultProtectedFreeIPAAdminPassword2026!"
+vault_freeipa_ds_password: "VaultProtectedFreeIPADSPassword2026!"
+vault_freeipa_client_otp: "VaultProtectedFreeIPAClientOTP2026"

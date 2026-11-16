@@ -26,6 +26,7 @@ INVENTORIES=(
   "examples/inventories/inventory.azure.ini"
   "examples/inventories/inventory.oci.ini"
   "examples/inventories/inventory.openstack.ini"
+  "examples/inventories/inventory.freeipa.ini"
 )
 
 for inv in "${INVENTORIES[@]}"; do
@@ -72,6 +73,23 @@ PROV_PLAYBOOKS=(
 for pb in "${PROV_PLAYBOOKS[@]}"; do
   echo "  -> Checking $pb..."
   ansible-playbook "$pb" --syntax-check > /dev/null
+  echo "     [✓] PASS"
+done
+
+echo ""
+echo "================================================================="
+echo " 5. FreeIPA Example Playbook Syntax Checks"
+echo "================================================================="
+FREEIPA_PLAYBOOKS=(
+  "examples/freeipa/standup_freeipa_cluster.yml:examples/freeipa/inventory.standup.ini"
+  "examples/freeipa/enroll_existing_freeipa.yml:examples/freeipa/inventory.existing.ini"
+)
+
+for pair in "${FREEIPA_PLAYBOOKS[@]}"; do
+  pb="${pair%%:*}"
+  inv="${pair##*:}"
+  echo "  -> Checking $pb with $inv..."
+  ansible-playbook -i "$inv" "$pb" --syntax-check > /dev/null
   echo "     [✓] PASS"
 done
 

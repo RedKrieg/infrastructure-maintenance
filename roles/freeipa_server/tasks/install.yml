@@ -1,0 +1,37 @@
+---
+# ==============================================================================
+# Package Installation & Host Preparation for FreeIPA Server
+# ==============================================================================
+
+- name: Determine target IP for FreeIPA server FQDN mapping
+  ansible.builtin.set_fact:
+    freeipa_host_ip: "{{ internal_ip | default(ansible_default_ipv4.address | default(ansible_host)) }}"
+
+- name: Ensure FreeIPA server FQDN is mapped in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ freeipa_host_ip }} {{ freeipa_server_fqdn }} {{ freeipa_server_fqdn.split('.')[0] }}"
+    regexp: "^.*\\s+{{ freeipa_server_fqdn | regex_escape }}.*$"
+    state: present
+
+- name: Set system hostname to FreeIPA FQDN
+  ansible.builtin.hostname:
+    name: "{{ freeipa_server_fqdn }}"
+
+- name: Install FreeIPA Server packages
+  ansible.builtin.apt:
+    name:
+      - freeipa-server
+      - dbus
+    state: present
+    update_cache: true
+  register: ipa_pkg_install
+  retries: 3
+  delay: 5
+  until: ipa_pkg_install is succeeded
+
+- name: Install FreeIPA BIND9 DNS package if DNS management is enabled
+  ansible.builtin.apt:
+    name: freeipa-server-dns
+    state: present
+  when: freeipa_setup_dns | bool

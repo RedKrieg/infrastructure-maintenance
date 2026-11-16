@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# Main Task Entry Point for freeipa_server Role
+# ==============================================================================
+
+- name: Configure UFW firewall rules for FreeIPA services
+  ansible.builtin.include_tasks: firewall.yml
+  tags: [freeipa, freeipa_server, firewall]
+
+- name: Install FreeIPA Server packages and prepare host
+  ansible.builtin.include_tasks: install.yml
+  tags: [freeipa, freeipa_server, install, packages]
+
+- name: Configure and initialize FreeIPA Server
+  ansible.builtin.include_tasks: configure.yml
+  tags: [freeipa, freeipa_server, configure, auth]

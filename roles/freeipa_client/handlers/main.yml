@@ -1,0 +1,14 @@
+---
+# ==============================================================================
+# Handlers for freeipa_client Role
+# ==============================================================================
+
+- name: Restart sssd
+  ansible.builtin.systemd:
+    name: sssd
+    state: restarted
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: restarted

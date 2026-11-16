@@ -1,0 +1,35 @@
+---
+# ==============================================================================
+# Example Configuration: Enrolling Cluster Nodes into an Existing FreeIPA Instance
+# ==============================================================================
+# Usage:
+#   ansible-playbook -i examples/freeipa/inventory.existing.ini \
+#     examples/freeipa/enroll_existing_freeipa.yml \
+#     -e "@examples/freeipa/vars_existing_example.yml" \
+#     --ask-vault-pass
+# ==============================================================================
+
+# Identity Provider Switch
+identity_provider: "freeipa"
+freeipa_deploy_server: false
+
+# External FreeIPA Server & Realm Details
+freeipa_server_host: "192.168.1.100"      # Optional IP mapping if DNS is not yet configured
+freeipa_server_fqdn: "idm.corp.example.com"
+freeipa_domain: "corp.example.com"
+freeipa_realm: "CORP.EXAMPLE.COM"
+
+# Enrollment Authentication Option A: One-Time Password (OTP) - Recommended for Zero-Trust
+# Pre-create the host entry in FreeIPA:
+#   ipa host-add node-01.corp.example.com --password="TempNodePassword123!"
+freeipa_client_otp: "TempNodePassword123!"
+
+# Enrollment Authentication Option B: Admin Principal (if OTP is not used)
+# freeipa_admin_user: "admin"
+# freeipa_admin_password: "YourDirectoryAdminPassword"
+
+# Client Configuration
+freeipa_enable_ssh_keys: true
+freeipa_enable_sudo: true
+freeipa_enable_mkhomedir: true
+freeipa_force_join: false

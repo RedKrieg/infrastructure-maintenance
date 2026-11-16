@@ -1,0 +1,61 @@
+---
+# ==============================================================================
+# Firewall Configuration for FreeIPA Server
+# ==============================================================================
+
+- name: Allow Web UI access from admin and cluster subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    from_ip: "{{ item.src }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ q('subelements', admin_rule_specs, 'srcs') | map('zip', ['spec', 'src']) | map('map', 'reverse') | map('items') | default([]) }}"
+  vars:
+    admin_rule_specs:
+      - port: "80"
+        proto: "tcp"
+        comment: "FreeIPA HTTP Web UI"
+        srcs: "{{ (freeipa_admin_trusted_cidrs + freeipa_trusted_subnets) | unique }}"
+      - port: "443"
+        proto: "tcp"
+        comment: "FreeIPA HTTPS Web UI"
+        srcs: "{{ (freeipa_admin_trusted_cidrs + freeipa_trusted_subnets) | unique }}"
+  when: false  # Using explicit flat loops below for clarity and performance
+
+- name: Allow FreeIPA Web UI (HTTP/HTTPS) from Admin CIDRs
+  community.general.ufw:
+    rule: allow
+    port: "{{ item[0] }}"
+    proto: tcp
+    from_ip: "{{ item[1] }}"
+    comment: "FreeIPA Web UI Admin Access"
+  loop: "{{ ['80', '443'] | product(freeipa_admin_trusted_cidrs) | list }}"
+
+- name: Allow FreeIPA Web UI (HTTP/HTTPS) from Internal Cluster Subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ item[0] }}"
+    proto: tcp
+    from_ip: "{{ item[1] }}"
+    comment: "FreeIPA Web UI Cluster Access"
+  loop: "{{ ['80', '443'] | product(freeipa_trusted_subnets) | list }}"
+
+- name: Allow Kerberos & LDAP authentication ports from Internal Cluster Subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ item[0].port }}"
+    proto: "{{ item[0].proto }}"
+    from_ip: "{{ item[1] }}"
+    comment: "{{ item[0].comment }}"
+  loop: "{{ freeipa_server_ports | rejectattr('port', 'in', ['80', '443']) | list | product(freeipa_trusted_subnets) | list }}"
+
+- name: Allow BIND9 DNS ports from Internal Cluster Subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ item[0].port }}"
+    proto: "{{ item[0].proto }}"
+    from_ip: "{{ item[1] }}"
+    comment: "{{ item[0].comment }}"
+  loop: "{{ freeipa_dns_ports | product(freeipa_trusted_subnets) | list }}"
+  when: freeipa_setup_dns | bool

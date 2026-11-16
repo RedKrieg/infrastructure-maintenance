@@ -1,0 +1,9 @@
+---
+# ==============================================================================
+# Handlers for freeipa_server Role
+# ==============================================================================
+
+- name: Restart ipa
+  ansible.builtin.systemd:
+    name: ipa
+    state: restarted

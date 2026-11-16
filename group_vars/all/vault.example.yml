@@ -21,3 +21,8 @@ vault_admin_default_password: "ReplaceWithYourAdminPassword"
 
 # Teleport GitHub SSO OAuth Client Secret
 vault_teleport_github_client_secret: "ReplaceWithYourGitHubOAuthClientSecret"
+
+# FreeIPA Identity Management Passwords & Enrollment OTP
+vault_freeipa_admin_password: "ReplaceWithYourFreeIPAAdminPassword"
+vault_freeipa_ds_password: "ReplaceWithYourFreeIPADirectoryManagerPassword"
+vault_freeipa_client_otp: "ReplaceWithYourHostEnrollmentOTP"

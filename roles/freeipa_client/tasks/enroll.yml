@@ -1,0 +1,40 @@
+---
+# ==============================================================================
+# Unattended FreeIPA Client Enrollment
+# ==============================================================================
+
+- name: Check if node is already enrolled in FreeIPA
+  ansible.builtin.stat:
+    path: /etc/ipa/default.conf
+  register: ipa_client_stat
+
+- name: Assemble client enrollment arguments
+  ansible.builtin.set_fact:
+    ipa_enroll_args: >-
+      --unattended
+      --server="{{ freeipa_server_fqdn }}"
+      --domain="{{ freeipa_domain }}"
+      --realm="{{ freeipa_realm }}"
+      {{ '--mkhomedir' if (freeipa_enable_mkhomedir | bool) else '' }}
+      {{ '--enable-dns-updates' if (freeipa_enable_dns_updates | bool) else '' }}
+      {{ '--no-ntp' if (freeipa_client_no_ntp | bool) else '' }}
+      {{ '--force-join' if (freeipa_force_join | bool) else '' }}
+
+- name: Enroll node into FreeIPA using One-Time Password (OTP)
+  ansible.builtin.command:
+    cmd: "ipa-client-install {{ ipa_enroll_args }} --password=\"{{ freeipa_client_otp }}\""
+  when:
+    - not ipa_client_stat.stat.exists
+    - freeipa_client_otp | length > 0
+  no_log: true
+  changed_when: true
+
+- name: Enroll node into FreeIPA using Administrator credentials
+  ansible.builtin.command:
+    cmd: "ipa-client-install {{ ipa_enroll_args }} --principal=\"{{ freeipa_admin_user }}\" --password=\"{{ freeipa_admin_password }}\""
+  when:
+    - not ipa_client_stat.stat.exists
+    - freeipa_client_otp | length == 0
+    - freeipa_admin_password | length > 0
+  no_log: true
+  changed_when: true

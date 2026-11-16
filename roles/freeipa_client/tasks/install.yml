@@ -1,0 +1,22 @@
+---
+# ==============================================================================
+# Host Preparation & Package Installation for FreeIPA Client
+# ==============================================================================
+
+- name: Map FreeIPA server FQDN in /etc/hosts if server IP is provided
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ freeipa_server_host }} {{ freeipa_server_fqdn }} {{ freeipa_server_fqdn.split('.')[0] }}"
+    regexp: "^.*\\s+{{ freeipa_server_fqdn | regex_escape }}.*$"
+    state: present
+  when: freeipa_server_host | length > 0
+
+- name: Install FreeIPA Client and SSSD packages
+  ansible.builtin.apt:
+    name: "{{ freeipa_client_packages }}"
+    state: present
+    update_cache: true
+  register: ipa_client_pkg_install
+  retries: 3
+  delay: 5
+  until: ipa_client_pkg_install is succeeded

@@ -1,0 +1,46 @@
+---
+# ==============================================================================
+# SSSD, SSH Daemon & Centralized Sudo Configuration
+# ==============================================================================
+
+- name: Deploy SSH daemon drop-in for FreeIPA LDAP authorized keys lookup
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/02-freeipa.conf
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible - FreeIPA SSSD Public Key Lookup
+      AuthorizedKeysCommand /usr/bin/sss_ssh_authorizedkeys
+      AuthorizedKeysCommandUser nobody
+  when: freeipa_enable_ssh_keys | bool
+  notify: Restart sshd
+
+- name: Ensure SSSD services include SSH and Sudo responders
+  ansible.builtin.lineinfile:
+    path: /etc/sssd/sssd.conf
+    regexp: "^services\\s*="
+    line: "services = nss, pam, sudo, ssh"
+    state: present
+  when: freeipa_enable_sudo | bool or freeipa_enable_ssh_keys | bool
+  notify: Restart sssd
+
+- name: Configure NSS for centralized Sudo rules via SSSD
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: "^sudoers:"
+    line: "sudoers: files sss"
+    state: present
+  when: freeipa_enable_sudo | bool
+
+- name: Enable automatic home directory creation in PAM
+  ansible.builtin.command:
+    cmd: "pam-auth-update --enable mkhomedir"
+  when: freeipa_enable_mkhomedir | bool
+  changed_when: false
+
+- name: Ensure SSSD service is enabled and running
+  ansible.builtin.systemd:
+    name: sssd
+    state: started
+    enabled: true

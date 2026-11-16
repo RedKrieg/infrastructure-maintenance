@@ -1,0 +1,125 @@
+---
+# ==============================================================================
+# Playbook: Standup Cluster with Dedicated FreeIPA Centralized Identity Server
+# ==============================================================================
+# Usage:
+#   ansible-playbook -i examples/freeipa/inventory.standup.ini \
+#     examples/freeipa/standup_freeipa_cluster.yml \
+#     --ask-vault-pass
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Play 1: Base System Hardening & Monitoring Telemetry for ALL Nodes
+# ------------------------------------------------------------------------------
+- name: Provision Core Systems, Security & Telemetry
+  hosts: all
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: system_base
+      tags: [system, packages]
+
+    - role: security
+      tags: [security, ufw, ssh]
+
+    - role: admin_users
+      tags: [admin_users, users]
+
+    - role: node_exporter
+      tags: [node_exporter, monitoring]
+
+# ------------------------------------------------------------------------------
+# Play 2: Frontend HAProxy Load Balancers & Edge Proxies
+# ------------------------------------------------------------------------------
+- name: Provision Frontend HAProxy Proxies
+  hosts: proxies
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: proxy
+      tags: [proxy, haproxy, ssl]
+
+    - role: keepalived
+      tags: [keepalived, ha]
+
+# ------------------------------------------------------------------------------
+# Play 3: Backend Webservers
+# ------------------------------------------------------------------------------
+- name: Provision Backend Webservers
+  hosts: webservers
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: webserver
+      tags: [webserver, nginx]
+
+# ------------------------------------------------------------------------------
+# Play 4: Prometheus & Grafana Monitoring Server
+# ------------------------------------------------------------------------------
+- name: Provision Observability Tier
+  hosts: monitoring
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: prometheus_server
+      tags: [monitoring, prometheus]
+
+    - role: grafana
+      tags: [grafana, monitoring]
+
+# ------------------------------------------------------------------------------
+# Play 5: Dedicated FreeIPA Server (Kerberos KDC, LDAP 389 Directory & Web UI)
+# ------------------------------------------------------------------------------
+- name: Provision Dedicated FreeIPA Centralized Identity Server
+  hosts: freeipa_servers
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: freeipa_server
+      tags: [freeipa, freeipa_server, identity, auth]
+
+# ------------------------------------------------------------------------------
+# Play 6: FreeIPA Client Enrollment across Cluster Nodes
+# ------------------------------------------------------------------------------
+- name: Enroll Cluster Nodes into FreeIPA Domain
+  hosts: headless_nodes
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: freeipa_client
+      tags: [freeipa, freeipa_client, identity, sssd]
+
+# ------------------------------------------------------------------------------
+# Play 7: Centralized Logging (Server & Shipper)
+# ------------------------------------------------------------------------------
+- name: Provision Centralized Log Ingestion Server
+  hosts: monitoring
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: central_logging
+      tags: [logging, logging_server]
+
+- name: Provision Centralized Log Shipper Clients
+  hosts: headless_nodes
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: central_logging
+      tags: [logging, logging_client]

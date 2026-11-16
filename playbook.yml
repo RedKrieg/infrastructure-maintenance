@@ -76,22 +76,36 @@
       tags: [grafana, monitoring, telemetry, dashboards]
 
 # ------------------------------------------------------------------------------
-# Play 5: Teleport Centralized Access & Auth/Proxy Server
+# Play 5: Centralized Identity & Access Management (Teleport or FreeIPA Server)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Auth & Proxy Server
   hosts: teleport_servers
   become: true
   gather_facts: true
-
   vars_files:
     - vars/admin_users.yml
 
   roles:
     - role: teleport_server
+      when: identity_provider | default('teleport') == 'teleport'
       tags: [teleport, teleport_server, auth, rbac]
 
+- name: Provision FreeIPA Centralized Identity Server
+  hosts: freeipa_servers
+  become: true
+  gather_facts: true
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: freeipa_server
+      when:
+        - identity_provider | default('teleport') == 'freeipa'
+        - freeipa_deploy_server | default(true) | bool
+      tags: [freeipa, freeipa_server, identity, auth]
+
 # ------------------------------------------------------------------------------
-# Play 6: Teleport SSH Node Service across Cluster Nodes
+# Play 6: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Node Service on Cluster Nodes
   hosts: headless_nodes
@@ -100,7 +114,18 @@
 
   roles:
     - role: teleport_node
+      when: identity_provider | default('teleport') == 'teleport'
       tags: [teleport, teleport_node, ssh]
+
+- name: Provision FreeIPA Client Enrollment across Cluster Nodes
+  hosts: headless_nodes
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: freeipa_client
+      when: identity_provider | default('teleport') == 'freeipa'
+      tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------
 # Play 7: Centralized Log Ingestion Server on Monitoring Node

@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# Main Task Entry Point for freeipa_client Role
+# ==============================================================================
+
+- name: Prepare host and install FreeIPA client packages
+  ansible.builtin.include_tasks: install.yml
+  tags: [freeipa, freeipa_client, install, packages]
+
+- name: Enroll host into FreeIPA domain
+  ansible.builtin.include_tasks: enroll.yml
+  tags: [freeipa, freeipa_client, enroll, auth]
+
+- name: Configure SSSD, SSH public key lookup and centralized sudo
+  ansible.builtin.include_tasks: sssd_ssh.yml
+  tags: [freeipa, freeipa_client, sssd, ssh, sudo]

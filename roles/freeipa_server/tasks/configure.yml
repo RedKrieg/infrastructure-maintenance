@@ -1,0 +1,38 @@
+---
+# ==============================================================================
+# Unattended FreeIPA Server Setup & Initialization
+# ==============================================================================
+
+- name: Check if FreeIPA server is already configured
+  ansible.builtin.stat:
+    path: /etc/ipa/default.conf
+  register: ipa_conf_stat
+
+- name: Assemble forwarder arguments for FreeIPA DNS
+  ansible.builtin.set_fact:
+    ipa_forwarder_args: "{{ freeipa_forwarders | map('regex_replace', '^(.*)$', '--forwarder=\\1') | join(' ') }}"
+  when: freeipa_setup_dns | bool
+
+- name: Execute unattended FreeIPA Server installation
+  ansible.builtin.command:
+    cmd: >-
+      ipa-server-install
+      --unattended
+      --realm="{{ freeipa_realm }}"
+      --domain="{{ freeipa_domain }}"
+      --ds-password="{{ freeipa_ds_password }}"
+      --admin-password="{{ freeipa_admin_password }}"
+      --ip-address="{{ freeipa_host_ip }}"
+      {{ '--no-ntp' if not (freeipa_setup_ntp | bool) else '' }}
+      {{ '--no-host-dns' if (freeipa_no_host_dns | bool) else '' }}
+      {{ '--setup-dns ' ~ ipa_forwarder_args if (freeipa_setup_dns | bool) else '' }}
+  when: not ipa_conf_stat.stat.exists
+  no_log: true
+  register: ipa_install_result
+  changed_when: true
+
+- name: Ensure FreeIPA service is running and enabled on boot
+  ansible.builtin.systemd:
+    name: ipa
+    state: started
+    enabled: true

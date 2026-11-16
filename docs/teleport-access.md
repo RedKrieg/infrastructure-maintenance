@@ -2,6 +2,9 @@
 
 The suite includes complete **[Teleport](https://goteleport.com/)** integration to eliminate credential desynchronization, static SSH keys, and static `/etc/sudoers` files across your cluster.
 
+> [!NOTE]
+> For enterprise environments requiring Kerberos KDC, LDAP 389 Directory Server, and native Linux SSSD integration instead of Teleport, see [freeipa-identity.md](freeipa-identity.md).
+
 ---
 
 ## 1. Architecture Overview

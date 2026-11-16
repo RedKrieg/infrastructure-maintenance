@@ -1,0 +1,36 @@
+---
+# ==============================================================================
+# Example Configuration: Standing up a Dedicated FreeIPA Server
+# ==============================================================================
+# Usage:
+#   ansible-playbook -i examples/freeipa/inventory.standup.ini \
+#     examples/freeipa/standup_freeipa_cluster.yml \
+#     -e "@examples/freeipa/vars_standup_example.yml" \
+#     --ask-vault-pass
+# ==============================================================================
+
+# Identity Provider Switch
+identity_provider: "freeipa"
+freeipa_deploy_server: true
+
+# Domain and Kerberos Realm
+freeipa_domain: "example.com"
+freeipa_realm: "EXAMPLE.COM"
+freeipa_server_fqdn: "ipa.example.com"
+
+# FreeIPA Passwords (should be stored encrypted in group_vars/all/vault.yml)
+# vault_freeipa_admin_password: "YourStrongFreeIPAAdminPassword"
+# vault_freeipa_ds_password: "YourStrongDirectoryManagerPassword"
+
+# DNS & NTP Configuration
+freeipa_setup_dns: false       # Set true to deploy integrated BIND9 DNS
+freeipa_forwarders:
+  - "8.8.8.8"
+  - "8.8.4.4"
+freeipa_setup_ntp: false       # Preserves systemd-timesyncd on Ubuntu 22.04
+
+# SSSD, SSH & Sudo Integration on Enrolled Clients
+freeipa_enable_ssh_keys: true  # Look up SSH authorized keys from FreeIPA LDAP via sss_ssh_authorizedkeys
+freeipa_enable_sudo: true      # Centralized sudo rules via SSSD
+freeipa_enable_mkhomedir: true # Auto-create /home/<user> on first login
+freeipa_force_join: false
