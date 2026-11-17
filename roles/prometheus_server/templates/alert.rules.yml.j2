@@ -95,3 +95,21 @@ groups:
         annotations:
           summary: "RabbitMQ queue backlog elevated on {{ $labels.instance }}"
           description: "Queue {{ $labels.queue }} on vhost {{ $labels.vhost }} has more than 5,000 ready messages pending worker consumption."
+
+      - alert: HostDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }} (mount {{ $labels.mountpoint }})"
+          description: "Filesystem mounted at {{ $labels.mountpoint }} on host {{ $labels.instance }} has less than 15% free disk space remaining."
+
+      - alert: HostDiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: Dangerous disk space exhaustion on {{ $labels.instance }} (mount {{ $labels.mountpoint }})"
+          description: "Filesystem mounted at {{ $labels.mountpoint }} on host {{ $labels.instance }} has less than 5% free disk space remaining! Immediate triage or volume expansion required."
