@@ -187,6 +187,15 @@
       register: teleport_state
       failed_when: teleport_state.changed
 
+    - name: Check Teleport Access Request notification watcher service state
+      ansible.builtin.systemd:
+        name: teleport-access-watcher
+        state: started
+      check_mode: true
+      register: teleport_watcher_state
+      when: teleport_access_watcher_enabled | default(true) | bool
+      failed_when: teleport_watcher_state.changed
+
     - name: Check Teleport cluster diagnostic status
       ansible.builtin.command:
         cmd: tctl status

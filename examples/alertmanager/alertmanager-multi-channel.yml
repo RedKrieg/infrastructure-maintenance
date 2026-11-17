@@ -23,6 +23,15 @@ route:
   receiver: 'ops-team-email'
 
   routes:
+    # 0. Instant delivery for Teleport JIT sudo access requests
+    - match:
+        alertname: 'TeleportSudoAccessRequestPending'
+      group_by: ['alertname', 'request_id']
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      receiver: 'chat-warnings'
+
     # 1. Critical infrastructure failures -> PagerDuty + Emergency Email
     - match:
         severity: critical
@@ -76,4 +85,5 @@ receivers:
         send_resolved: true
         icon_emoji: ':warning:'
         title: '[WARNING] {{ .CommonLabels.alertname }}'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        title_link: '{{ (index .Alerts 0).GeneratorURL }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ if .Annotations.approval_url }} — <{{ .Annotations.approval_url }}|Open in Teleport Web UI>{{ end }}{{ end }}'

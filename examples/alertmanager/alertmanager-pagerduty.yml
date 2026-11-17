@@ -18,6 +18,14 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   receiver: 'pagerduty-critical'
+  routes:
+    - match:
+        alertname: 'TeleportSudoAccessRequestPending'
+      group_by: ['alertname', 'request_id']
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      receiver: 'pagerduty-critical'
 
 receivers:
   - name: 'pagerduty-critical'
@@ -27,9 +35,10 @@ receivers:
         severity: '{{ if eq .CommonLabels.severity "critical" }}critical{{ else }}warning{{ end }}'
         description: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}'
         client: 'Cluster Alertmanager'
-        client_url: 'http://monitoring.internal:9090'
+        client_url: '{{ if .CommonAnnotations.approval_url }}{{ .CommonAnnotations.approval_url }}{{ else }}http://monitoring.internal:9090{{ end }}'
         details:
           cluster: '{{ .CommonLabels.cluster }}'
           service: '{{ .CommonLabels.service }}'
           summary: '{{ .CommonAnnotations.summary }}'
           description: '{{ .CommonAnnotations.description }}'
+          approval_url: '{{ .CommonAnnotations.approval_url }}'

@@ -14,6 +14,7 @@ The suite includes complete **[Teleport](https://goteleport.com/)** integration 
 - Hosts the Web UI / API on port `3080` (fronted by HAProxy TLS on port `443`), SSH proxy on port `3023`, and reverse tunnel on port `3024`.
 - Manages centralized RBAC roles and user accounts.
 - Installs the full CLI helper suite (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`) globally in `/usr/local/bin` and stages a pre-configured **Workstation Bundle** at `/opt/teleport-workstation-bundle/teleport-workstation-helpers.tar.gz`.
+- Runs `teleport-access-watcher.service` to stream pending `tsudo` / access requests to Alertmanager (Slack, Google Chat, Microsoft Teams, Discord, PagerDuty, Email) with clickable Web UI approval links (`https://teleport.<domain>/web/requests/<request-id>`).
 
 ### Teleport SSH Node Service (`roles/teleport_node`)
 - Runs strictly on workload nodes (`proxies`, `webservers`, `databases`, `redis_servers`, `rabbitmq_servers`, `monitoring`) — skipped automatically on `teleport_servers`.
@@ -111,10 +112,27 @@ tsudo "Need to restart HAProxy and verify SSL logs"
 ```
 
 ### Step 4: Lead Admin Approves (from Lead Admin Workstation, Bastion, or Web UI)
+
+Whenever a junior operator runs `tsudo` (or `tsh request create`), the `teleport-access-watcher` service on `teleport-01` automatically detects the pending request and dispatches an alert (`TeleportSudoAccessRequestPending`) to **Alertmanager** (and all configured chat/notification channels: **Slack, Google Chat, Microsoft Teams, Discord, PagerDuty, and Email**).
+
+Each notification includes a **direct clickable Web UI link** so a Lead Admin can approve in a browser with no CLI access required:
+- Direct request review link: `https://teleport.example.com/web/requests/<request-id>` (opens the **Approve / Deny** prompt directly in Teleport Web UI)
+- Pending requests queue: `https://teleport.example.com/web/requests`
+
+Alternatively, approve from any Lead Admin workstation or the Bastion CLI:
 ```bash
 tapprove
 # Lists pending requests and approves the junior operator's ticket via tsh/tctl
 ```
+
+#### Notification Configuration Variables
+By default, `roles/teleport_server` automatically discovers all `[monitoring]` hosts and posts requests to Alertmanager on port `9093`. To wire Alertmanager directly into chat webhooks via Ansible, configure `roles/prometheus_server`:
+```yaml
+alertmanager_slack_webhook_url: "https://hooks.slack.com/services/..."
+alertmanager_google_chat_webhook_url: "https://chat.googleapis.com/v1/spaces/..."
+alertmanager_teams_webhook_url: "https://prod-XX.logic.azure.com:443/workflows/..."
+```
+*(Or set `teleport_notify_slack_webhook_url`, `teleport_notify_google_chat_webhook_url`, or `teleport_notify_teams_webhook_url` on `teleport_servers` if deploying without Alertmanager. See `examples/alertmanager/` for customized routing templates.)*
 
 ### Step 5: Open a New Elevated Session
 Once approved, `tsudo` updates your active workstation/Bastion certificate. Connect cleanly to apply `host_sudoers`:

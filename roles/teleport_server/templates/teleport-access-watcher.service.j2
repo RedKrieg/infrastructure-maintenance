@@ -1,0 +1,17 @@
+[Unit]
+Description=Teleport Access Request Notification Watcher (Alertmanager & Chat Webhooks)
+After=network-online.target teleport.service
+Wants=network-online.target teleport.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/teleport-access-watcher
+ExecStart=/usr/local/bin/teleport-access-watcher
+Restart=always
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

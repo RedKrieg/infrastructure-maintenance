@@ -20,6 +20,14 @@ route:
   group_interval: {{ alertmanager_group_interval | default('5m') }}
   repeat_interval: {{ alertmanager_repeat_interval | default('4h') }}
   receiver: 'admin-email-notifications'
+  routes:
+    - match:
+        alertname: 'TeleportSudoAccessRequestPending'
+      group_by: ['alertname', 'request_id']
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      receiver: 'admin-email-notifications'
 
 receivers:
   - name: 'admin-email-notifications'
@@ -29,4 +37,35 @@ receivers:
       - to: '{{ recipient }}'
         send_resolved: true
 {% endfor %}
+{% endif %}
+{% if alertmanager_slack_webhook_url | default('') | length > 0 %}
+    slack_configs:
+      - api_url: '{{ alertmanager_slack_webhook_url }}'
+        channel: '{{ alertmanager_slack_channel | default("#cluster-alerts") }}'
+        send_resolved: true
+        title: '{% raw %}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.cluster }}){% endraw %}'
+        title_link: '{% raw %}{{ (index .Alerts 0).GeneratorURL }}{% endraw %}'
+        text: >-
+{% raw %}
+          {{ range .Alerts }}
+            *Alert:* {{ .Annotations.summary }}
+            *Description:* {{ .Annotations.description }}
+            *Severity:* `{{ .Labels.severity }}`
+            *Instance:* `{{ .Labels.instance }}`
+            {{ if .Annotations.approval_url }}*Click to Approve / Review:* <{{ .Annotations.approval_url }}|Open in Teleport Web UI>{{ end }}
+          {{ end }}
+{% endraw %}
+{% endif %}
+{% if alertmanager_google_chat_webhook_url | default('') | length > 0 or alertmanager_teams_webhook_url | default('') | length > 0 %}
+    webhook_configs:
+{% if alertmanager_google_chat_webhook_url | default('') | length > 0 %}
+      - url: 'http://127.0.0.1:{{ alertmanager_google_chat_relay_port | default(5001) }}/'
+        send_resolved: true
+        max_alerts: 10
+{% endif %}
+{% if alertmanager_teams_webhook_url | default('') | length > 0 %}
+      - url: '{{ alertmanager_teams_webhook_url }}'
+        send_resolved: true
+        max_alerts: 10
+{% endif %}
 {% endif %}

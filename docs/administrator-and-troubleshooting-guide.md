@@ -68,7 +68,8 @@ tssh ubuntu@web-01
 # 4. If sudo is needed (junior admins), run tsudo from your WORKSTATION or BASTION
 #    BEFORE opening the SSH session (existing shells are not retroactively elevated):
 tsudo "Fixing Nginx configuration on web-01"
-# (Lead admin approves via `tapprove` or Web UI)
+# (Alertmanager/Slack/Google Chat/Teams automatically posts a clickable Web UI link;
+#  Lead admin clicks https://teleport.example.com/web/requests/<id> or runs `tapprove`)
 tssh ubuntu@web-01   # New session now receives temporary 1h sudo
 # Drop elevated privileges after maintenance:
 tdrop
@@ -108,7 +109,7 @@ Keep this table handy during incident response:
 | **Prometheus**| `prometheus.service` | `/etc/prometheus/prometheus.yml` | `journalctl -u prometheus` | Port 9090 |
 | **Grafana** | `grafana-server.service`| `/etc/grafana/grafana.ini` | `/var/log/grafana/grafana.log` | Port 3000 |
 | **Rsyslog** | `rsyslog.service` | `/etc/rsyslog.d/` | `/var/log/remote/<host>/` | Port 6514 (TLS) or 5140 (TCP) |
-| **Teleport** | `teleport.service` | `/etc/teleport.yaml` | `/var/log/teleport.log` | Ports 3080 (Web), 3023 (SSH) |
+| **Teleport** | `teleport.service`, `teleport-access-watcher.service` | `/etc/teleport.yaml`, `/etc/default/teleport-access-watcher` | `/var/log/teleport.log`, `journalctl -u teleport-access-watcher` | Ports 3080 (Web), 3023 (SSH) |
 
 ---
 

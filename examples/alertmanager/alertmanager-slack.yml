@@ -18,6 +18,14 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   receiver: 'slack-notifications'
+  routes:
+    - match:
+        alertname: 'TeleportSudoAccessRequestPending'
+      group_by: ['alertname', 'request_id']
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      receiver: 'slack-notifications'
 
 receivers:
   - name: 'slack-notifications'
@@ -27,11 +35,13 @@ receivers:
         icon_emoji: ':fire_engine:'
         title: |-
           [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.cluster }})
+        title_link: '{{ (index .Alerts 0).GeneratorURL }}'
         text: >-
           {{ range .Alerts }}
             *Alert:* {{ .Annotations.summary }}
             *Description:* {{ .Annotations.description }}
             *Severity:* `{{ .Labels.severity }}`
             *Instance:* `{{ .Labels.instance }}`
+            {{ if .Annotations.approval_url }}*Approve / Review:* <{{ .Annotations.approval_url }}|Open in Teleport Web UI>{{ end }}
             *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
           {{ end }}

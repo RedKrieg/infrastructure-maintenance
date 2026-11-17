@@ -1,0 +1,25 @@
+# ==============================================================================
+# Teleport Access Request Notification Watcher Environment - Managed by Ansible
+# ==============================================================================
+{% set am_urls = [] %}
+{% if teleport_alertmanager_urls | default([]) | length > 0 %}
+{% for u in teleport_alertmanager_urls %}
+{% set _ = am_urls.append(u) %}
+{% endfor %}
+{% else %}
+{% for host in (groups['monitoring'] | default([])) %}
+{% set am_host = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
+{% set am_port = hostvars[host]['prometheus_alertmanager_port'] | default(9093) %}
+{% if hostvars[host]['prometheus_alertmanager_enabled'] | default(true) | bool %}
+{% set _ = am_urls.append('http://' ~ am_host ~ ':' ~ am_port) %}
+{% endif %}
+{% endfor %}
+{% endif %}
+TELEPORT_PUBLIC_ADDR={{ teleport_public_addr }}
+TELEPORT_CLUSTER_NAME={{ teleport_cluster_name }}
+TELEPORT_HOSTNAME={{ inventory_hostname }}
+POLL_INTERVAL={{ teleport_access_watcher_poll_interval | default(5) }}
+ALERTMANAGER_URLS={{ am_urls | unique | join(',') }}
+SLACK_WEBHOOK_URL={{ teleport_notify_slack_webhook_url | default('') }}
+GCHAT_WEBHOOK_URL={{ teleport_notify_google_chat_webhook_url | default('') }}
+TEAMS_WEBHOOK_URL={{ teleport_notify_teams_webhook_url | default('') }}

@@ -56,6 +56,8 @@ echo "===================================================================="
 echo " Submitting Sudo Elevation Request"
 echo " Role          : ${ELEVATED_ROLE}"
 echo " Justification : ${REASON}"
+echo " Alerts        : Admins notified automatically via Alertmanager/chat"
+echo " Web UI Queue  : https://{{ (teleport_public_addr | default('teleport.' ~ (domain_name | default('cluster.local')) ~ ':443')) | regex_replace(':443$', '') }}/web/requests"
 echo "===================================================================="
 
 if [ "$NOWAIT" -eq 1 ]; then

@@ -51,3 +51,14 @@ teleport_github_teams_to_roles:
   - organization: "{{ teleport_github_organization }}"
     team: "{{ teleport_github_team }}"
     roles: "{{ teleport_github_roles }}"
+
+# Teleport Access Request Notification Bridge (Alertmanager & Chat Webhooks)
+teleport_access_watcher_enabled: true
+teleport_access_watcher_poll_interval: 5
+# Optional explicit list of Alertmanager URLs (e.g. ["http://10.0.0.50:9093"]).
+# When empty, automatically discovers all hosts in groups['monitoring'] on port 9093.
+teleport_alertmanager_urls: []
+# Optional direct webhook overrides (only needed if not routing via Alertmanager)
+teleport_notify_slack_webhook_url: ""
+teleport_notify_google_chat_webhook_url: ""
+teleport_notify_teams_webhook_url: ""

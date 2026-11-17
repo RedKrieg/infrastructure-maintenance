@@ -12,6 +12,7 @@ Usage:
     python3 google_chat_relay.py [PORT]
 """
 
+import html
 import json
 import os
 import sys
@@ -39,14 +40,14 @@ def format_google_chat_card(alert_data):
     if common_annotations.get("summary"):
         widgets.append({
             "textParagraph": {
-                "text": f"<b>Summary:</b> {common_annotations.get('summary')}"
+                "text": f"<b>Summary:</b> {html.escape(str(common_annotations.get('summary')))}"
             }
         })
 
     if common_annotations.get("description"):
         widgets.append({
             "textParagraph": {
-                "text": f"<b>Description:</b> {common_annotations.get('description')}"
+                "text": f"<b>Description:</b> {html.escape(str(common_annotations.get('description')))}"
             }
         })
 
@@ -58,8 +59,35 @@ def format_google_chat_card(alert_data):
         widgets.append({
             "decoratedText": {
                 "topLabel": "Impacted Target",
-                "text": f"<b>{instance}</b>",
+                "text": f"<b>{html.escape(str(instance))}</b>",
                 "bottomLabel": f"State: {alert.get('status', '').upper()} | Started: {starts_at[:19]}"
+            }
+        })
+
+    first_alert = alerts[0] if alerts else {}
+    first_annotations = first_alert.get("annotations", {})
+    approval_url = (
+        common_annotations.get("approval_url")
+        or first_annotations.get("approval_url")
+        or (
+            first_alert.get("generatorURL")
+            if common_labels.get("alertname") == "TeleportSudoAccessRequestPending"
+            else None
+        )
+    )
+    if approval_url:
+        widgets.append({
+            "buttonList": {
+                "buttons": [
+                    {
+                        "text": "Approve / Review in Teleport Web UI",
+                        "onClick": {
+                            "openLink": {
+                                "url": approval_url
+                            }
+                        }
+                    }
+                ]
             }
         })
 

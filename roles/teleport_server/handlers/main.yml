@@ -12,3 +12,10 @@
   ansible.builtin.systemd:
     name: teleport
     state: reloaded
+
+- name: Restart teleport-access-watcher
+  ansible.builtin.systemd:
+    name: teleport-access-watcher
+    daemon_reload: true
+    state: restarted
+  when: teleport_access_watcher_enabled | default(true) | bool

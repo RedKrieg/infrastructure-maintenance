@@ -60,5 +60,12 @@ alertmanager_group_wait: "30s"
 alertmanager_group_interval: "5m"
 alertmanager_repeat_interval: "4h"
 
+# Optional Chat & Webhook Alerting Channels (Slack, Google Chat, Microsoft Teams)
+alertmanager_slack_webhook_url: ""
+alertmanager_slack_channel: "#cluster-alerts"
+alertmanager_google_chat_webhook_url: ""
+alertmanager_google_chat_relay_port: 5001
+alertmanager_teams_webhook_url: ""
+
 # Optional additional custom scrape jobs
 prometheus_custom_scrape_configs: []

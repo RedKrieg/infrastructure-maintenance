@@ -56,6 +56,43 @@
   notify: Reload alertmanager
   tags: [monitoring, prometheus, config, alertmanager]
 
+- name: Deploy Google Chat webhook relay script for Alertmanager
+  ansible.builtin.copy:
+    src: "{{ role_path }}/../../examples/alertmanager/google_chat_relay.py"
+    dest: /usr/local/bin/alertmanager-google-chat-relay
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - prometheus_alertmanager_enabled | bool
+    - alertmanager_google_chat_webhook_url | default('') | length > 0
+  notify: Restart alertmanager-google-chat-relay
+  tags: [monitoring, prometheus, config, alertmanager]
+
+- name: Deploy Google Chat webhook relay systemd service
+  ansible.builtin.template:
+    src: alertmanager-google-chat-relay.service.j2
+    dest: /etc/systemd/system/alertmanager-google-chat-relay.service
+    owner: root
+    group: prometheus
+    mode: "0640"
+  when:
+    - prometheus_alertmanager_enabled | bool
+    - alertmanager_google_chat_webhook_url | default('') | length > 0
+  notify: Restart alertmanager-google-chat-relay
+  tags: [monitoring, prometheus, config, alertmanager]
+
+- name: Ensure Google Chat webhook relay service is enabled and started
+  ansible.builtin.systemd:
+    name: alertmanager-google-chat-relay
+    daemon_reload: true
+    state: started
+    enabled: true
+  when:
+    - prometheus_alertmanager_enabled | bool
+    - alertmanager_google_chat_webhook_url | default('') | length > 0
+  tags: [monitoring, prometheus, service, alertmanager]
+
 - name: Ensure Alertmanager service is enabled and started
   ansible.builtin.systemd:
     name: "{{ prometheus_alertmanager_service | default('prometheus-alertmanager') }}"

@@ -21,6 +21,14 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   receiver: 'google-chat-relay'
+  routes:
+    - match:
+        alertname: 'TeleportSudoAccessRequestPending'
+      group_by: ['alertname', 'request_id']
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      receiver: 'google-chat-relay'
 
 receivers:
   - name: 'google-chat-relay'

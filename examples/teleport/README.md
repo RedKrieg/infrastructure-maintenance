@@ -53,7 +53,7 @@ Teleport enforces `host_sudoers` rules when an SSH connection opens based on the
 1. Authenticate first: `tlogin junior`
 2. Connect unprivileged to investigate: `tssh web-01`
 3. When elevated privileges are needed, run `tsudo "Restarting Nginx after TLS renewal"` **on your workstation (or Bastion)** — not expecting an already-open unprivileged shell on `web-01` to change mid-session.
-4. Lead Admin approves from their workstation or the Web UI (`tapprove`).
+4. `teleport-access-watcher` on `teleport-01` automatically pushes the pending request to Alertmanager (Slack, Google Chat, Microsoft Teams, Discord, PagerDuty, Email) with a clickable approval link (`https://teleport.example.com/web/requests/<id>`). Lead Admin clicks that link in chat to approve in the Web UI (or runs `tapprove` via CLI).
 5. Open a **new** session (`tssh web-01`) — your shell now receives temporary 1-hour `sudo` rights.
 6. Drop elevated privileges when done: `tdrop`.
 

@@ -72,3 +72,41 @@
     group: root
     mode: "0644"
   tags: [teleport, teleport_server, helpers, bundle]
+
+- name: Deploy Teleport Access Request notification watcher script
+  ansible.builtin.copy:
+    src: teleport_access_watcher.py
+    dest: /usr/local/bin/teleport-access-watcher
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart teleport-access-watcher
+  tags: [teleport, teleport_server, helpers, notifications]
+
+- name: Deploy Teleport Access Request notification watcher environment
+  ansible.builtin.template:
+    src: teleport-access-watcher.default.j2
+    dest: /etc/default/teleport-access-watcher
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart teleport-access-watcher
+  tags: [teleport, teleport_server, helpers, notifications]
+
+- name: Deploy Teleport Access Request notification watcher systemd service
+  ansible.builtin.template:
+    src: teleport-access-watcher.service.j2
+    dest: /etc/systemd/system/teleport-access-watcher.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart teleport-access-watcher
+  tags: [teleport, teleport_server, helpers, notifications]
+
+- name: Ensure Teleport Access Request notification watcher service state
+  ansible.builtin.systemd:
+    name: teleport-access-watcher
+    daemon_reload: true
+    state: "{{ 'started' if (teleport_access_watcher_enabled | default(true) | bool) else 'stopped' }}"
+    enabled: "{{ teleport_access_watcher_enabled | default(true) | bool }}"
+  tags: [teleport, teleport_server, helpers, notifications, service]

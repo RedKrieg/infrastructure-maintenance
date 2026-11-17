@@ -22,3 +22,12 @@
   ansible.builtin.systemd:
     name: "{{ prometheus_alertmanager_service | default('prometheus-alertmanager') }}"
     state: reloaded
+
+- name: Restart alertmanager-google-chat-relay
+  ansible.builtin.systemd:
+    name: alertmanager-google-chat-relay
+    daemon_reload: true
+    state: restarted
+  when:
+    - prometheus_alertmanager_enabled | bool
+    - alertmanager_google_chat_webhook_url | default('') | length > 0

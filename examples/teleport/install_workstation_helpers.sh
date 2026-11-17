@@ -75,13 +75,17 @@ echo "[✓] Successfully logged into Teleport!"
 tsh status
 EOF
 
-cat > "${BIN_DIR}/teleport-request-sudo" <<'EOF'
+cat > "${BIN_DIR}/teleport-request-sudo" <<EOF
 #!/usr/bin/env bash
 set -e
+DEFAULT_PROXY="${PROXY_ADDR}"
+EOF
+cat >> "${BIN_DIR}/teleport-request-sudo" <<'EOF'
 
 ELEVATED_ROLE="elevated-sudo"
 NOWAIT=0
 REASON=""
+WEB_BASE="https://${DEFAULT_PROXY%:443}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -117,6 +121,8 @@ echo "===================================================================="
 echo " Submitting Sudo Elevation Request"
 echo " Role          : ${ELEVATED_ROLE}"
 echo " Justification : ${REASON}"
+echo " Alerts        : Admins notified automatically via Alertmanager/chat"
+echo " Web UI Queue  : ${WEB_BASE}/web/requests"
 echo "===================================================================="
 
 if [ "$NOWAIT" -eq 1 ]; then
