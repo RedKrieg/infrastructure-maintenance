@@ -137,6 +137,7 @@ internal_ca_srl: "{{ internal_ca_dir }}/cluster-ca.srl"
 internal_ca_signer_port: 8444
 internal_ca_validity_days: 730
 internal_ca_renewal_threshold_days: 30
+internal_ca_fallback_renewal_days: 15
 internal_ca_leaf_validity_days: 90
 internal_cert_renewal_threshold_days: 14
 internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"

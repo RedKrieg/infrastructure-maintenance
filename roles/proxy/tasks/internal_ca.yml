@@ -55,6 +55,9 @@
       delegate_to: "{{ cert_primary_host }}"
       run_once: true
       register: slurped_internal_ca_cert
+      when: >
+        (ca_gen_result is defined and ca_gen_result.changed) or
+        (groups['proxies'] | default([]) | map('extract', hostvars, ['internal_ca_stat', 'stat', 'exists']) | select('equalto', false) | list | length > 0)
 
     - name: Slurp Internal CA private key from primary proxy
       ansible.builtin.slurp:
@@ -62,27 +65,39 @@
       delegate_to: "{{ cert_primary_host }}"
       run_once: true
       register: slurped_internal_ca_key
+      when: >
+        (ca_gen_result is defined and ca_gen_result.changed) or
+        (groups['proxies'] | default([]) | map('extract', hostvars, ['internal_ca_stat', 'stat', 'exists']) | select('equalto', false) | list | length > 0)
 
-    - name: Distribute Internal Root CA certificate across all proxies
+    - name: Distribute Internal Root CA certificate across uninitialized proxies
       ansible.builtin.copy:
         dest: "{{ internal_ca_cert }}"
         content: "{{ slurped_internal_ca_cert.content | b64decode }}"
         owner: root
         group: root
         mode: "0644"
+      when:
+        - slurped_internal_ca_cert is defined
+        - slurped_internal_ca_cert.content is defined
+        - not internal_ca_stat.stat.exists or (ca_gen_result is defined and ca_gen_result.changed)
 
-    - name: Distribute Internal CA private key across all proxies
+    - name: Distribute Internal CA private key across uninitialized proxies
       ansible.builtin.copy:
         dest: "{{ internal_ca_key }}"
         content: "{{ slurped_internal_ca_key.content | b64decode }}"
         owner: root
         group: root
         mode: "0600"
+      when:
+        - slurped_internal_ca_key is defined
+        - slurped_internal_ca_key.content is defined
+        - not internal_ca_stat.stat.exists or (ca_gen_result is defined and ca_gen_result.changed)
 
-    - name: Copy Internal CA certificate to HAProxy trust location across all proxies
+    - name: Ensure Internal CA certificate is present in HAProxy trust store
       ansible.builtin.copy:
+        src: "{{ internal_ca_cert }}"
         dest: "{{ haproxy_backend_ca_file }}"
-        content: "{{ slurped_internal_ca_cert.content | b64decode }}"
+        remote_src: true
         owner: root
         group: root
         mode: "0644"

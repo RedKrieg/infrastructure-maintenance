@@ -18,3 +18,9 @@ acme_use_staging: false
 #   - "10.0.0.0/8"
 #   - "192.168.1.50"
 #   - "admin.example.com"
+
+# Zero-Trust Internal TLS Encryption to Backend Webservers
+# When enabled, HAProxy re-encrypts upstream traffic over HTTPS (port 443)
+# with strict cryptographic peer verification against the internal Root CA.
+# haproxy_backend_ssl: true
+# haproxy_backend_ssl_verify: "required" # "required" (default) or "none"

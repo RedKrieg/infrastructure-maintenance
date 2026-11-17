@@ -122,6 +122,41 @@ for domain in "${TARGET_DOMAINS[@]}"; do
     fi
 done
 
+# Check cluster peers for newer Internal Root CA
+LOCAL_CA_CERT="{{ internal_ca_cert }}"
+if [ -f "$LOCAL_CA_CERT" ]; then
+    LOCAL_CA_EPOCH=$(get_cert_epoch "$LOCAL_CA_CERT")
+    BEST_CA_PEER_IP=""
+    BEST_CA_PEER_NAME=""
+    BEST_CA_EPOCH="$LOCAL_CA_EPOCH"
+
+    for peer in "${PEER_PROXIES[@]}"; do
+        PEER_NAME="${peer%%:*}"
+        PEER_IP="${peer##*:}"
+        REMOTE_CA_EPOCH=$(get_remote_cert_epoch "$PEER_IP" "$LOCAL_CA_CERT")
+        if [ "$REMOTE_CA_EPOCH" -gt $(( BEST_CA_EPOCH + 86400 )) ]; then
+            BEST_CA_EPOCH="$REMOTE_CA_EPOCH"
+            BEST_CA_PEER_IP="$PEER_IP"
+            BEST_CA_PEER_NAME="$PEER_NAME"
+        fi
+    done
+
+    if [ -n "$BEST_CA_PEER_IP" ]; then
+        log "Found newer Internal Root CA on peer ${BEST_CA_PEER_NAME} (${BEST_CA_PEER_IP}). Adopting..."
+        if rsync -avz \
+            -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes" \
+            "root@${BEST_CA_PEER_IP}:{{ internal_ca_dir }}/" "{{ internal_ca_dir }}/" >> "$LOG_FILE" 2>&1; then
+            chmod 600 "{{ internal_ca_key }}"
+            chmod 644 "{{ internal_ca_cert }}"
+            cp -f "{{ internal_ca_cert }}" "{{ haproxy_backend_ca_file }}"
+            chmod 644 "{{ haproxy_backend_ca_file }}"
+            systemctl restart internal-ca-signer 2>/dev/null || true
+            ADOPTED_ANY=1
+            log "Successfully adopted newer Internal Root CA from ${BEST_CA_PEER_NAME}."
+        fi
+    fi
+fi
+
 if [ "$ADOPTED_ANY" -eq 1 ]; then
     if systemctl is-active --quiet haproxy; then
         systemctl reload haproxy

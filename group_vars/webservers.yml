@@ -5,3 +5,8 @@
 # private subnets (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) and trust all proxy IPs.
 # Use this file to supply any environment-specific CIDR overrides.
 # ==============================================================================
+
+# Zero-Trust Internal TLS Encryption
+# When enabled, webservers obtain CA-signed certificates from ingress proxies
+# and auto-renew via systemd timers at the 14-day threshold.
+# webserver_enable_ssl: true

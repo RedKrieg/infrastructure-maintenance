@@ -109,11 +109,47 @@ Backend webservers execute `/usr/local/bin/renew-internal-cert.sh` daily via the
    - If `proxy-01` is offline or fails, the client logs a warning and immediately falls back to `proxy-02`.
    - Once signed, the certificate is installed at `/etc/ssl/internal/webserver.crt`, the latest CA root is fetched from `/ca.crt`, and Nginx is reloaded gracefully (`systemctl reload nginx`).
 
-### 2. Root CA Auto-Renewal (`renew-internal-ca.sh`)
-Proxies execute `/usr/local/bin/renew-internal-ca.sh` twice daily via the `renew-internal-ca.timer` systemd timer:
-1. **Threshold Assessment**: Evaluates `/etc/ssl/internal/ca/cluster-ca.crt`. If validity is $\le 30$ days, auto-renewal initiates.
-2. **Self-Re-signing**: Re-signs the Root CA with a fresh validity window (`VALIDITY_DAYS=730`) preserving key integrity.
-3. **Cluster Sync**: Automatically updates `/etc/haproxy/certs/internal-ca.crt`, reloads local HAProxy, and executes `/usr/local/bin/sync-haproxy-certs.sh` to mirror the renewed CA across all peer proxies.
+### 2. Root CA Auto-Renewal & Simultaneous Renewal Prevention (`renew-internal-ca.sh`)
+To guarantee that proxies never renew the root CA simultaneously or create divergent certificates, renewal employs a multi-tiered authority and watchdog model:
+
+1. **Primary Authority Designation (`proxy-01`)**:
+   - `cert_primary_host` (`proxy-01`) is the designated Primary CA Authority.
+   - Executes `/usr/local/bin/renew-internal-ca.sh` twice daily via `renew-internal-ca.timer`.
+   - Evaluates `/etc/ssl/internal/ca/cluster-ca.crt`. When remaining validity is $\le 30$ days (`internal_ca_renewal_threshold_days`), `proxy-01` self-re-signs the Root CA with a fresh 730-day window (`VALIDITY_DAYS=730`) while preserving key integrity.
+   - Updates `/etc/haproxy/certs/internal-ca.crt`, restarts local `internal-ca-signer`, reloads local HAProxy, and executes `/usr/local/bin/sync-haproxy-certs.sh` to mirror the renewed CA across all peer proxies.
+
+2. **Standby Watchdog Mode on Replicas (`proxy-02`, `proxy-03`, ...)**:
+   - Replica proxies execute `renew-internal-ca.sh` in **standby watchdog mode**.
+   - **Staggered Fallback Window**: Replicas ignore the 30-day threshold and evaluate an emergency fallback threshold (`internal_ca_fallback_renewal_days`, default: 15 days) staggered by 1 day per replica rank offset (`proxy-02` = 15d, `proxy-03` = 14d, etc.).
+   - **Liveness Probing**: Even if the emergency threshold is reached, a replica will **never** renew if any higher-priority proxy is alive. It probes higher-priority proxies via ICMP, port 8444 HTTP `/health`, and SSH keyscan. Only if **all** higher-priority proxies are confirmed unreachable will the standby replica take over CA renewal and propagate it to surviving peers.
+
+3. **Concurrency Locks & Timer Jitter**:
+   - **File Lock**: Local executions acquire an exclusive non-blocking lock (`flock`) on `/var/lock/internal-ca-renewal.lock` to prevent overlapping runs on the same node.
+   - **Timer Jitter**: Systemd timer includes `RandomizedDelaySec=1800` (up to 30 minutes of random distribution) to eliminate simultaneous cron wakeups across the cluster.
+
+4. **Boot-Time Reconciliation & Adoption (`check-and-adopt-cluster-certs.sh`)**:
+   - If `proxy-01` suffers an extended outage during which `proxy-02` performed an emergency CA renewal, `proxy-01` will not blindly renew or revert the CA upon rebooting.
+   - The boot-time service (`haproxy-cert-reconcile.service`) queries peer proxies for `/etc/ssl/internal/ca/cluster-ca.crt` expiration epochs. Seeing that `proxy-02` holds a newer CA, `proxy-01` automatically adopts `proxy-02`'s newer CA, updates HAProxy, and resumes its primary rank seamlessly.
+
+---
+
+## Non-Destructive Ansible Runs & Out-of-Band Safety
+
+Because certificate renewals occur continuously and autonomously on systemd timers without Ansible interaction, the Ansible roles are engineered to be **100% non-destructive and idempotent**:
+
+1. **Root CA State Preservation**:
+   - In `roles/proxy/tasks/internal_ca.yml`, Ansible inspects `/etc/ssl/internal/ca/cluster-ca.crt` via `stat`.
+   - CA generation (`openssl req`) runs strictly `when: not internal_ca_stat.stat.exists`. Once a CA exists (or has been renewed out-of-band), Ansible **never regenerates or overwrites** it.
+   - CA slurping and distribution across proxies runs strictly for uninitialized nodes lacking CA files (`when: not internal_ca_stat.stat.exists`). Existing proxies keep their active certificates untouched.
+   - HAProxy's trust copy (`/etc/haproxy/certs/internal-ca.crt`) is maintained locally from the host's own active `/etc/ssl/internal/ca/cluster-ca.crt`.
+
+2. **Webserver Leaf Certificate Preservation**:
+   - In `roles/webserver/tasks/tls.yml`, Ansible inspects `/etc/ssl/internal/webserver.crt` via `stat`.
+   - Initial CA signing (`/usr/local/bin/renew-internal-cert.sh --force`) executes strictly `when: not internal_cert_stat.stat.exists`.
+   - If a valid or auto-renewed certificate is already present, Ansible skips certificate issuance entirely.
+
+3. **Zero Configuration Drift or Clashes**:
+   - Administrators can safely run `playbook.yml` at any time (for package updates, user management, or firewall changes) without interrupting automated renewal timers, invalidating serial trackers, or reverting active certificates.
 
 ---
 
@@ -169,3 +205,11 @@ From an ingress proxy:
 # Verify TLS handshake with strict CA verification
 openssl s_client -connect 10.0.1.11:443 -CAfile /etc/haproxy/certs/internal-ca.crt -servername web1.example.com
 ```
+
+---
+
+## Configuration Examples
+
+For complete group variable templates and reference configurations:
+- [enable_internal_tls_vars.yml](../examples/internal-tls/enable_internal_tls_vars.yml): Ready-to-use variables file for proxies and webservers.
+- [internal-tls Example README](../examples/internal-tls/README.md): Quickstart setup and testing guide.

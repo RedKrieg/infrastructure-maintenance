@@ -2,37 +2,75 @@
 # ==============================================================================
 # Automated Internal CA Renewal & Watchdog Script
 # Managed by Ansible - Executed on Ingress Proxies via systemd timer
-# Checks expiration of Cluster Internal Root CA and automatically renews it
+#
+# Primary Authority (proxy-01):
+#   Owns standard CA renewal at the configured threshold (30 days).
+#
+# Standby Watchdogs (proxy-02, proxy-03, ...):
+#   Operate in standby mode with staggered fallback thresholds (15d - rank).
+#   Checks if higher-priority proxies are alive before attempting renewal.
+#   Never attempts renewal while higher-priority proxies are healthy.
+#   Only takes over if all higher-priority proxies are down.
+#
+# Concurrency & Outage Safety:
+#   Exclusive flock prevents concurrent runs.
+#   Syncs renewed CA to all peers via sync-haproxy-certs.sh.
 # ==============================================================================
 set -u
 
 LOG_FILE="/var/log/internal-ca-renewal.log"
+LOCK_FILE="/var/lock/internal-ca-renewal.lock"
 CA_DIR="{{ internal_ca_dir }}"
 CA_CERT="{{ internal_ca_cert }}"
 CA_KEY="{{ internal_ca_key }}"
 CA_HAPROXY_COPY="{{ haproxy_backend_ca_file }}"
-THRESHOLD_DAYS={{ internal_ca_renewal_threshold_days | default(30) }}
-THRESHOLD_SECONDS=$(( THRESHOLD_DAYS * 86400 ))
 VALIDITY_DAYS={{ internal_ca_validity_days | default(730) }}
+PRIMARY_HOST="{{ cert_primary_host }}"
 PROM_DIR="/var/lib/prometheus/node-exporter"
 
+{% set proxy_list = groups['proxies'] | default([inventory_hostname]) %}
+{% set my_index = proxy_list.index(inventory_hostname) if inventory_hostname in proxy_list else 1 %}
+{% set rank_offset = my_index - 1 %}
+IS_PRIMARY={% if inventory_hostname == cert_primary_host %}1{% else %}0{% endif %}
+RANK_INDEX="{{ my_index }}"
+RANK_OFFSET="{{ rank_offset }}"
+
+# Stagger fallback threshold by 1 day per replica rank
+if [ "$IS_PRIMARY" -eq 1 ]; then
+    THRESHOLD_DAYS={{ internal_ca_renewal_threshold_days | default(30) }}
+else
+    BASE_FALLBACK_DAYS={{ internal_ca_fallback_renewal_days | default(15) }}
+    THRESHOLD_DAYS=$(( BASE_FALLBACK_DAYS - RANK_OFFSET ))
+    if [ "$THRESHOLD_DAYS" -lt 1 ]; then
+        THRESHOLD_DAYS=1
+    fi
+fi
+THRESHOLD_SECONDS=$(( THRESHOLD_DAYS * 86400 ))
+
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [ca-renewal] $*" | tee -a "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [ca-renewal-rank-${RANK_INDEX}] $*" | tee -a "$LOG_FILE"
 }
+
+# 1. Exclusive local execution lock to prevent overlapping runs
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    log "INFO: Another CA renewal process is currently running on $(hostname). Exiting."
+    exit 0
+fi
 
 if [ ! -f "$CA_CERT" ] || [ ! -f "$CA_KEY" ]; then
     log "INFO: CA files not present on $(hostname). Skipping check."
     exit 0
 fi
 
-# 1. Calculate expiration timestamp and remaining days
+# 2. Calculate expiration timestamp and remaining days
 EXPIRY_DATE=$(openssl x509 -enddate -noout -in "$CA_CERT" | cut -d= -f2)
 EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$EXPIRY_DATE" +%s)
 NOW_EPOCH=$(date +%s)
 REMAINING_SECONDS=$(( EXPIRY_EPOCH - NOW_EPOCH ))
 REMAINING_DAYS=$(( REMAINING_SECONDS / 86400 ))
 
-# 2. Write metric for Prometheus Node Exporter
+# 3. Export metric for Prometheus Node Exporter
 if [ -d "$PROM_DIR" ]; then
     cat <<EOF > "${PROM_DIR}/internal_ca_expiry.prom.$$"
 # HELP x509_cert_expiry_timestamp_seconds Unix timestamp when the X.509 certificate expires
@@ -42,14 +80,61 @@ EOF
     mv "${PROM_DIR}/internal_ca_expiry.prom.$$" "${PROM_DIR}/internal_ca_expiry.prom"
 fi
 
-log "Internal Root CA valid until ${EXPIRY_DATE} (${REMAINING_DAYS} days remaining; renewal threshold: ${THRESHOLD_DAYS}d)."
+log "Internal Root CA valid until ${EXPIRY_DATE} (${REMAINING_DAYS} days remaining; renewal threshold: ${THRESHOLD_DAYS}d; primary: ${IS_PRIMARY})."
 
-# 3. Check if renewal is required
-if [ "$REMAINING_SECONDS" -le "$THRESHOLD_SECONDS" ]; then
-    log "WARNING: Internal Root CA is within the ${THRESHOLD_DAYS}-day threshold. Automatically renewing CA certificate..."
+# 4. Check if renewal threshold is reached
+if [ "$REMAINING_SECONDS" -gt "$THRESHOLD_SECONDS" ]; then
+    log "CA certificate is above renewal threshold. Exiting cleanly."
+    exit 0
+fi
 
-    TMP_EXT=$(mktemp)
-    cat <<EOF > "$TMP_EXT"
+# 5. For replica proxies, check if any higher-priority proxy is alive
+HIGHER_PRIORITY_PROXIES=(
+{% for p in proxy_list[:my_index] %}
+    "{{ p }}:{{ hostvars[p]['internal_ip'] | default(hostvars[p]['ansible_host'] | default(p)) }}"
+{% endfor %}
+)
+
+is_higher_priority_proxy_alive() {
+    for peer in "${HIGHER_PRIORITY_PROXIES[@]}"; do
+        [ -z "$peer" ] && continue
+        local p_name="${peer%%:*}"
+        local p_ip="${peer##*:}"
+
+        # Test ICMP reachability
+        if ping -c 2 -W 2 "$p_ip" >/dev/null 2>&1; then
+            # Verify HTTP health of CA signer service on port 8444
+            if curl -s --connect-timeout 2 -m 3 "http://${p_ip}:{{ internal_ca_signer_port | default(8444) }}/health" >/dev/null 2>&1; then
+                log "Higher-priority proxy ${p_name} (${p_ip}) is alive and signer service is healthy."
+                return 0
+            fi
+            # Verify SSH daemon responsiveness
+            if command -v ssh-keyscan >/dev/null 2>&1; then
+                if timeout 3 ssh-keyscan -T 3 "$p_ip" 2>/dev/null | grep -q "ssh-"; then
+                    log "Higher-priority proxy ${p_name} (${p_ip}) is alive and responding via SSH."
+                    return 0
+                fi
+            fi
+        fi
+    done
+    return 1
+}
+
+if [ "$IS_PRIMARY" -ne 1 ]; then
+    if is_higher_priority_proxy_alive; then
+        log "Higher-priority proxy is active and healthy. Primary authority manages CA renewal. Deferring renewal."
+        exit 0
+    else
+        log "WARNING: All higher-priority proxies are unreachable and CA is within emergency fallback threshold (${THRESHOLD_DAYS}d)!"
+        log "Taking over Internal Root CA renewal on replica $(hostname)..."
+    fi
+else
+    log "Primary authority $(hostname) initiating scheduled renewal of Internal Root CA (${REMAINING_DAYS} days remaining)..."
+fi
+
+# 6. Execute CA renewal
+TMP_EXT=$(mktemp)
+cat <<EOF > "$TMP_EXT"
 [v3_ca]
 basicConstraints = critical,CA:TRUE
 keyUsage = critical,digitalSignature,cRLSign,keyCertSign
@@ -57,46 +142,46 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid:always,issuer
 EOF
 
-    if openssl req -x509 -new -nodes -sha256 -days "${VALIDITY_DAYS}" \
-        -key "${CA_KEY}" \
-        -out "${CA_CERT}.new" \
-        -subj "/CN=ClusterInternalRootCA/O=Infrastructure/OU=Security" \
-        -extensions v3_ca \
-        -config "$TMP_EXT" >> "$LOG_FILE" 2>&1; then
+if openssl req -x509 -new -nodes -sha256 -days "${VALIDITY_DAYS}" \
+    -key "${CA_KEY}" \
+    -out "${CA_CERT}.new" \
+    -subj "/CN=ClusterInternalRootCA/O=Infrastructure/OU=Security" \
+    -extensions v3_ca \
+    -config "$TMP_EXT" >> "$LOG_FILE" 2>&1; then
 
-        mv "${CA_CERT}.new" "${CA_CERT}"
-        chmod 0644 "${CA_CERT}"
-        cp -f "${CA_CERT}" "${CA_HAPROXY_COPY}"
-        chmod 0644 "${CA_HAPROXY_COPY}"
-        rm -f "$TMP_EXT"
+    mv "${CA_CERT}.new" "${CA_CERT}"
+    chmod 0644 "${CA_CERT}"
+    cp -f "${CA_CERT}" "${CA_HAPROXY_COPY}"
+    chmod 0644 "${CA_HAPROXY_COPY}"
+    rm -f "$TMP_EXT"
 
-        NEW_EXPIRY_DATE=$(openssl x509 -enddate -noout -in "$CA_CERT" | cut -d= -f2)
-        NEW_EXPIRY_EPOCH=$(date -d "$NEW_EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$NEW_EXPIRY_DATE" +%s)
-        log "SUCCESS: Internal Root CA renewed successfully. New expiration: ${NEW_EXPIRY_DATE}."
+    NEW_EXPIRY_DATE=$(openssl x509 -enddate -noout -in "$CA_CERT" | cut -d= -f2)
+    NEW_EXPIRY_EPOCH=$(date -d "$NEW_EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$NEW_EXPIRY_DATE" +%s)
+    log "SUCCESS: Internal Root CA renewed successfully on $(hostname). New expiration: ${NEW_EXPIRY_DATE}."
 
-        # Update metric immediately with new timestamp
-        if [ -d "$PROM_DIR" ]; then
-            cat <<EOF > "${PROM_DIR}/internal_ca_expiry.prom.$$"
+    # Update metric immediately with new timestamp
+    if [ -d "$PROM_DIR" ]; then
+        cat <<EOF > "${PROM_DIR}/internal_ca_expiry.prom.$$"
 # HELP x509_cert_expiry_timestamp_seconds Unix timestamp when the X.509 certificate expires
 # TYPE x509_cert_expiry_timestamp_seconds gauge
 x509_cert_expiry_timestamp_seconds{cert_name="internal_ca",cert_path="${CA_CERT}",role="ca"} ${NEW_EXPIRY_EPOCH}
 EOF
-            mv "${PROM_DIR}/internal_ca_expiry.prom.$$" "${PROM_DIR}/internal_ca_expiry.prom"
-        fi
-
-        # Reload HAProxy on local node
-        if systemctl is-active --quiet haproxy; then
-            systemctl reload haproxy && log "Reloaded local HAProxy with renewed Internal CA." || true
-        fi
-
-        # Replicate renewed CA to all peer proxies in the cluster
-        if [ -x /usr/local/bin/sync-haproxy-certs.sh ]; then
-            log "Replicating renewed Internal CA to peer proxies..."
-            /usr/local/bin/sync-haproxy-certs.sh >> "$LOG_FILE" 2>&1 || true
-        fi
-    else
-        rm -f "$TMP_EXT" "${CA_CERT}.new"
-        log "ERROR: Failed to renew Internal Root CA!"
-        exit 1
+        mv "${PROM_DIR}/internal_ca_expiry.prom.$$" "${PROM_DIR}/internal_ca_expiry.prom"
     fi
+
+    # Restart local internal-ca-signer and reload HAProxy
+    systemctl restart internal-ca-signer 2>/dev/null || true
+    if systemctl is-active --quiet haproxy; then
+        systemctl reload haproxy && log "Reloaded local HAProxy with renewed Internal CA." || true
+    fi
+
+    # Replicate renewed CA to all peer proxies in the cluster
+    if [ -x /usr/local/bin/sync-haproxy-certs.sh ]; then
+        log "Replicating renewed Internal CA to peer proxies..."
+        /usr/local/bin/sync-haproxy-certs.sh >> "$LOG_FILE" 2>&1 || true
+    fi
+else
+    rm -f "$TMP_EXT" "${CA_CERT}.new"
+    log "ERROR: Failed to renew Internal Root CA!"
+    exit 1
 fi

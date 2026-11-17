@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# Example: Zero-Trust Internal TLS Configuration
+# ==============================================================================
+# To enable Zero-Trust internal TLS across your cluster, include these variables
+# in your group_vars, host_vars, or playbook vars.
+#
+# Architecture Summary:
+# 1. Edge HAProxy terminates public SSL.
+# 2. HAProxy re-encrypts upstream traffic over HTTPS (port 443) to backend webservers.
+# 3. HAProxy strictly validates backend certificates against the internal Root CA
+#    ('ssl verify required ca-file /etc/haproxy/certs/internal-ca.crt').
+# 4. Webservers generate private keys/CSRs with SANs and request signatures from
+#    the proxy CA signer daemon (port 8444).
+# 5. Renewals occur automatically via systemd timers without Ansible intervention:
+#    - Leaf certs renew at 14 days before expiration with proxy failover.
+#    - Root CA renews at 30 days before expiration on the primary proxy,
+#      with replica proxies in standby watchdog mode (15 days - rank offset).
+# 6. Ansible runs are 100% non-destructive and preserve existing, auto-renewed certs.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Proxy Configuration (group_vars/proxies.yml or playbook vars)
+# ------------------------------------------------------------------------------
+# Enable re-encryption to backend webservers over port 443
+haproxy_backend_ssl: true
+
+# Verification mode: "required" strictly authenticates backend certificates
+# using the replicated internal Root CA.
+haproxy_backend_ssl_verify: "required"
+
+# Path to the CA bundle used by HAProxy to verify backends
+haproxy_backend_ca_file: "/etc/haproxy/certs/internal-ca.crt"
+
+# Internal CA authority settings (defaults shown)
+enable_internal_ca: true
+internal_ca_dir: "/etc/ssl/internal/ca"
+internal_ca_signer_port: 8444
+internal_ca_validity_days: 730
+internal_ca_renewal_threshold_days: 30
+internal_ca_fallback_renewal_days: 15
+internal_ca_leaf_validity_days: 90
+
+# ------------------------------------------------------------------------------
+# Webserver Configuration (group_vars/webservers.yml or playbook vars)
+# ------------------------------------------------------------------------------
+# Enable HTTPS on backend webservers
+webserver_enable_ssl: true
+
+# Renewal threshold in days for automated client leaf certificates
+internal_cert_renewal_threshold_days: 14
+
+# Directory for internal certificate and key storage
+webserver_ssl_cert_dir: "/etc/ssl/internal"
+webserver_ssl_cert: "/etc/ssl/internal/webserver.crt"
+webserver_ssl_key: "/etc/ssl/internal/webserver.key"
+webserver_ssl_ca_cert: "/etc/ssl/internal/cluster-ca.crt"

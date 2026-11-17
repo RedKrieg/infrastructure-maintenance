@@ -114,6 +114,15 @@
         timeout: 5
       register: haproxy_metrics_resp
 
+    - name: Verify Internal CA Signer daemon health (if CA enabled)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ internal_ca_signer_port | default(8444) }}/health"
+        method: GET
+        status_code: 200
+        timeout: 5
+      when: enable_internal_ca | default(true) | bool
+      register: internal_ca_health_resp
+
 - name: Verify Backend Webservers & Zero-Trust TLS
   hosts: webservers
   gather_facts: false
@@ -154,6 +163,15 @@
         timeout: 5
       when: webserver_enable_ssl | default(false) | bool
       register: web_resp_https
+
+    - name: Verify internal certificate renewal timer is active
+      ansible.builtin.systemd:
+        name: renew-internal-cert.timer
+        state: started
+      check_mode: true
+      register: renew_timer_state
+      when: webserver_enable_ssl | default(false) | bool
+      failed_when: renew_timer_state.changed
 
 - name: Verify Teleport Access Gateway & Node Registration
   hosts: teleport_servers
