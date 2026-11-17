@@ -25,6 +25,7 @@ CA_CERT="{{ internal_ca_cert }}"
 CA_KEY="{{ internal_ca_key }}"
 CA_HAPROXY_COPY="{{ haproxy_backend_ca_file }}"
 VALIDITY_DAYS={{ internal_ca_validity_days | default(730) }}
+DIGEST="{{ internal_ca_digest | default('sha384') }}"
 PRIMARY_HOST="{{ cert_primary_host }}"
 PROM_DIR="/var/lib/prometheus/node-exporter"
 
@@ -142,7 +143,7 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid:always,issuer
 EOF
 
-if openssl req -x509 -new -nodes -sha256 -days "${VALIDITY_DAYS}" \
+if openssl req -x509 -new -nodes -${DIGEST} -days "${VALIDITY_DAYS}" \
     -key "${CA_KEY}" \
     -out "${CA_CERT}.new" \
     -subj "/CN=ClusterInternalRootCA/O=Infrastructure/OU=Security" \

@@ -1,6 +1,6 @@
 # Zero-Trust Internal TLS Example & Operational Guide
 
-This example demonstrates how to enable end-to-end cryptographic transit between HAProxy ingress load balancers and backend Nginx webservers using the replicated lightweight Internal Certificate Authority (CA).
+This example demonstrates how to enable end-to-end cryptographic transit between HAProxy ingress load balancers and backend Nginx webservers using the replicated lightweight Internal Certificate Authority (CA) powered by ECDSA P-384 (`secp384r1` with SHA-384).
 
 ## Quick Start: Enabling Internal TLS
 
@@ -42,7 +42,7 @@ To prevent multiple proxy nodes from renewing the root CA at the same time:
 
 ### 2. Idempotent, Non-Destructive Ansible Runs
 Ansible plays are engineered to be strictly non-destructive on subsequent runs:
-- **Root CA**: Generated on `proxy-01` only if `/etc/ssl/internal/ca/cluster-ca.crt` is missing. Existing or auto-renewed CAs are never regenerated.
+- **Root CA**: Generated on `proxy-01` using ECDSA P-384 (`secp384r1` with SHA-384) only if `/etc/ssl/internal/ca/cluster-ca.crt` is missing. Existing or auto-renewed CAs are never regenerated.
 - **Cluster Sync**: CA keys and certificates are slurped and distributed only to uninitialized proxies lacking CA files. Existing proxies retain their active certificates.
 - **Webserver Certificates**: Initial signing via `/usr/local/bin/renew-internal-cert.sh --force` runs only if `/etc/ssl/internal/webserver.crt` does not exist. Subsequent Ansible runs skip certificate generation entirely.
 - **Trust Stores**: HAProxy backend CA files are maintained from the local proxy's active CA copy.

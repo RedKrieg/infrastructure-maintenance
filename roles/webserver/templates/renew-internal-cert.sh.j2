@@ -16,6 +16,8 @@ THRESHOLD_DAYS={{ internal_cert_renewal_threshold_days | default(14) }}
 THRESHOLD_SECONDS=$(( THRESHOLD_DAYS * 86400 ))
 AUTH_TOKEN="{{ internal_ca_token }}"
 SIGNER_PORT={{ internal_ca_signer_port | default(8444) }}
+CURVE="{{ webserver_ssl_curve | default('secp384r1') }}"
+DIGEST="{{ webserver_ssl_digest | default('sha384') }}"
 PROM_DIR="/var/lib/prometheus/node-exporter"
 
 NODE_IP="{{ internal_ip | default(ansible_default_ipv4.address | default(ansible_host)) }}"
@@ -78,8 +80,8 @@ fi
 
 # 2. Ensure private key exists
 if [ ! -f "$KEY_FILE" ]; then
-    log "Generating new 2048-bit RSA private key..."
-    openssl genrsa -out "$KEY_FILE" 2048 >> "$LOG_FILE" 2>&1
+    log "Generating new ECDSA P-384 (${CURVE}) private key..."
+    openssl ecparam -name "${CURVE}" -genkey -noout -out "$KEY_FILE" >> "$LOG_FILE" 2>&1
     chmod 0640 "$KEY_FILE"
     chown root:www-data "$KEY_FILE" 2>/dev/null || true
 fi
@@ -99,7 +101,7 @@ OU = WebServers
 
 [v3_req]
 basicConstraints = CA:FALSE
-keyUsage = digitalSignature, keyEncipherment
+keyUsage = digitalSignature, keyAgreement
 extendedKeyUsage = serverAuth, clientAuth
 subjectAltName = @alt_names
 
@@ -109,7 +111,7 @@ DNS.2 = ${NODE_HOSTNAME}
 IP.1 = ${NODE_IP}
 EOF
 
-openssl req -new -key "$KEY_FILE" -out "$CSR_FILE" -config "$TMP_CNF" >> "$LOG_FILE" 2>&1
+openssl req -new -${DIGEST} -key "$KEY_FILE" -out "$CSR_FILE" -config "$TMP_CNF" >> "$LOG_FILE" 2>&1
 rm -f "$TMP_CNF"
 
 CSR_CONTENT=$(cat "$CSR_FILE")

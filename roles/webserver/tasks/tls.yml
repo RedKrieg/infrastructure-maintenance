@@ -59,7 +59,8 @@
     # Fallback to bootstrap self-signed if proxies are unreachable during offline staging
     - name: Generate bootstrap self-signed certificate if proxy CA is unreachable
       ansible.builtin.command: >
-        openssl req -x509 -nodes -days 30 -newkey rsa:2048
+        openssl req -x509 -nodes -days 30 -{{ webserver_ssl_digest | default('sha384') }}
+        -newkey ec -pkeyopt ec_paramgen_curve:{{ webserver_ssl_curve | default('secp384r1') }}
         -keyout {{ webserver_ssl_key }}
         -out {{ webserver_ssl_cert }}
         -subj "/CN={{ external_fqdn | default(inventory_hostname) }}/O=InternalCluster"

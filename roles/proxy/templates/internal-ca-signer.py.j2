@@ -119,7 +119,7 @@ class InternalCASignerHandler(BaseHTTPRequestHandler):
 
             with open(ext_file, "w") as f:
                 f.write("basicConstraints = CA:FALSE\n")
-                f.write("keyUsage = digitalSignature, keyEncipherment\n")
+                f.write("keyUsage = digitalSignature, keyAgreement\n")
                 f.write("extendedKeyUsage = serverAuth, clientAuth\n")
                 if san_line:
                     f.write(f"subjectAltName = {san_line}\n")
@@ -132,7 +132,7 @@ class InternalCASignerHandler(BaseHTTPRequestHandler):
                 "-CAkey", CA_KEY_PATH,
                 "-CAcreateserial",
                 "-days", str(LEAF_DAYS),
-                "-sha256",
+                "-{{ internal_ca_digest | default('sha384') }}",
                 "-extfile", ext_file,
                 "-out", out_cert
             ]

@@ -13,6 +13,8 @@ webserver_ssl_cert: "{{ webserver_ssl_cert_dir }}/webserver.crt"
 webserver_ssl_key: "{{ webserver_ssl_cert_dir }}/webserver.key"
 webserver_ssl_csr: "{{ webserver_ssl_cert_dir }}/webserver.csr"
 webserver_ssl_ca_cert: "{{ webserver_ssl_cert_dir }}/cluster-ca.crt"
+webserver_ssl_curve: "secp384r1"
+webserver_ssl_digest: "sha384"
 
 # Automated Certificate Renewal Configuration (Zero-Ansible-Interaction)
 internal_cert_renewal_threshold_days: 14

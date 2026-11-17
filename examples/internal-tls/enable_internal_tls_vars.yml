@@ -32,10 +32,12 @@ haproxy_backend_ssl_verify: "required"
 # Path to the CA bundle used by HAProxy to verify backends
 haproxy_backend_ca_file: "/etc/haproxy/certs/internal-ca.crt"
 
-# Internal CA authority settings (defaults shown)
+# Internal CA authority settings (defaults shown - ECDSA P-384 / secp384r1)
 enable_internal_ca: true
 internal_ca_dir: "/etc/ssl/internal/ca"
 internal_ca_signer_port: 8444
+internal_ca_curve: "secp384r1"
+internal_ca_digest: "sha384"
 internal_ca_validity_days: 730
 internal_ca_renewal_threshold_days: 30
 internal_ca_fallback_renewal_days: 15
@@ -60,3 +62,5 @@ webserver_ssl_cert_dir: "/etc/ssl/internal"
 webserver_ssl_cert: "/etc/ssl/internal/webserver.crt"
 webserver_ssl_key: "/etc/ssl/internal/webserver.key"
 webserver_ssl_ca_cert: "/etc/ssl/internal/cluster-ca.crt"
+webserver_ssl_curve: "secp384r1"
+webserver_ssl_digest: "sha384"

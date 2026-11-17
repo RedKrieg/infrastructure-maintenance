@@ -5,7 +5,7 @@
 In traditional cloud and enterprise topologies, SSL termination occurs at the edge load balancer, leaving internal transit between the load balancer and backend web servers unencrypted over plaintext HTTP (port 80) or unverified with opportunistic self-signed certificates (`ssl verify none`).
 
 To satisfy strict Zero-Trust and compliance mandates (e.g., **NIST SP 800-207**, **PCI-DSS 4.0**, **SOC 2**, **HIPAA**), this architecture provides a **production-grade, fully automated Internal Certificate Authority (CA)**:
-1. **Lightweight Root CA on `proxy-01`**: A dedicated 4096-bit internal Certificate Authority is initialized on the primary proxy (`cert_primary_host`).
+1. **Lightweight ECDSA P-384 Root CA on `proxy-01`**: A high-assurance Elliptic Curve Root Certificate Authority (`secp384r1` curve with SHA-384, delivering 192 bits of symmetric cryptographic equivalent strength—surpassing RSA-4096) is initialized on the primary proxy (`cert_primary_host`).
 2. **Cluster-Wide CA Replication**: The internal CA root certificate, key, and serial tracker are automatically replicated across all peer proxies using dedicated cluster SSH keys (`sync-haproxy-certs.sh`).
 3. **Strict Cryptographic Peer Verification by Default**: When internal TLS is enabled, `haproxy_backend_ssl_verify: "required"` is the default. HAProxy strictly authenticates every backend server against `/etc/haproxy/certs/internal-ca.crt`.
 4. **Rank-Based Line of Succession Failover**: Backend webservers request and auto-renew certificates via an internal signing API on port `8444`. If `proxy-01` is down or unreachable, clients automatically fall back to `proxy-02`, `proxy-03`, etc., using the exact same succession rules as external certificate renewal.
@@ -57,10 +57,12 @@ haproxy_backend_ssl: true
 haproxy_backend_ssl_verify: "required"
 haproxy_backend_ca_file: "/etc/haproxy/certs/internal-ca.crt"
 
-# Internal CA settings
+# Internal CA settings (ECDSA P-384 / secp384r1)
 enable_internal_ca: true
 internal_ca_dir: "/etc/ssl/internal/ca"
 internal_ca_signer_port: 8444
+internal_ca_curve: "secp384r1"
+internal_ca_digest: "sha384"
 internal_ca_validity_days: 730
 internal_ca_renewal_threshold_days: 30
 internal_ca_leaf_validity_days: 90
@@ -76,7 +78,9 @@ webserver_ssl_cert: "/etc/ssl/internal/webserver.crt"
 webserver_ssl_key: "/etc/ssl/internal/webserver.key"
 webserver_ssl_ca_cert: "/etc/ssl/internal/cluster-ca.crt"
 
-# Automated Certificate Renewal Configuration
+# Automated Certificate Renewal Configuration (ECDSA P-384)
+webserver_ssl_curve: "secp384r1"
+webserver_ssl_digest: "sha384"
 internal_cert_renewal_threshold_days: 14
 internal_ca_signer_port: 8444
 ```
@@ -94,7 +98,7 @@ vault_internal_ca_token: "YourSecretInternalCAToken2026!"
 ### 1. Leaf Certificate Auto-Renewal & Proxy Failover (`renew-internal-cert.sh`)
 Backend webservers execute `/usr/local/bin/renew-internal-cert.sh` daily via the `renew-internal-cert.timer` systemd timer:
 1. **Threshold Assessment**: Evaluates `/etc/ssl/internal/webserver.crt`. If remaining validity is $\le 14$ days (or cert is missing), renewal initiates.
-2. **CSR Generation**: Generates private key (if missing) and CSR containing complete Subject Alternative Names:
+2. **CSR Generation**: Generates an ECDSA P-384 private key (`secp384r1`, if missing) and CSR containing complete Subject Alternative Names signed with SHA-384:
    ```
    DNS:web1.example.com, DNS:web-01, IP:10.0.1.11
    ```

@@ -135,6 +135,8 @@ internal_ca_cert: "{{ internal_ca_dir }}/cluster-ca.crt"
 internal_ca_key: "{{ internal_ca_dir }}/cluster-ca.key"
 internal_ca_srl: "{{ internal_ca_dir }}/cluster-ca.srl"
 internal_ca_signer_port: 8444
+internal_ca_curve: "secp384r1"
+internal_ca_digest: "sha384"
 internal_ca_validity_days: 730
 internal_ca_renewal_threshold_days: 30
 internal_ca_fallback_renewal_days: 15

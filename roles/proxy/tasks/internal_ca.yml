@@ -36,9 +36,9 @@
 
     - name: Generate Cluster Internal Root CA on Primary Proxy
       ansible.builtin.command: >
-        openssl req -x509 -new -nodes -sha256
+        openssl req -x509 -new -nodes -{{ internal_ca_digest | default('sha384') }}
         -days {{ internal_ca_validity_days | default(730) }}
-        -newkey rsa:4096
+        -newkey ec -pkeyopt ec_paramgen_curve:{{ internal_ca_curve | default('secp384r1') }}
         -keyout {{ internal_ca_key }}
         -out {{ internal_ca_cert }}
         -subj "/CN=ClusterInternalRootCA/O=Infrastructure/OU=Security"
