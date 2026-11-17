@@ -12,6 +12,14 @@
         name: prometheus-node-exporter
         state: present
 
+    - name: Grant prometheus user ssl-cert group membership for Node Exporter TLS
+      ansible.builtin.user:
+        name: prometheus
+        groups: ssl-cert
+        append: true
+      when: node_exporter_enable_tls | bool
+      notify: Restart node_exporter
+
     - name: Allow node_exporter port through UFW
       community.general.ufw:
         rule: allow
@@ -49,7 +57,7 @@
             client_ca_file: {{ node_exporter_ca_cert }}
             client_auth_type: VerifyClientCertIfGiven
         owner: root
-        group: root
+        group: prometheus
         mode: "0640"
       when: node_exporter_enable_tls | bool
       notify: Restart node_exporter

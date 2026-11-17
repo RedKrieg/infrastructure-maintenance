@@ -7,6 +7,16 @@
   ansible.builtin.include_tasks: packages.yml
   when: enable_grafana | default(true) | bool
 
+- name: Grant grafana user ssl-cert group membership for internal TLS
+  ansible.builtin.user:
+    name: grafana
+    groups: ssl-cert
+    append: true
+  when:
+    - enable_grafana | default(true) | bool
+    - grafana_enable_tls | default(enable_internal_tls | default(false)) | bool
+  notify: Restart grafana-server
+
 - name: Include configuration & dashboard provisioning tasks
   ansible.builtin.include_tasks: config.yml
   when: enable_grafana | default(true) | bool

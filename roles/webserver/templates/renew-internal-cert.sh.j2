@@ -83,7 +83,7 @@ if [ ! -f "$KEY_FILE" ]; then
     log "Generating new ECDSA P-384 (${CURVE}) private key..."
     openssl ecparam -name "${CURVE}" -genkey -noout -out "$KEY_FILE" >> "$LOG_FILE" 2>&1
     chmod 0640 "$KEY_FILE"
-    chown root:www-data "$KEY_FILE" 2>/dev/null || true
+    chgrp ssl-cert "$KEY_FILE" 2>/dev/null || true
 fi
 
 # 3. Generate CSR with Subject Alternative Names (SANs)
@@ -158,6 +158,8 @@ EOF
             if [ -s "${CA_FILE}.new" ]; then
                 mv "${CA_FILE}.new" "$CA_FILE"
                 chmod 0644 "$CA_FILE"
+                cp -f "$CA_FILE" /usr/local/share/ca-certificates/cluster-internal-ca.crt 2>/dev/null || true
+                update-ca-certificates >/dev/null 2>&1 || true
             fi
 
             # Update Prometheus metric
@@ -170,14 +172,13 @@ x509_cert_expiry_timestamp_seconds{cert_name="internal_webserver",cert_path="${C
 EOF
             mv "${PROM_DIR}/internal_leaf_expiry.prom.$$" "${PROM_DIR}/internal_leaf_expiry.prom"
 
-            # Reload Nginx if active
-            if systemctl is-active --quiet nginx; then
-                if systemctl reload nginx; then
-                    log "SUCCESS: Reloaded Nginx with fresh internal certificate on $(hostname)."
-                else
-                    log "WARNING: Failed to reload Nginx on $(hostname)."
+            # Gracefully refresh active services using the internal certificate
+            for svc in nginx rsyslog prometheus-node-exporter; do
+                if systemctl is-active --quiet "$svc"; then
+                    systemctl reload "$svc" 2>/dev/null || systemctl restart "$svc" 2>/dev/null || true
+                    log "Refreshed service $svc with fresh internal certificate on $(hostname)."
                 fi
-            fi
+            done
 
             SIGN_SUCCESS=1
             break

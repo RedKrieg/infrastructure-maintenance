@@ -287,14 +287,23 @@ backend be_{{ clean_name }}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
 {% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
+{% set grafana_tls = hostvars[host]['grafana_enable_tls'] | default(enable_internal_tls | default(false)) | bool %}
 backend be_{{ clean_name }}
     mode http
     balance roundrobin
     option forwardfor
     http-request set-header Host {{ grafana_host_fqdn }}
     http-request set-header X-Forwarded-Proto https
-    # Grafana Web UI operates on internal HTTP port 3000
-    server {{ host }} {{ target_ip }}:3000 check inter 5s fall 3 rise 2
+    # Grafana Web UI operates on internal port {{ hostvars[host]['grafana_port'] | default(3000) }} ({{ 'HTTPS' if grafana_tls else 'HTTP' }})
+{% if grafana_tls %}
+{% if haproxy_backend_ssl_verify | default('required') == 'required' %}
+    server {{ host }} {{ target_ip }}:{{ hostvars[host]['grafana_port'] | default(3000) }} ssl verify required ca-file {{ haproxy_backend_ca_file }} check inter 5s fall 3 rise 2
+{% else %}
+    server {{ host }} {{ target_ip }}:{{ hostvars[host]['grafana_port'] | default(3000) }} ssl verify none check inter 5s fall 3 rise 2
+{% endif %}
+{% else %}
+    server {{ host }} {{ target_ip }}:{{ hostvars[host]['grafana_port'] | default(3000) }} check inter 5s fall 3 rise 2
+{% endif %}
 {% endfor %}
 {% endif %}
 

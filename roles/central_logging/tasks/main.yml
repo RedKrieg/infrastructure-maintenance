@@ -16,6 +16,14 @@
           - rsyslog-gnutls
         state: present
 
+    - name: Grant syslog user ssl-cert group membership for Rsyslog TLS
+      ansible.builtin.user:
+        name: syslog
+        groups: ssl-cert
+        append: true
+      when: logging_enable_tls | bool
+      notify: Restart rsyslog
+
     - name: Ensure centralized log storage directory exists
       ansible.builtin.file:
         path: "{{ logging_storage_dir }}"
@@ -70,6 +78,14 @@
           - rsyslog
           - rsyslog-gnutls
         state: present
+
+    - name: Grant syslog user ssl-cert group membership for Rsyslog TLS on client
+      ansible.builtin.user:
+        name: syslog
+        groups: ssl-cert
+        append: true
+      when: logging_enable_tls | bool
+      notify: Restart rsyslog
 
     - name: Deploy rsyslog client log forwarder configuration
       ansible.builtin.template:

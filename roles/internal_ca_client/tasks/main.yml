@@ -6,7 +6,22 @@
 - name: Manage Fleet-Wide Internal TLS Certificates
   tags: [internal_ca_client, internal_tls, ssl, tls]
   block:
-    - name: Ensure internal SSL certificate and metrics directories exist
+    - name: Ensure ssl-cert and acl packages are installed for shared TLS key permissions
+      ansible.builtin.apt:
+        name:
+          - ssl-cert
+          - acl
+        state: present
+
+    - name: Ensure internal SSL certificate directory exists with ssl-cert group permissions
+      ansible.builtin.file:
+        path: "{{ internal_ssl_cert_dir }}"
+        state: directory
+        owner: root
+        group: ssl-cert
+        mode: "0750"
+
+    - name: Ensure system CA trust and Prometheus metrics directories exist
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
@@ -14,7 +29,6 @@
         group: root
         mode: "0755"
       loop:
-        - "{{ internal_ssl_cert_dir }}"
         - "/usr/local/share/ca-certificates"
         - "/var/lib/prometheus/node-exporter"
 
@@ -67,14 +81,18 @@
         - not node_cert_stat.stat.exists
         - node_ca_sign_attempt is defined
         - node_ca_sign_attempt.rc != 0
+      register: bootstrap_cert_attempt
 
     - name: Secure internal TLS private key permissions
       ansible.builtin.file:
         path: "{{ internal_ssl_key }}"
         owner: root
-        group: adm
+        group: ssl-cert
         mode: "0640"
-      when: node_cert_stat.stat.exists or (node_ca_sign_attempt is defined and node_ca_sign_attempt.rc == 0)
+      when: >
+        node_cert_stat.stat.exists or
+        (node_ca_sign_attempt is defined and (node_ca_sign_attempt.rc | default(1)) == 0) or
+        (bootstrap_cert_attempt is defined and bootstrap_cert_attempt is changed)
 
     - name: Set internal TLS public certificate permissions
       ansible.builtin.file:
@@ -82,7 +100,10 @@
         owner: root
         group: root
         mode: "0644"
-      when: node_cert_stat.stat.exists or (node_ca_sign_attempt is defined and node_ca_sign_attempt.rc == 0)
+      when: >
+        node_cert_stat.stat.exists or
+        (node_ca_sign_attempt is defined and (node_ca_sign_attempt.rc | default(1)) == 0) or
+        (bootstrap_cert_attempt is defined and bootstrap_cert_attempt is changed)
 
     - name: Update system trust store with Internal CA if present
       ansible.builtin.command: update-ca-certificates

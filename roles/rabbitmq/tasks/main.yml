@@ -24,6 +24,14 @@
     - /var/lib/rabbitmq
     - /var/log/rabbitmq
 
+- name: Grant rabbitmq user ssl-cert group membership for AMQP TLS
+  ansible.builtin.user:
+    name: rabbitmq
+    groups: ssl-cert
+    append: true
+  when: rabbitmq_enable_tls | default(enable_internal_tls | default(false)) | bool
+  notify: restart rabbitmq-server
+
 - name: Configure Erlang cluster secret cookie
   ansible.builtin.copy:
     content: "{{ rabbitmq_erlang_cookie }}"
@@ -57,6 +65,18 @@
     comment: "Allow RabbitMQ AMQP from {{ item }}"
   loop: "{{ rabbitmq_trusted_subnets }}"
   when: rabbitmq_trusted_subnets is defined and rabbitmq_trusted_subnets | length > 0
+
+- name: Configure UFW firewall for RabbitMQ AMQP TLS port
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ rabbitmq_amqp_ssl_port | default(5671) | string }}"
+    src: "{{ item }}"
+    comment: "Allow RabbitMQ AMQP TLS from {{ item }}"
+  loop: "{{ rabbitmq_trusted_subnets }}"
+  when:
+    - rabbitmq_enable_tls | default(enable_internal_tls | default(false)) | bool
+    - rabbitmq_trusted_subnets is defined and rabbitmq_trusted_subnets | length > 0
 
 - name: Configure UFW firewall for RabbitMQ Management UI port
   community.general.ufw:

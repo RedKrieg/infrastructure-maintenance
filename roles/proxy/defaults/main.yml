@@ -125,7 +125,7 @@ haproxy_balance_algorithm: "roundrobin"
 haproxy_enable_cookie_persistence: false
 
 # Internal Backend SSL / Zero-Trust TLS to Webservers
-haproxy_backend_ssl: false
+haproxy_backend_ssl: "{{ enable_internal_tls | default(false) | bool }}"
 # Verification mode: "required" with internal CA (default for Zero-Trust), or "none"
 haproxy_backend_ssl_verify: "required"
 haproxy_backend_ca_file: "/etc/haproxy/certs/internal-ca.crt"

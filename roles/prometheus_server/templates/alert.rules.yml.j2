@@ -2,6 +2,7 @@
 # Prometheus Alerting Rules - Managed by Ansible
 # Validated with `promtool check rules` during deployment
 # ==============================================================================
+{% raw %}
 
 groups:
   - name: haproxy_cluster_alerts
@@ -149,4 +150,5 @@ groups:
         annotations:
           summary: "High CPU utilization on {{ $labels.instance }}"
           description: "Host {{ $labels.instance }} CPU utilization has exceeded 90% for more than 10 minutes."
+{% endraw %}
 

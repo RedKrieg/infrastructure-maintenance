@@ -105,5 +105,57 @@ done
 
 echo ""
 echo "================================================================="
+echo " 6. Jinja2, Python, JSON & Alertmanager YAML Validation"
+echo "================================================================="
+python3 - <<'EOF'
+import glob, json, py_compile, sys
+import jinja2, yaml
+
+errors = []
+env = jinja2.Environment()
+
+j2_files = sorted(glob.glob("roles/**/*.j2", recursive=True))
+for p in j2_files:
+    with open(p, encoding="utf-8") as f:
+        try:
+            env.parse(f.read())
+        except Exception as e:
+            errors.append(f"Jinja2 parse error in {p}: {e}")
+print(f"  [✓] Parsed {len(j2_files)} Jinja2 templates")
+
+py_files = sorted(glob.glob("**/*.py", recursive=True))
+for p in py_files:
+    try:
+        py_compile.compile(p, doraise=True)
+    except Exception as e:
+        errors.append(f"Python compile error in {p}: {e}")
+print(f"  [✓] Compiled {len(py_files)} Python scripts")
+
+json_files = sorted(glob.glob("**/*.json", recursive=True))
+for p in json_files:
+    with open(p, encoding="utf-8") as f:
+        try:
+            json.load(f)
+        except Exception as e:
+            errors.append(f"JSON parse error in {p}: {e}")
+print(f"  [✓] Validated {len(json_files)} JSON files")
+
+am_files = sorted(glob.glob("examples/alertmanager/*.yml", recursive=True))
+for p in am_files:
+    with open(p, encoding="utf-8") as f:
+        try:
+            yaml.safe_load(f)
+        except Exception as e:
+            errors.append(f"YAML parse error in {p}: {e}")
+print(f"  [✓] Validated {len(am_files)} Alertmanager YAML files")
+
+if errors:
+    for err in errors:
+        print(f"  [✗] {err}", file=sys.stderr)
+    sys.exit(1)
+EOF
+
+echo ""
+echo "================================================================="
 echo " All syntax and script validation checks PASSED successfully!"
 echo "================================================================="

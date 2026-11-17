@@ -241,7 +241,8 @@
 
     - name: Verify Grafana health API endpoint
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ grafana_port | default(3000) }}/api/health"
+        url: "{{ 'https' if (grafana_enable_tls | default(enable_internal_tls | default(false)) | bool) else 'http' }}://127.0.0.1:{{ grafana_port | default(3000) }}/api/health"
+        validate_certs: false
         status_code: 200
         timeout: 5
       register: grafana_health
@@ -297,7 +298,8 @@
     - name: Verify Redis PING responsiveness
       ansible.builtin.command:
         cmd: >
-          redis-cli -p {{ redis_port | default(6379) }}
+          redis-cli -p {{ redis_tls_port | default(redis_port | default(6379)) }}
+          {% if redis_enable_tls | default(enable_internal_tls | default(false)) | bool %}--tls --cacert {{ redis_ca_cert | default('/etc/ssl/certs/internal-ca.crt') }}{% endif %}
           {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
           ping
       changed_when: false

@@ -291,7 +291,8 @@
     - name: Trigger Redis background save snapshot (bgsave)
       ansible.builtin.command:
         cmd: >
-          redis-cli -p {{ redis_port | default(6379) }}
+          redis-cli -p {{ redis_tls_port | default(redis_port | default(6379)) }}
+          {% if redis_enable_tls | default(enable_internal_tls | default(false)) | bool %}--tls --cacert {{ redis_ca_cert | default('/etc/ssl/certs/internal-ca.crt') }}{% endif %}
           {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
           bgsave
       failed_when: false

@@ -12,6 +12,14 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Grant redis user ssl-cert group membership for Redis TLS
+  ansible.builtin.user:
+    name: redis
+    groups: ssl-cert
+    append: true
+  when: redis_enable_tls | default(enable_internal_tls | default(false)) | bool
+  notify: restart redis-server
+
 - name: Ensure Redis working and log directories exist
   ansible.builtin.file:
     path: "{{ item }}"
@@ -36,7 +44,7 @@
   community.general.ufw:
     rule: allow
     proto: tcp
-    port: "{{ redis_port | string }}"
+    port: "{{ ((redis_tls_port | default(redis_port)) if (redis_enable_tls | default(enable_internal_tls | default(false)) | bool) else redis_port) | string }}"
     src: "{{ item }}"
     comment: "Allow Redis traffic from trusted internal subnet {{ item }}"
   loop: "{{ redis_trusted_subnets }}"
@@ -54,7 +62,8 @@
 - name: Verify Redis service is responsive via redis-cli
   ansible.builtin.command:
     cmd: >
-      redis-cli -p {{ redis_port }}
+      redis-cli -p {{ redis_tls_port | default(redis_port | default(6379)) }}
+      {% if redis_enable_tls | default(enable_internal_tls | default(false)) | bool %}--tls --cacert {{ redis_ca_cert | default('/etc/ssl/certs/internal-ca.crt') }}{% endif %}
       {% if redis_password %} -a '{{ redis_password }}'{% endif %}
       ping
   register: redis_ping_result

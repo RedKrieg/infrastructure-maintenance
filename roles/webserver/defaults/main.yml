@@ -7,12 +7,12 @@
 webserver_root_dir: "/var/www/{{ external_fqdn | default('html') }}"
 
 # Internal Backend SSL / TLS (Zero-Trust)
-webserver_enable_ssl: false
+webserver_enable_ssl: "{{ enable_internal_tls | default(false) | bool }}"
 webserver_ssl_cert_dir: "/etc/ssl/internal"
-webserver_ssl_cert: "{{ webserver_ssl_cert_dir }}/webserver.crt"
-webserver_ssl_key: "{{ webserver_ssl_cert_dir }}/webserver.key"
-webserver_ssl_csr: "{{ webserver_ssl_cert_dir }}/webserver.csr"
-webserver_ssl_ca_cert: "{{ webserver_ssl_cert_dir }}/cluster-ca.crt"
+webserver_ssl_cert: "{{ webserver_ssl_cert_dir }}/server.crt"
+webserver_ssl_key: "{{ webserver_ssl_cert_dir }}/server.key"
+webserver_ssl_csr: "{{ webserver_ssl_cert_dir }}/server.csr"
+webserver_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
 webserver_ssl_curve: "secp384r1"
 webserver_ssl_digest: "sha384"
 

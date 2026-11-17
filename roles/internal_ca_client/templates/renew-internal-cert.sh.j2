@@ -83,7 +83,7 @@ if [ ! -f "$KEY_FILE" ]; then
     log "Generating new ECDSA P-384 (${CURVE}) private key..."
     openssl ecparam -name "${CURVE}" -genkey -noout -out "$KEY_FILE" >> "$LOG_FILE" 2>&1
     chmod 0640 "$KEY_FILE"
-    chgrp adm "$KEY_FILE" 2>/dev/null || true
+    chgrp ssl-cert "$KEY_FILE" 2>/dev/null || true
 fi
 
 # 3. Generate CSR with Subject Alternative Names (SANs)

@@ -28,64 +28,17 @@ jobs:
 
       - name: Install Ansible Collections
         run: |
-          ansible-galaxy collection install amazon.aws google.cloud azure.azcollection openstack.cloud community.general community.crypto ansible.posix
+          ansible-galaxy collection install amazon.aws google.cloud azure.azcollection openstack.cloud community.general community.crypto community.postgresql community.mysql community.rabbitmq ansible.posix
 
-      - name: Run Bash Script Syntax Check (bash -n)
+      - name: Run Automated Test & Validation Suite
         run: |
-          echo "Validating syntax of shell scripts..."
-          find . -name "*.sh" -not -path "*/.git/*" -exec bash -n {} +
-          echo "All shell scripts passed syntax checks."
+          chmod +x tests/run_tests.sh
+          ./tests/run_tests.sh
 
       - name: Run ShellCheck
         run: |
           echo "Running ShellCheck on automation scripts..."
           find examples/provisioning -name "*.sh" -exec shellcheck {} + || true
-
-      - name: Run Ansible Playbook Syntax Checks across all Inventories
-        run: |
-          echo "Testing main playbook against active inventory..."
-          ansible-playbook -i inventory.ini playbook.yml --syntax-check
-
-          echo "Testing against staging and production inventories..."
-          ansible-playbook -i inventories/staging/hosts.ini playbook.yml --syntax-check
-          ansible-playbook -i inventories/production/hosts.ini playbook.yml --syntax-check
-
-          echo "Testing against cloud example inventories..."
-          ansible-playbook -i examples/inventories/inventory.aws.ini playbook.yml --syntax-check
-          ansible-playbook -i examples/inventories/inventory.gcp.ini playbook.yml --syntax-check
-          ansible-playbook -i examples/inventories/inventory.azure.ini playbook.yml --syntax-check
-          ansible-playbook -i examples/inventories/inventory.oci.ini playbook.yml --syntax-check
-          ansible-playbook -i examples/inventories/inventory.openstack.ini playbook.yml --syntax-check
-          ansible-playbook -i examples/inventories/inventory.freeipa.ini playbook.yml --syntax-check
-
-      - name: Run Operational Playbooks Syntax Checks
-        run: |
-          echo "Testing operational playbooks (backup, restore, verify, rolling maintenance, chaos drill)..."
-          ansible-playbook -i inventory.ini backup_cluster.yml --syntax-check
-          ansible-playbook -i inventory.ini restore_cluster.yml --syntax-check
-          ansible-playbook -i inventory.ini verify_cluster.yml --syntax-check
-          ansible-playbook -i inventory.ini rolling_maintenance.yml --syntax-check
-          ansible-playbook -i inventory.ini chaos_drill.yml --syntax-check
-
-      - name: Run FreeIPA Playbooks Syntax Checks
-        run: |
-          echo "Testing FreeIPA standup and client enrollment playbooks..."
-          ansible-playbook -i examples/freeipa/inventory.standup.ini examples/freeipa/standup_freeipa_cluster.yml --syntax-check
-          ansible-playbook -i examples/freeipa/inventory.existing.ini examples/freeipa/enroll_existing_freeipa.yml --syntax-check
-
-      - name: Run Provisioning Playbooks Syntax Checks
-        run: |
-          echo "Testing provisioning playbooks..."
-          ansible-playbook examples/provisioning/provision_aws.yml --syntax-check
-          ansible-playbook examples/provisioning/deprovision_aws.yml --syntax-check
-          ansible-playbook examples/provisioning/provision_gcp.yml --syntax-check
-          ansible-playbook examples/provisioning/deprovision_gcp.yml --syntax-check
-          ansible-playbook examples/provisioning/provision_azure.yml --syntax-check
-          ansible-playbook examples/provisioning/deprovision_azure.yml --syntax-check
-          ansible-playbook examples/provisioning/provision_oci.yml --syntax-check
-          ansible-playbook examples/provisioning/deprovision_oci.yml --syntax-check
-          ansible-playbook examples/provisioning/provision_openstack.yml --syntax-check
-          ansible-playbook examples/provisioning/deprovision_openstack.yml --syntax-check
 
       - name: Run Ansible Lint
         run: |

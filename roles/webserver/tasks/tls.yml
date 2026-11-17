@@ -7,16 +7,33 @@
   when: webserver_enable_ssl | bool
   tags: [webserver, ssl, tls]
   block:
-    - name: Ensure internal SSL certificate and prometheus directories exist
+    - name: Ensure ssl-cert package is installed for shared TLS key permissions
+      ansible.builtin.apt:
+        name: ssl-cert
+        state: present
+
+    - name: Grant www-data user ssl-cert group membership for Nginx internal TLS
+      ansible.builtin.user:
+        name: www-data
+        groups: ssl-cert
+        append: true
+      notify: Reload nginx
+
+    - name: Ensure internal SSL certificate directory exists with ssl-cert permissions
       ansible.builtin.file:
-        path: "{{ item }}"
+        path: "{{ webserver_ssl_cert_dir }}"
+        state: directory
+        owner: root
+        group: ssl-cert
+        mode: "0750"
+
+    - name: Ensure Prometheus textfile metrics directory exists
+      ansible.builtin.file:
+        path: "/var/lib/prometheus/node-exporter"
         state: directory
         owner: root
         group: root
-        mode: "0750"
-      loop:
-        - "{{ webserver_ssl_cert_dir }}"
-        - "/var/lib/prometheus/node-exporter"
+        mode: "0755"
 
     - name: Deploy automated internal certificate renewal script
       ansible.builtin.template:
@@ -68,15 +85,19 @@
         - not internal_cert_stat.stat.exists
         - ca_sign_attempt is defined
         - ca_sign_attempt.rc != 0
+      register: bootstrap_cert_attempt
       notify: Reload nginx
 
     - name: Secure internal TLS private key permissions
       ansible.builtin.file:
         path: "{{ webserver_ssl_key }}"
         owner: root
-        group: www-data
+        group: ssl-cert
         mode: "0640"
-      when: internal_cert_stat.stat.exists or (ca_sign_attempt is defined and ca_sign_attempt.rc == 0)
+      when: >
+        internal_cert_stat.stat.exists or
+        (ca_sign_attempt is defined and (ca_sign_attempt.rc | default(1)) == 0) or
+        (bootstrap_cert_attempt is defined and bootstrap_cert_attempt is changed)
 
     - name: Set internal TLS public certificate permissions
       ansible.builtin.file:
@@ -84,4 +105,7 @@
         owner: root
         group: root
         mode: "0644"
-      when: internal_cert_stat.stat.exists or (ca_sign_attempt is defined and ca_sign_attempt.rc == 0)
+      when: >
+        internal_cert_stat.stat.exists or
+        (ca_sign_attempt is defined and (ca_sign_attempt.rc | default(1)) == 0) or
+        (bootstrap_cert_attempt is defined and bootstrap_cert_attempt is changed)

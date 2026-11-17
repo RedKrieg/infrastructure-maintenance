@@ -18,7 +18,7 @@ module(
     load="imtcp"
     StreamDriver.Name="gtls"
     StreamDriver.Mode="1"
-    StreamDriver.Authmode="anon"
+    StreamDriver.Authmode="x509/certvalid"
 )
 
 input(type="imtcp" port="{{ logging_tls_port }}" ruleset="remote_logs")

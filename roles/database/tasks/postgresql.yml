@@ -42,8 +42,15 @@
 - name: Configure PostgreSQL Zero-Trust TLS encryption
   when: postgresql_enable_ssl | default(enable_internal_tls | default(false)) | bool
   block:
-    - name: Ensure PostgreSQL has read access to internal SSL private key
-      ansible.builtin.acl:
+    - name: Grant postgres user ssl-cert group membership for internal TLS
+      ansible.builtin.user:
+        name: postgres
+        groups: ssl-cert
+        append: true
+      notify: restart postgresql
+
+    - name: Ensure PostgreSQL has read access to internal SSL private key via POSIX ACL
+      ansible.posix.acl:
         path: /etc/ssl/internal/server.key
         entity: postgres
         etype: user

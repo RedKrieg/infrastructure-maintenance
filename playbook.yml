@@ -24,9 +24,6 @@
     - role: admin_users
       tags: [admin_users, users, dotfiles, venv]
 
-    - role: node_exporter
-      tags: [node_exporter, monitoring, telemetry]
-
 # ------------------------------------------------------------------------------
 # Play 2: Proxy Ingress Foundation & Cluster Internal CA Authority
 # ------------------------------------------------------------------------------
@@ -57,8 +54,11 @@
 
   roles:
     - role: internal_ca_client
-      when: enable_internal_tls | default(false) | bool or webserver_enable_ssl | default(true) | bool
+      when: enable_internal_tls | default(false) | bool or webserver_enable_ssl | default(false) | bool
       tags: [internal_ca_client, internal_tls, ssl, tls, ca]
+
+    - role: node_exporter
+      tags: [node_exporter, monitoring, telemetry]
 
 # ------------------------------------------------------------------------------
 # Play 3: Optional Database Layer (PostgreSQL or MySQL)
