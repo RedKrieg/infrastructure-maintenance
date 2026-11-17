@@ -195,7 +195,7 @@ frontend fe_https
 {% if rmq_hosts | length > 0 %}
 {% for host in rmq_hosts %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set rmq_host_fqdn = hostvars[host]['rabbitmq_mgmt_fqdn'] | default(rabbitmq_mgmt_fqdn | default('rabbitmq.' ~ domain_name)) %}
+{% set rmq_host_fqdn = hostvars[host]['rabbitmq_mgmt_fqdn'] | default(rabbitmq_mgmt_fqdn | default('mq.' ~ (domain_name | default('example.com')))) %}
     # Route for RabbitMQ Management UI: {{ rmq_host_fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
 
     acl is_{{ clean_name }}_rmq hdr(host) -i {{ rmq_host_fqdn }}
@@ -264,7 +264,7 @@ backend be_{{ clean_name }}
     http-check expect rstatus (2..|3..)
 {% endif %}
 {% for host in pdata.hosts %}
-{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
 {% set target_port = 443 if (haproxy_backend_ssl | default(false) | bool) else 80 %}
 {% if haproxy_backend_ssl | default(false) | bool %}
 {% if haproxy_backend_ssl_verify | default('required') == 'required' %}
@@ -296,7 +296,7 @@ backend be_default_404
 {% if tp_hosts | length > 0 %}
 {% for host in tp_hosts %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
 backend be_{{ clean_name }}
     mode http
     balance roundrobin
@@ -312,7 +312,7 @@ backend be_{{ clean_name }}
 {% if groups['monitoring'] is defined and groups['monitoring'] | length > 0 %}
 {% for host in groups['monitoring'] %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
 {% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
 {% set grafana_tls = hostvars[host]['grafana_enable_tls'] | default(enable_internal_tls | default(false)) | bool %}
 backend be_{{ clean_name }}
@@ -339,7 +339,7 @@ backend be_{{ clean_name }}
 {% if rmq_hosts | length > 0 %}
 {% for host in rmq_hosts %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
 {% set target_port = hostvars[host]['rabbitmq_mgmt_port'] | default(15672) %}
 backend be_{{ clean_name }}_rmq
     mode http
@@ -391,7 +391,7 @@ backend be_teleport_ssh
     mode tcp
     timeout server 1h
     timeout connect 5s
-    server {{ tp_hosts[0] }} {{ hostvars[tp_hosts[0]]['ansible_host'] | default(tp_hosts[0]) }}:3023 check
+    server {{ tp_hosts[0] }} {{ hostvars[tp_hosts[0]]['internal_ip'] | default(hostvars[tp_hosts[0]]['ansible_host'] | default(tp_hosts[0])) }}:3023 check
 {% endif %}
 
 {% if haproxy_enable_coraza_waf | default(true) | bool %}

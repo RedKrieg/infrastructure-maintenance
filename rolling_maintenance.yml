@@ -59,33 +59,8 @@
       failed_when: false
       changed_when: true
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: apt_cache_res
-      retries: 3
-      delay: 5
-      until: apt_cache_res is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-      register: apt_upgrade_res
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: reboot_required_file
-
-    - name: Reboot webserver node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: reboot_required_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure Nginx webserver is running
       ansible.builtin.systemd:
@@ -147,32 +122,8 @@
         seconds: 3
       when: enable_keepalived | default(false) | bool
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: proxy_apt_cache
-      retries: 3
-      delay: 5
-      until: proxy_apt_cache is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: proxy_reboot_file
-
-    - name: Reboot proxy node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting proxy {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: proxy_reboot_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure HAProxy service is active and healthy
       ansible.builtin.systemd:
@@ -214,32 +165,8 @@
           ansible.builtin.debug:
             msg: ">>> Starting rolling maintenance on database replica {{ inventory_hostname }} <<<"
 
-        - name: Update APT package cache on replica
-          ansible.builtin.apt:
-            update_cache: true
-          register: db_rep_apt_cache
-          retries: 3
-          delay: 5
-          until: db_rep_apt_cache is succeeded
-
-        - name: Apply security and OS package updates on replica (preserving configurations)
-          ansible.builtin.apt:
-            upgrade: dist
-            dpkg_options: 'force-confdef,force-confold'
-
-        - name: Check if kernel reboot is required on replica
-          ansible.builtin.stat:
-            path: /var/run/reboot-required
-          register: db_rep_reboot_file
-
-        - name: Reboot database replica if updates require it
-          ansible.builtin.reboot:
-            msg: "Rebooting database replica {{ inventory_hostname }} following rolling system upgrades"
-            connect_timeout: 10
-            reboot_timeout: 300
-            pre_reboot_delay: 2
-            post_reboot_delay: 5
-          when: db_rep_reboot_file.stat.exists or (force_reboot | bool)
+        - name: Execute unattended OS package upgrade and conditional reboot
+          ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
         - name: Ensure database service is active on replica
           ansible.builtin.systemd:
@@ -296,32 +223,8 @@
           ansible.builtin.debug:
             msg: ">>> Starting rolling maintenance on database node {{ inventory_hostname }} (Role: {{ db_role | default('standalone') }}) <<<"
 
-        - name: Update APT package cache
-          ansible.builtin.apt:
-            update_cache: true
-          register: db_apt_cache
-          retries: 3
-          delay: 5
-          until: db_apt_cache is succeeded
-
-        - name: Apply security and OS package updates (preserving configurations)
-          ansible.builtin.apt:
-            upgrade: dist
-            dpkg_options: 'force-confdef,force-confold'
-
-        - name: Check if kernel reboot is required
-          ansible.builtin.stat:
-            path: /var/run/reboot-required
-          register: db_reboot_file
-
-        - name: Reboot database node if updates require it
-          ansible.builtin.reboot:
-            msg: "Rebooting database node {{ inventory_hostname }} following rolling system upgrades"
-            connect_timeout: 10
-            reboot_timeout: 300
-            pre_reboot_delay: 2
-            post_reboot_delay: 5
-          when: db_reboot_file.stat.exists or (force_reboot | bool)
+        - name: Execute unattended OS package upgrade and conditional reboot
+          ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
         - name: Ensure database service is active
           ansible.builtin.systemd:
@@ -375,32 +278,8 @@
       ansible.builtin.debug:
         msg: ">>> Starting rolling maintenance on Redis node {{ inventory_hostname }} <<<"
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: redis_apt_cache
-      retries: 3
-      delay: 5
-      until: redis_apt_cache is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: redis_reboot_file
-
-    - name: Reboot Redis node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting Redis node {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: redis_reboot_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure Redis service is active
       ansible.builtin.systemd:
@@ -441,32 +320,8 @@
       ansible.builtin.debug:
         msg: ">>> Starting rolling maintenance on RabbitMQ node {{ inventory_hostname }} <<<"
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: rmq_apt_cache
-      retries: 3
-      delay: 5
-      until: rmq_apt_cache is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: rmq_reboot_file
-
-    - name: Reboot RabbitMQ node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting RabbitMQ node {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: rmq_reboot_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure RabbitMQ service is active
       ansible.builtin.systemd:
@@ -502,32 +357,8 @@
       ansible.builtin.debug:
         msg: ">>> Starting rolling maintenance on FreeIPA node {{ inventory_hostname }} <<<"
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: ipa_apt_cache
-      retries: 3
-      delay: 5
-      until: ipa_apt_cache is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: ipa_reboot_file
-
-    - name: Reboot FreeIPA node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting FreeIPA node {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: ipa_reboot_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure FreeIPA service is active
       ansible.builtin.systemd:
@@ -564,32 +395,8 @@
       ansible.builtin.debug:
         msg: ">>> Starting rolling maintenance on Monitoring node {{ inventory_hostname }} <<<"
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: mon_apt_cache
-      retries: 3
-      delay: 5
-      until: mon_apt_cache is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: mon_reboot_file
-
-    - name: Reboot Monitoring node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting Monitoring node {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: mon_reboot_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure Prometheus and Grafana services are active
       ansible.builtin.systemd:
@@ -641,32 +448,8 @@
       ansible.builtin.debug:
         msg: ">>> Starting rolling maintenance on Teleport gateway {{ inventory_hostname }} <<<"
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: tp_apt_cache
-      retries: 3
-      delay: 5
-      until: tp_apt_cache is succeeded
-
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
-
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: tp_reboot_file
-
-    - name: Reboot Teleport gateway if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting Teleport gateway {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: tp_reboot_file.stat.exists or (force_reboot | bool)
+    - name: Execute unattended OS package upgrade and conditional reboot
+      ansible.builtin.include_tasks: tasks/rolling_upgrade_node.yml
 
     - name: Ensure Teleport service is active
       ansible.builtin.systemd:
@@ -687,4 +470,3 @@
     - name: Confirm Teleport gateway is healthy and restored
       ansible.builtin.debug:
         msg: ">>> Teleport gateway {{ inventory_hostname }} successfully updated and verified <<<"
-

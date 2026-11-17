@@ -64,7 +64,7 @@ For sample `rclone.conf` configurations across Cloudflare R2, Backblaze B2, AWS 
 
 | Cluster Component | Host Group | Paths & State Preserved |
 | :--- | :--- | :--- |
-| **Edge Proxies & VIP** | `proxies` | `/etc/haproxy/`, `/etc/keepalived/`, `/root/.acme.sh/` (TLS certs) |
+| **Edge Proxies & VIP** | `proxies` | `/etc/haproxy/`, `/etc/keepalived/`, `/etc/ssl/internal/` (Internal Root CA), `/root/.acme.sh/` (ACME certs) |
 | **Webservers** | `webservers` | `/etc/nginx/`, `/etc/ssl/internal/`, `/var/www/` |
 | **Database Tier** | `databases` | Live compressed SQL dumps (`pg_dumpall`, `mysqldump`), `/etc/postgresql/`, `/etc/mysql/` |
 | **Redis Cache Tier** | `redis_servers` | Point-in-time snapshot (`dump.rdb`, `appendonly.aof`), `/etc/redis/redis.conf` |

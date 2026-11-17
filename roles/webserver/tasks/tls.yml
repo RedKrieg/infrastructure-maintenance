@@ -2,6 +2,9 @@
 # ==============================================================================
 # Internal TLS Certificate Provisioning & Automated Renewal for Webserver
 # ==============================================================================
+# Delegates certificate enrollment, trust-store registration, and systemd timer
+# lifecycle to roles/internal_ca_client as the Single Source of Truth.
+# ==============================================================================
 
 - name: Manage Internal TLS Certificates for Zero-Trust Backend
   when: webserver_enable_ssl | bool
@@ -19,93 +22,14 @@
         append: true
       notify: Reload nginx
 
-    - name: Ensure internal SSL certificate directory exists with ssl-cert permissions
-      ansible.builtin.file:
-        path: "{{ webserver_ssl_cert_dir }}"
-        state: directory
-        owner: root
-        group: ssl-cert
-        mode: "0750"
-
-    - name: Ensure Prometheus textfile metrics directory exists
-      ansible.builtin.file:
-        path: "/var/lib/prometheus/node-exporter"
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
-
-    - name: Deploy automated internal certificate renewal script
-      ansible.builtin.template:
-        src: renew-internal-cert.sh.j2
-        dest: /usr/local/bin/renew-internal-cert.sh
-        owner: root
-        group: root
-        mode: "0750"
-
-    - name: Deploy renew-internal-cert systemd service and timer
-      ansible.builtin.template:
-        src: "{{ item.src }}"
-        dest: "/etc/systemd/system/{{ item.dest }}"
-        owner: root
-        group: root
-        mode: "0644"
-      loop:
-        - { src: "renew-internal-cert.service.j2", dest: "renew-internal-cert.service" }
-        - { src: "renew-internal-cert.timer.j2", dest: "renew-internal-cert.timer" }
-
-    - name: Enable and start renew-internal-cert timer
-      ansible.builtin.systemd:
-        name: renew-internal-cert.timer
-        state: started
-        enabled: true
-        daemon_reload: true
-
-    - name: Check if internal certificate already exists
-      ansible.builtin.stat:
-        path: "{{ webserver_ssl_cert }}"
-      register: internal_cert_stat
-
-    - name: Request initial CA-signed certificate from active ingress proxy
-      ansible.builtin.command: /usr/local/bin/renew-internal-cert.sh --force
-      when: not internal_cert_stat.stat.exists
-      register: ca_sign_attempt
-      failed_when: false
-      changed_when: true
-
-    # Fallback to bootstrap self-signed if proxies are unreachable during offline staging
-    - name: Generate bootstrap self-signed certificate if proxy CA is unreachable
-      ansible.builtin.command: >
-        openssl req -x509 -nodes -days 30 -{{ webserver_ssl_digest | default('sha384') }}
-        -newkey ec -pkeyopt ec_paramgen_curve:{{ webserver_ssl_curve | default('secp384r1') }}
-        -keyout {{ webserver_ssl_key }}
-        -out {{ webserver_ssl_cert }}
-        -subj "/CN={{ external_fqdn | default(inventory_hostname) }}/O=InternalCluster"
-      when:
-        - not internal_cert_stat.stat.exists
-        - ca_sign_attempt is defined
-        - ca_sign_attempt.rc != 0
-      register: bootstrap_cert_attempt
-      notify: Reload nginx
-
-    - name: Secure internal TLS private key permissions
-      ansible.builtin.file:
-        path: "{{ webserver_ssl_key }}"
-        owner: root
-        group: ssl-cert
-        mode: "0640"
-      when: >
-        internal_cert_stat.stat.exists or
-        (ca_sign_attempt is defined and (ca_sign_attempt.rc | default(1)) == 0) or
-        (bootstrap_cert_attempt is defined and bootstrap_cert_attempt is changed)
-
-    - name: Set internal TLS public certificate permissions
-      ansible.builtin.file:
-        path: "{{ webserver_ssl_cert }}"
-        owner: root
-        group: root
-        mode: "0644"
-      when: >
-        internal_cert_stat.stat.exists or
-        (ca_sign_attempt is defined and (ca_sign_attempt.rc | default(1)) == 0) or
-        (bootstrap_cert_attempt is defined and bootstrap_cert_attempt is changed)
+    - name: Enroll webserver and maintain internal TLS certificate via internal_ca_client
+      ansible.builtin.include_role:
+        name: internal_ca_client
+      vars:
+        internal_ssl_cert_dir: "{{ webserver_ssl_cert_dir }}"
+        internal_ssl_cert: "{{ webserver_ssl_cert }}"
+        internal_ssl_key: "{{ webserver_ssl_key }}"
+        internal_ssl_csr: "{{ webserver_ssl_csr }}"
+        internal_ssl_ca_cert: "{{ webserver_ssl_ca_cert }}"
+        internal_ssl_curve: "{{ webserver_ssl_curve }}"
+        internal_ssl_digest: "{{ webserver_ssl_digest }}"

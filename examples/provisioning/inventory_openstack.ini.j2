@@ -25,11 +25,35 @@
 {{ inst.name }} ansible_host={{ inst.ip }}
 {% endfor %}
 
+[freeipa_servers]
+{% for inst in os_instances if inst.group == 'freeipa_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
+[databases]
+{% for inst in os_instances if inst.group == 'databases' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
+[redis_servers]
+{% for inst in os_instances if inst.group == 'redis_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
+[rabbitmq_servers]
+{% for inst in os_instances if inst.group == 'rabbitmq_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }}
+{% endfor %}
+
 [headless_nodes:children]
 proxies
 webservers
 monitoring
 teleport_servers
+freeipa_servers
+databases
+redis_servers
+rabbitmq_servers
 
 [headless_nodes:vars]
 ansible_user={{ os_ssh_user }}

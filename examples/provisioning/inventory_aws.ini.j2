@@ -25,11 +25,35 @@
 {{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
+[freeipa_servers]
+{% for inst in aws_instances if inst.group == 'freeipa_servers' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
+[databases]
+{% for inst in aws_instances if inst.group == 'databases' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
+[redis_servers]
+{% for inst in aws_instances if inst.group == 'redis_servers' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
+[rabbitmq_servers]
+{% for inst in aws_instances if inst.group == 'rabbitmq_servers' %}
+{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{% endfor %}
+
 [headless_nodes:children]
 proxies
 webservers
 monitoring
 teleport_servers
+freeipa_servers
+databases
+redis_servers
+rabbitmq_servers
 
 [headless_nodes:vars]
 ansible_user={{ aws_ssh_user }}

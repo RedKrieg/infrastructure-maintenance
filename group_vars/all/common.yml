@@ -1,0 +1,31 @@
+---
+# ==============================================================================
+# Global Cluster Defaults (Single Source of Truth)
+# ==============================================================================
+# Loaded automatically for all hosts and roles via Ansible's group_vars/all/.
+# Override any value per-environment in inventories/<env>/group_vars/ or -e.
+# ==============================================================================
+
+# Base domain used to derive service FQDNs and Realms
+domain_name: "example.com"
+
+# Fleet-wide Zero-Trust Internal TLS (Internal Root CA & Mutual Authentication)
+enable_internal_tls: false
+internal_ssl_cert_dir: "/etc/ssl/internal"
+internal_ssl_cert: "{{ internal_ssl_cert_dir }}/server.crt"
+internal_ssl_key: "{{ internal_ssl_cert_dir }}/server.key"
+internal_ssl_csr: "{{ internal_ssl_cert_dir }}/server.csr"
+internal_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
+internal_ca_signer_port: 8444
+internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
+
+# Canonical Service FQDNs
+teleport_fqdn: "teleport.{{ domain_name }}"
+grafana_fqdn: "grafana.{{ domain_name }}"
+monitoring_fqdn: "monitoring.{{ domain_name }}"
+rabbitmq_mgmt_fqdn: "mq.{{ domain_name }}"
+
+# Canonical FreeIPA Identity Defaults
+freeipa_domain: "{{ domain_name }}"
+freeipa_realm: "{{ freeipa_domain | upper }}"
+freeipa_server_fqdn: "ipa.{{ freeipa_domain }}"

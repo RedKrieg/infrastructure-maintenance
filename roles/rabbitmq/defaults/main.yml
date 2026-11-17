@@ -8,8 +8,12 @@ enable_rabbitmq: true
 
 # Listening Ports
 rabbitmq_amqp_port: 5672
+rabbitmq_amqp_ssl_port: 5671
 rabbitmq_mgmt_port: 15672
 rabbitmq_prometheus_port: 15692
+
+# Management UI Reverse Proxy FQDN
+rabbitmq_mgmt_fqdn: "mq.{{ domain_name | default('example.com') }}"
 
 # Erlang Cluster Secret Cookie (Required for multi-node clustering and cli tools)
 rabbitmq_erlang_cookie: "{{ vault_rabbitmq_erlang_cookie | default('ClusterErlangCookie2026!') }}"

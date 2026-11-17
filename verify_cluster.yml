@@ -204,6 +204,29 @@
       ansible.builtin.debug:
         var: tctl_nodes.stdout_lines
 
+- name: Verify FreeIPA Centralized Identity Server
+  hosts: freeipa_servers
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify FreeIPA service state and directory health
+      when: identity_provider | default('teleport') in ['freeipa', 'both']
+      block:
+        - name: Check FreeIPA systemd service state
+          ansible.builtin.systemd:
+            name: ipa
+            state: started
+          check_mode: true
+          register: ipa_svc_state
+          failed_when: ipa_svc_state.changed
+
+        - name: Verify FreeIPA control status (KDC, 389 DS, PKI)
+          ansible.builtin.command:
+            cmd: ipactl status
+          changed_when: false
+          register: ipa_status_out
+          failed_when: ipa_status_out.rc != 0
+
 - name: Verify Observability Tier (Prometheus & Grafana)
   hosts: monitoring
   gather_facts: false
@@ -357,5 +380,6 @@
           - " [✓] Redis In-Memory Cache & Session Store Responsive"
           - " [✓] RabbitMQ Message Broker & Management API Operational"
           - " [✓] Teleport Zero-Trust Access Gateway & Nodes Registered"
+          - " [✓] FreeIPA Centralized Identity Server Operational (when enabled)"
           - " [✓] Prometheus Server & Grafana Telemetry Dashboards Ready"
           - "=========================================================="

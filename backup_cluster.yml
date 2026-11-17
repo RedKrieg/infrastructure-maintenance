@@ -51,6 +51,7 @@
       loop:
         - /etc/haproxy
         - /etc/keepalived
+        - /etc/ssl/internal
         - /root/.acme.sh
       register: proxy_stat_results
 

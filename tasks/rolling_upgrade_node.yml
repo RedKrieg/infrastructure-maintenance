@@ -1,0 +1,33 @@
+---
+# ==============================================================================
+# Shared Task Helper: Unattended Rolling OS Package Upgrade & Kernel Reboot
+# ==============================================================================
+# Reused across all rolling_maintenance.yml tier plays (DRY / Single Source).
+# ==============================================================================
+
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: true
+  register: rolling_apt_cache
+  retries: 3
+  delay: 5
+  until: rolling_apt_cache is succeeded
+
+- name: Apply security and OS package updates (preserving configurations)
+  ansible.builtin.apt:
+    upgrade: dist
+    dpkg_options: 'force-confdef,force-confold'
+
+- name: Check if kernel reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: rolling_reboot_file
+
+- name: Reboot node if kernel updates require it
+  ansible.builtin.reboot:
+    msg: "Rebooting {{ inventory_hostname }} following rolling system upgrades"
+    connect_timeout: 10
+    reboot_timeout: 300
+    pre_reboot_delay: 2
+    post_reboot_delay: 5
+  when: rolling_reboot_file.stat.exists or (force_reboot | default(false) | bool)

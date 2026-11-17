@@ -169,6 +169,50 @@ for md in md_files:
             errors.append(f"Broken relative link in {md}: {target} -> {resolved}")
 print(f"  [✓] Verified {checked_links} relative links across {len(md_files)} Markdown files")
 
+vault_files = sorted(glob.glob("roles/**/*", recursive=True) + glob.glob("group_vars/**/*", recursive=True) + glob.glob("*.yml"))
+vault_refs = set()
+vault_re = re.compile(r"(?<![.\w])vault_[a-zA-Z0-9_]+")
+for p in vault_files:
+    if os.path.isdir(p):
+        continue
+    with open(p, encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            code_part = line.split("#", 1)[0]
+            for m in vault_re.finditer(code_part):
+                v = m.group(0)
+                if v != "vault_password_file":
+                    vault_refs.add((v, p))
+
+with open("group_vars/all/vault.example.yml", encoding="utf-8") as f:
+    vault_example_keys = set((yaml.safe_load(f) or {}).keys())
+with open("group_vars/all/vault.yml", encoding="utf-8") as f:
+    vault_raw = f.read()
+vault_actual_keys = set((yaml.safe_load(vault_raw) or {}).keys()) if not vault_raw.startswith("$ANSIBLE_VAULT;") else None
+
+for v, p in sorted(vault_refs):
+    if v not in vault_example_keys:
+        errors.append(f"Vault SSOT mismatch: {v} (used in {p}) missing from group_vars/all/vault.example.yml")
+    if vault_actual_keys is not None and v not in vault_actual_keys:
+        errors.append(f"Vault SSOT mismatch: {v} (used in {p}) missing from group_vars/all/vault.yml")
+print(f"  [✓] Verified {len({v for v, _ in vault_refs})} vault_* references match SSOT vault files")
+
+expected_groups = [
+    "[proxies]", "[webservers]", "[monitoring]", "[teleport_servers]",
+    "[freeipa_servers]", "[databases]", "[redis_servers]", "[rabbitmq_servers]",
+    "[headless_nodes:children]",
+]
+inv_files = sorted(set(
+    glob.glob("**/*.ini", recursive=True)
+    + glob.glob("examples/provisioning/inventory_*.ini.j2")
+))
+for inv in inv_files:
+    with open(inv, encoding="utf-8") as f:
+        inv_content = f.read()
+    missing_groups = [g for g in expected_groups if g not in inv_content]
+    if missing_groups:
+        errors.append(f"Inventory group parity mismatch in {inv}: missing {missing_groups}")
+print(f"  [✓] Verified host group parity across {len(inv_files)} inventory files and templates")
+
 if errors:
     for err in errors:
         print(f"  [✗] {err}", file=sys.stderr)

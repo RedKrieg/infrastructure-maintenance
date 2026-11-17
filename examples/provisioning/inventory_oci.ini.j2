@@ -25,11 +25,35 @@
 {{ inst.name }} ansible_host={{ inst.ip }} fault_domain={{ inst.fault_domain }}
 {% endfor %}
 
+[freeipa_servers]
+{% for inst in oci_instances if inst.group == 'freeipa_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }} fault_domain={{ inst.fault_domain }}
+{% endfor %}
+
+[databases]
+{% for inst in oci_instances if inst.group == 'databases' %}
+{{ inst.name }} ansible_host={{ inst.ip }} fault_domain={{ inst.fault_domain }}
+{% endfor %}
+
+[redis_servers]
+{% for inst in oci_instances if inst.group == 'redis_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }} fault_domain={{ inst.fault_domain }}
+{% endfor %}
+
+[rabbitmq_servers]
+{% for inst in oci_instances if inst.group == 'rabbitmq_servers' %}
+{{ inst.name }} ansible_host={{ inst.ip }} fault_domain={{ inst.fault_domain }}
+{% endfor %}
+
 [headless_nodes:children]
 proxies
 webservers
 monitoring
 teleport_servers
+freeipa_servers
+databases
+redis_servers
+rabbitmq_servers
 
 [headless_nodes:vars]
 ansible_user={{ oci_ssh_user }}
