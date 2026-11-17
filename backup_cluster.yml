@@ -392,6 +392,61 @@
         - "{{ backup_staging_dir }}/rabbitmq_definitions_{{ inventory_hostname }}_{{ backup_ts }}.json"
         - "{{ backup_staging_dir }}/rabbitmq_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
 
+- name: Backup FreeIPA Centralized Identity & Directory State
+  hosts: freeipa_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Execute FreeIPA native data backup
+      ansible.builtin.command:
+        cmd: "ipa-backup --data --no-logs"
+      failed_when: false
+      changed_when: true
+
+    - name: Check candidate FreeIPA backup paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/ipa/backup
+        - /etc/ipa
+        - /etc/dirsrv
+        - /etc/krb5.conf
+      register: ipa_stat_results
+
+    - name: Assemble existing FreeIPA backup paths
+      ansible.builtin.set_fact:
+        ipa_backup_paths: "{{ ipa_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Archive FreeIPA configurations and backup archives
+      community.general.archive:
+        path: "{{ ipa_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/freeipa_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: ipa_backup_paths | length > 0
+
+    - name: Fetch FreeIPA archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/freeipa_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: ipa_backup_paths | length > 0
+
+    - name: Remove temporary FreeIPA staging archive
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}/freeipa_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        state: absent
+
 - name: Finalize Backup Dispatch & Offsite Synchronization
   hosts: localhost
   connection: local

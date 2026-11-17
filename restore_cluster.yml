@@ -344,3 +344,36 @@
           ansible.builtin.file:
             path: /tmp/rabbitmq_restore
             state: absent
+
+- name: Restore FreeIPA Identity Server Tier
+  hosts: freeipa_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if FreeIPA backup archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: ipa_archive_stat
+
+    - name: Restore FreeIPA configuration and directory state
+      when: ipa_archive_stat.stat.exists
+      block:
+        - name: Unarchive FreeIPA state to filesystem root
+          ansible.builtin.unarchive:
+            src: "{{ active_restore_dir }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+            dest: /
+          notify: Restart FreeIPA service
+
+  handlers:
+    - name: Restart FreeIPA service
+      ansible.builtin.systemd:
+        name: ipa
+        state: restarted
+      failed_when: false
+

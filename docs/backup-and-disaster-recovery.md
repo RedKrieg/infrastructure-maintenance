@@ -70,6 +70,7 @@ For sample `rclone.conf` configurations across Cloudflare R2, Backblaze B2, AWS 
 | **Redis Cache Tier** | `redis_servers` | Point-in-time snapshot (`dump.rdb`, `appendonly.aof`), `/etc/redis/redis.conf` |
 | **RabbitMQ Message Broker**| `rabbitmq_servers` | Schema & broker definitions export (JSON), `/etc/rabbitmq/`, `.erlang.cookie` |
 | **Teleport Gateway** | `teleport_servers` | `/etc/teleport.yaml`, `/var/lib/teleport/` (CA keys, state) |
+| **FreeIPA Identity Server** | `freeipa_servers` | Native backup (`ipa-backup --data`), `/var/lib/ipa/backup/`, `/etc/ipa/`, `/etc/dirsrv/`, `/etc/krb5.conf` |
 | **Monitoring Stack** | `monitoring` | `/etc/prometheus/`, `/etc/grafana/`, `/var/lib/grafana/grafana.db` |
 
 ---

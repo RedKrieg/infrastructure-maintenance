@@ -61,6 +61,8 @@ Ready-to-use cloud-specific inventory templates are available in the `examples/i
 > - **[OpenStack Setup Guide](openstack-setup.md)** (`examples/provisioning/provision_openstack.yml`)
 > - **[Database Architecture Guide](database-architecture.md)** (Self-hosted & cloud-native PostgreSQL / MySQL)
 > - **[Cache & Queue Architecture Guide](cache-and-queue-architecture.md)** (Redis caching/sessions & RabbitMQ message broker)
+> - **[Alert Response & Runbooks Guide](alert-response-and-runbooks.md)** (Incident triage, memory/disk limits & online volume expansion)
+> - **[Secret Rotation & Key Management](secret-rotation-and-key-management.md)** (Zero-downtime secret rotation, vault rekeying, DB/Redis & CA lifecycles)
 
 ---
 

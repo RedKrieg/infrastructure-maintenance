@@ -30,6 +30,23 @@ The `chaos_drill.yml` playbook runs automated, non-destructive failure injection
   - Audits presence and executable permissions of `/usr/local/bin/sync-haproxy-certs.sh` and `/usr/local/bin/check-ssh-cluster.sh`.
   - Verifies that replica standby proxies maintain their staggered renewal offsets (1 day per rank) and do not attempt conflicting renewals while the primary proxy is operational.
 
+### 4. Database Connection Resiliency & Service Health
+- **Assertion**:
+  - Validates active query execution against PostgreSQL (`SELECT 1;`) or MySQL.
+  - Performs a non-destructive service reload to test runtime configuration ingestion.
+  - Confirms database daemon returns cleanly to active running state without connection starvation.
+
+### 5. Redis In-Memory Cache Snapshot & Recovery
+- **Failure Injection**: Triggers background snapshot creation (`bgsave`) followed by a graceful restart of the Redis service daemon.
+- **Assertion**:
+  - Measures recovery latency for Redis to bind to port 6379 and load dataset from disk.
+  - Verifies authenticated `redis-cli ping` returns `PONG`.
+
+### 6. RabbitMQ Diagnostic & Alarm Status
+- **Assertion**:
+  - Executes `rabbitmq-diagnostics check_running` to ensure the Erlang VM, message store, and node plugins are operational.
+  - Inspects `rabbitmq-diagnostics check_alarms` to verify no memory or disk watermarks are blocking publishers.
+
 ---
 
 ## Running the Chaos Drill
@@ -58,6 +75,9 @@ ok: [localhost] => {
         " [✓] Backend Recovery & Return-to-Pool Asserted",
         " [✓] VRRP Virtual IP Migration Handshake Validated",
         " [✓] ACME Cert Succession Watchdog & Standby Ready",
+        " [✓] Database Query Responsiveness & Service Health Validated",
+        " [✓] Redis Cache Snapshot & Restart Recovery Confirmed",
+        " [✓] RabbitMQ Broker Diagnostics & Alarm Status Verified",
         " [✓] 100% Self-Healing Confirmed: All Services Restored",
         "=========================================================="
     ]

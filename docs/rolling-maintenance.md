@@ -60,6 +60,12 @@ The `rolling_maintenance.yml` playbook automates zero-downtime maintenance by co
 8. **RabbitMQ Broker Tier Maintenance**:
    - RabbitMQ nodes are updated sequentially (`serial: 1`).
    - Runs `rabbitmq-diagnostics check_running` to ensure the Erlang VM and all plugins are healthy before proceeding.
+9. **FreeIPA Identity Tier Maintenance**:
+   - FreeIPA identity servers are updated sequentially (`serial: 1`).
+   - Reboots only if kernel updates require it; verifies `ipactl status` reports 389 Directory Server, Kerberos KDC, and CA services are running before proceeding.
+10. **Monitoring & Telemetry Tier Maintenance**:
+   - Monitoring instances are updated sequentially (`serial: 1`).
+   - Verifies Prometheus `/-/healthy` and Grafana `/api/health` HTTP endpoints respond with HTTP 200 before proceeding.
 
 ---
 

@@ -400,3 +400,142 @@
     - name: Confirm RabbitMQ node is healthy and restored
       ansible.builtin.debug:
         msg: ">>> RabbitMQ node {{ inventory_hostname }} successfully updated and verified <<<"
+
+# ------------------------------------------------------------------------------
+# Play 6: Rolling Maintenance across FreeIPA Identity Tier (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Rolling Maintenance for FreeIPA Identity Server Tier
+  hosts: freeipa_servers
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display FreeIPA node maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on FreeIPA node {{ inventory_hostname }} <<<"
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: ipa_apt_cache
+      retries: 3
+      delay: 5
+      until: ipa_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: ipa_reboot_file
+
+    - name: Reboot FreeIPA node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting FreeIPA node {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: ipa_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure FreeIPA service is active
+      ansible.builtin.systemd:
+        name: ipa
+        state: started
+        enabled: true
+
+    - name: Verify FreeIPA service responsiveness
+      ansible.builtin.command:
+        cmd: ipactl status
+      changed_when: false
+      retries: 10
+      delay: 5
+      register: ipa_status_res
+      until: ipa_status_res.rc == 0
+      failed_when: false
+
+    - name: Confirm FreeIPA node is healthy and restored
+      ansible.builtin.debug:
+        msg: ">>> FreeIPA node {{ inventory_hostname }} successfully updated and verified <<<"
+
+# ------------------------------------------------------------------------------
+# Play 7: Rolling Maintenance across Monitoring Tier (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Rolling Maintenance for Monitoring & Telemetry Tier
+  hosts: monitoring
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display Monitoring node maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on Monitoring node {{ inventory_hostname }} <<<"
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: mon_apt_cache
+      retries: 3
+      delay: 5
+      until: mon_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: mon_reboot_file
+
+    - name: Reboot Monitoring node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting Monitoring node {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: mon_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure Prometheus and Grafana services are active
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - prometheus
+        - grafana-server
+      failed_when: false
+
+    - name: Verify Prometheus health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9090/-/healthy"
+        status_code: 200
+      retries: 10
+      delay: 3
+      register: prom_health
+      until: prom_health.status == 200
+      failed_when: false
+
+    - name: Verify Grafana health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:3000/api/health"
+        status_code: 200
+      retries: 10
+      delay: 3
+      register: grafana_health
+      until: grafana_health.status == 200
+      failed_when: false
+
+    - name: Confirm Monitoring node is healthy and restored
+      ansible.builtin.debug:
+        msg: ">>> Monitoring node {{ inventory_hostname }} successfully updated and verified <<<"
+

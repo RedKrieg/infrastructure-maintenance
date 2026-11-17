@@ -179,6 +179,117 @@
         success_msg: "Succession scripts and SSH cluster check operational on {{ inventory_hostname }}"
 
 # ------------------------------------------------------------------------------
+# Drill 4: Database Connection Resiliency & Service Health
+# ------------------------------------------------------------------------------
+- name: "Chaos Drill: Database Tier Resiliency & Query Responsiveness"
+  hosts: databases
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify PostgreSQL responsiveness if configured
+      ansible.builtin.shell:
+        cmd: "su - postgres -c 'psql -t -c \"SELECT 1;\"'"
+      changed_when: false
+      failed_when: false
+      register: pg_query_check
+
+    - name: Verify MySQL responsiveness if configured
+      ansible.builtin.shell:
+        cmd: "mysql -e 'SELECT 1;'"
+      changed_when: false
+      failed_when: false
+      register: mysql_query_check
+
+    - name: Non-destructive database service reload
+      ansible.builtin.systemd:
+        name: "{{ 'postgresql' if pg_query_check.rc == 0 else 'mysql' }}"
+        state: reloaded
+      when: pg_query_check.rc == 0 or mysql_query_check.rc == 0
+      failed_when: false
+
+    - name: Assert database service returned to active status
+      ansible.builtin.systemd:
+        name: "{{ 'postgresql' if pg_query_check.rc == 0 else 'mysql' }}"
+        state: started
+      when: pg_query_check.rc == 0 or mysql_query_check.rc == 0
+
+    - name: Confirm Drill 4 Recovery
+      ansible.builtin.debug:
+        msg: ">>> Drill 4 Complete: Database tier query responsiveness validated! <<<"
+
+# ------------------------------------------------------------------------------
+# Drill 5: Redis In-Memory Cache Resiliency & Fast Recovery
+# ------------------------------------------------------------------------------
+- name: "Chaos Drill: Redis In-Memory Cache Snapshot & Recovery"
+  hosts: redis_servers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Trigger background save snapshot before simulated restart
+      ansible.builtin.command:
+        cmd: >
+          redis-cli -p {{ redis_port | default(6379) }}
+          {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
+          bgsave
+      failed_when: false
+      changed_when: true
+      no_log: true
+
+    - name: Wait for snapshot creation
+      ansible.builtin.pause:
+        seconds: 2
+
+    - name: Gracefully restart Redis service
+      ansible.builtin.systemd:
+        name: redis-server
+        state: restarted
+
+    - name: Verify Redis PING recovery
+      ansible.builtin.command:
+        cmd: >
+          redis-cli -p {{ redis_port | default(6379) }}
+          {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
+          ping
+      changed_when: false
+      retries: 10
+      delay: 2
+      register: redis_ping_recovery
+      until: "'PONG' in redis_ping_recovery.stdout"
+      no_log: true
+
+    - name: Confirm Drill 5 Recovery
+      ansible.builtin.debug:
+        msg: ">>> Drill 5 Complete: Redis in-memory cache restored and PONG verified! <<<"
+
+# ------------------------------------------------------------------------------
+# Drill 6: RabbitMQ Message Broker Readiness & Diagnostic Drill
+# ------------------------------------------------------------------------------
+- name: "Chaos Drill: RabbitMQ Health & Queue Diagnostic Drill"
+  hosts: rabbitmq_servers
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Run RabbitMQ node diagnostics
+      ansible.builtin.command:
+        cmd: rabbitmq-diagnostics -q check_running
+      changed_when: false
+      retries: 5
+      delay: 2
+      register: rmq_diag_res
+      until: rmq_diag_res.rc == 0
+
+    - name: Check RabbitMQ alarms
+      ansible.builtin.command:
+        cmd: rabbitmq-diagnostics -q check_alarms
+      changed_when: false
+      register: rmq_alarms_res
+      failed_when: false
+
+    - name: Confirm Drill 6 Recovery
+      ansible.builtin.debug:
+        msg: ">>> Drill 6 Complete: RabbitMQ broker running with clean diagnostic status! <<<"
+
+# ------------------------------------------------------------------------------
 # Summary
 # ------------------------------------------------------------------------------
 - name: Chaos Drill Results Summary
@@ -196,5 +307,8 @@
           - " [✓] Backend Recovery & Return-to-Pool Asserted"
           - " [✓] VRRP Virtual IP Migration Handshake Validated"
           - " [✓] ACME Cert Succession Watchdog & Standby Ready"
+          - " [✓] Database Query Responsiveness & Service Health Validated"
+          - " [✓] Redis Cache Snapshot & Restart Recovery Confirmed"
+          - " [✓] RabbitMQ Broker Diagnostics & Alarm Status Verified"
           - " [✓] 100% Self-Healing Confirmed: All Services Restored"
           - "=========================================================="

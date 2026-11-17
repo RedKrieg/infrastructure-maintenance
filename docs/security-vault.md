@@ -50,6 +50,13 @@ Add the password file path to your `ansible.cfg`:
 [defaults]
 vault_password_file = ~/.vault_pass
 ```
+
+---
+
+## 4. Key Lifecycle & Credential Rotation
+
+For detailed operational procedures on rekeying Ansible Vault (`ansible-vault rekey`), rotating live database and Redis passwords with zero downtime, and cycling Internal CA root keys, see the comprehensive [Secret Rotation & Key Management Guide](secret-rotation-and-key-management.md).
+
 With this configured, Ansible commands (`ansible-playbook`, `ansible-vault view`) automatically decrypt vault variables in the background without requiring manual CLI flags.
 
 ### Step 2.2: Encrypting the Vault File
@@ -87,3 +94,10 @@ To make Ansible use your vault password file automatically without passing `--va
 [defaults]
 vault_password_file = ~/.vault_pass
 ```
+
+---
+
+## 4. Key Lifecycle & Credential Rotation
+
+For detailed operational procedures on rekeying Ansible Vault (`ansible-vault rekey`), rotating live database and Redis passwords with zero downtime, and cycling Internal CA root keys, see the comprehensive [Secret Rotation & Key Management Guide](secret-rotation-and-key-management.md).
+

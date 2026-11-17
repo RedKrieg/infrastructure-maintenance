@@ -371,3 +371,55 @@ df -h /
 ```
 
 The filesystem expands dynamically within seconds with **zero downtime, zero unmounting, and zero process restarts**.
+
+---
+
+## 3. Database & Broker Alert Response Runbooks
+
+### A. PostgreSQL Replication Lag (`PostgreSQLReplicationLagHigh`)
+
+* **Alert Trigger**: Replica falls more than 60 seconds behind primary (`pg_replication_lag_seconds > 60`).
+* **Diagnostic Triage**:
+  1. On the primary database node:
+     ```sql
+     SELECT client_addr, state, sync_state, 
+            pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS lag_bytes 
+     FROM pg_stat_replication;
+     ```
+  2. On the read replica:
+     ```sql
+     SELECT now() - pg_last_xact_replay_timestamp() AS replication_lag;
+     ```
+* **Common Root Causes**:
+  - High-volume batch data ingestion or heavy write transactions on primary.
+  - I/O throttling or disk saturation on replica storage volume.
+  - Network throughput saturation between availability zones.
+* **Remediation**:
+  - Check replica disk I/O with `iostat -xz 1 5`.
+  - Increase `max_wal_size` and `wal_keep_size` on primary if replication drops.
+  - Scale replica disk volume IOPS/throughput tier or increase instance compute size.
+
+---
+
+### B. Connection Pool Saturation (`PostgreSQLConnectionPoolSaturation`)
+
+* **Alert Trigger**: Active connection count exceeds 85% of configured `max_connections`.
+* **Diagnostic Triage**:
+  ```sql
+  SELECT count(*), state FROM pg_stat_activity GROUP BY state;
+  SELECT pid, client_addr, state, query_start, now() - query_start AS duration, query 
+  FROM pg_stat_activity 
+  WHERE state != 'idle' 
+  ORDER BY duration DESC LIMIT 10;
+  ```
+* **Immediate Remediation**:
+  - Terminate hung queries holding locks or lingering idle in transaction:
+    ```sql
+    SELECT pg_terminate_backend(pid) 
+    FROM pg_stat_activity 
+    WHERE state = 'idle in transaction' 
+      AND state_change < now() - INTERVAL '10 minutes';
+    ```
+  - Verify and route read queries through **PgBouncer** connection pooler (port 6432) on read replicas to reuse server connections.
+  - Increase `max_connections` in `postgresql.conf` if physical RAM allows (adjusting `shared_buffers` accordingly).
+
