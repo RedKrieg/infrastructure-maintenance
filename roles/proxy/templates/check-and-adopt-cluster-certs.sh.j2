@@ -59,8 +59,14 @@ TARGET_DOMAINS=(
 {% if enable_wildcard_cert | default(false) | bool and acme_dns_provider | default('') | length > 0 %}
     "{{ wildcard_cert_name | default('wildcard.' ~ domain_name) }}"
 {% else %}
+{% set unique_web_fqdns = [] %}
 {% for host in groups['webservers'] | default([]) %}
 {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
+{% if fqdn not in unique_web_fqdns %}
+{% set _ = unique_web_fqdns.append(fqdn) %}
+{% endif %}
+{% endfor %}
+{% for fqdn in unique_web_fqdns %}
     "{{ fqdn }}"
 {% endfor %}
 {% endif %}

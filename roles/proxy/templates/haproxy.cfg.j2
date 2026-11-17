@@ -132,12 +132,27 @@ frontend fe_https
     http-request deny deny_status 403 if { var(txn.coraza.action) -m str deny }
 {% endif %}
 
-{% if groups['webservers'] is defined %}
-{% for host in groups['webservers'] %}
-{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
-    # Route for {{ fqdn }} -> {{ host }}
-    acl is_{{ clean_name }} hdr(host) -i {{ fqdn }}
+{%- set web_pools = {} -%}
+{%- if groups['webservers'] is defined -%}
+{%- for host in groups['webservers'] -%}
+{%- set host_fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) -%}
+{%- set pool_id = hostvars[host]['backend_pool'] | default(host_fqdn) -%}
+{%- if pool_id not in web_pools -%}
+{%- set _ = web_pools.update({pool_id: {'fqdns': [], 'hosts': []}}) -%}
+{%- endif -%}
+{%- if host_fqdn not in web_pools[pool_id]['fqdns'] -%}
+{%- set _ = web_pools[pool_id]['fqdns'].append(host_fqdn) -%}
+{%- endif -%}
+{%- set _ = web_pools[pool_id]['hosts'].append(host) -%}
+{%- endfor -%}
+{%- endif -%}
+
+{% if web_pools is defined and web_pools | length > 0 %}
+    # Webserver routing (supports 1:1 dedicated backends and N:1 pooled backends)
+{% for pool_id, pdata in web_pools.items() %}
+{% set clean_name = pool_id | regex_replace('[^a-zA-Z0-9]', '_') %}
+    # Route for backend pool: {{ pool_id }} ({{ pdata.fqdns | join(', ') }})
+    acl is_{{ clean_name }} hdr(host) -i {{ pdata.fqdns | join(' ') }}
     use_backend be_{{ clean_name }} if is_{{ clean_name }}
 {% endfor %}
 {% endif %}
@@ -188,11 +203,27 @@ backend be_acme
 {% endfor %}
 {% endif %}
 
-# --- Dynamic Backend Webservers (1:1 per external FQDN) ---
-{% if groups['webservers'] is defined %}
-{% for host in groups['webservers'] %}
-{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
+# --- Dynamic Backend Webservers (1:1 dedicated or N:1 load-balanced pools) ---
+{% if web_pools is defined and web_pools | length > 0 %}
+{% for pool_id, pdata in web_pools.items() %}
+{% set clean_name = pool_id | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set primary_fqdn = pdata.fqdns[0] %}
+{% set first_host = pdata.hosts[0] %}
+{% set balance_algo = hostvars[first_host]['backend_balance'] | default(haproxy_balance_algorithm | default('roundrobin')) %}
+{% set use_cookie = hostvars[first_host]['backend_cookie_persistence'] | default(haproxy_enable_cookie_persistence | default(false)) | bool %}
+backend be_{{ clean_name }}
+    mode http
+    balance {{ balance_algo }}
+{% if use_cookie %}
+    cookie SERVERID insert indirect nocache
+{% endif %}
+    option forwardfor
+    http-request set-header Host {{ primary_fqdn }}
+{% if haproxy_backend_http_check | bool %}
+    option httpchk GET / HTTP/1.1\r\nHost:\ {{ primary_fqdn }}
+    http-check expect rstatus (2..|3..)
+{% endif %}
+{% for host in pdata.hosts %}
 {% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
 {% set target_port = 443 if (haproxy_backend_ssl | default(false) | bool) else 80 %}
 {% if haproxy_backend_ssl | default(false) | bool %}
@@ -204,18 +235,13 @@ backend be_acme
 {% else %}
 {% set ssl_opts = '' %}
 {% endif %}
-backend be_{{ clean_name }}
-    mode http
-    balance roundrobin
-    option forwardfor
-    http-request set-header Host {{ fqdn }}
+{% set cookie_opt = ('cookie ' ~ host) if use_cookie else '' %}
 {% if haproxy_backend_http_check | bool %}
-    option httpchk GET / HTTP/1.1\r\nHost:\ {{ fqdn }}
-    http-check expect rstatus (2..|3..)
-    server {{ host }} {{ target_ip }}:{{ target_port }} {{ ssl_opts }} check inter {{ haproxy_check_inter }} fall {{ haproxy_check_fall }} rise {{ haproxy_check_rise }}
+    server {{ host }} {{ target_ip }}:{{ target_port }}{% if ssl_opts %} {{ ssl_opts }}{% endif %}{% if cookie_opt %} {{ cookie_opt }}{% endif %} check inter {{ haproxy_check_inter }} fall {{ haproxy_check_fall }} rise {{ haproxy_check_rise }}
 {% else %}
-    server {{ host }} {{ target_ip }}:{{ target_port }} {{ ssl_opts }} check
+    server {{ host }} {{ target_ip }}:{{ target_port }}{% if ssl_opts %} {{ ssl_opts }}{% endif %}{% if cookie_opt %} {{ cookie_opt }}{% endif %} check
 {% endif %}
+{% endfor %}
 
 {% endfor %}
 {% endif %}

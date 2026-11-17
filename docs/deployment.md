@@ -4,40 +4,38 @@ This guide details inventory design, dynamic host-to-FQDN mapping, cloud-specifi
 
 ---
 
-## 1. Inventory & Dynamic 1:1 Mapping
+## 1. Inventory & Backend Topologies
 
-The only setting required per webserver is **`external_fqdn`** in your inventory file:
+The infrastructure playbooks support both **Dedicated 1:1 Webservers** (multi-tenant isolation) and **Pooled N:1 Webservers** (clustered high availability), as well as a **Hybrid Architecture** combining both.
+
+For an extensive architectural breakdown and operational comparison, see the [Backend Webserver Topologies Guide](backend-topologies.md).
+
+### Scenario 1: Dedicated 1:1 Mapping (Multi-Tenant)
+Each webserver specifies a unique **`external_fqdn`**:
 
 ```ini
-[proxies]
-proxy-01 ansible_host=10.0.1.10
-proxy-02 ansible_host=10.0.1.20
-proxy-03 ansible_host=10.0.1.30
-
 [webservers]
-web-01 ansible_host=10.0.1.11 external_fqdn=web1.example.com
-web-02 ansible_host=10.0.1.12 external_fqdn=web2.example.com
-web-03 ansible_host=10.0.1.13 external_fqdn=web3.example.com
-
-[monitoring]
-monitoring-01 ansible_host=10.0.1.50
-
-[teleport_servers]
-teleport-01 ansible_host=10.0.1.60
-
-[headless_nodes:children]
-proxies
-webservers
-monitoring
-teleport_servers
+web-alpha ansible_host=10.0.1.11 external_fqdn=alpha.example.com
+web-beta  ansible_host=10.0.1.12 external_fqdn=beta.example.com
+web-gamma ansible_host=10.0.1.13 external_fqdn=gamma.example.com
 ```
+HAProxy routes `alpha.example.com` ➔ `10.0.1.11`, `beta.example.com` ➔ `10.0.1.12`, etc.
 
-### Dynamic Routing Behavior
-HAProxy on all proxies dynamically generates:
-- `web1.example.com` ➔ routes to `10.0.1.11:80`
-- `web2.example.com` ➔ routes to `10.0.1.12:80`
-- `web3.example.com` ➔ routes to `10.0.1.13:80`
-- Unmapped hostnames / IPs ➔ **404 Not Found** (via Nginx default generic 404 server)
+### Scenario 2: Pooled N:1 Clustered Mapping (High Availability)
+Multiple webservers share the exact same **`external_fqdn`**:
+
+```ini
+[webservers]
+web-01 ansible_host=10.0.1.21 external_fqdn=app.example.com
+web-02 ansible_host=10.0.1.22 external_fqdn=app.example.com
+web-03 ansible_host=10.0.1.23 external_fqdn=app.example.com
+```
+HAProxy pools all three servers under `be_app_example_com` with round-robin load balancing. When running `rolling_maintenance.yml`, nodes drain serially with zero downtime.
+
+Example inventories are ready to use in `examples/topologies/`:
+- [Scenario 1: Dedicated 1:1](../examples/topologies/scenario-1-unique-clients/README.md)
+- [Scenario 2: Pooled N:1](../examples/topologies/scenario-2-pooled-webservers/README.md)
+- [Scenario 3: Hybrid](../examples/topologies/scenario-3-hybrid/README.md)
 
 ---
 

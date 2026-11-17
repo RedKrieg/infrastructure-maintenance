@@ -27,6 +27,9 @@ INVENTORIES=(
   "examples/inventories/inventory.oci.ini"
   "examples/inventories/inventory.openstack.ini"
   "examples/inventories/inventory.freeipa.ini"
+  "examples/topologies/scenario-1-unique-clients/inventory.ini"
+  "examples/topologies/scenario-2-pooled-webservers/inventory.ini"
+  "examples/topologies/scenario-3-hybrid/inventory.ini"
 )
 
 for inv in "${INVENTORIES[@]}"; do

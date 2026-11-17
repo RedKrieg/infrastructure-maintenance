@@ -59,13 +59,17 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
 
 ---
 
-## Dynamic 1:1 Host-to-FQDN Routing Concept
+## Flexible Backend Routing Topologies (1:1 Dedicated vs. N:1 Clustered Pools)
 
-In this architecture, HAProxy serves as an intelligent reverse proxy that routes traffic based on incoming HTTP `Host` headers directly to designated backend webservers.
+In this architecture, HAProxy serves as an intelligent reverse proxy that routes traffic based on incoming HTTP `Host` headers directly to designated backend webservers. The cluster supports three routing topologies:
 
-- Each backend node specifies an `external_fqdn` in the inventory.
-- HAProxy dynamically compiles ACL rules matching each `Host` header to its exact backend server.
-- Non-matching or unmapped hostnames/IPs are caught by a strict generic 404 fallback on the backend, preventing information disclosure or unintended virtual host leakage.
+- **Scenario 1: Dedicated 1:1 Backends**: Each webserver specifies a unique `external_fqdn` in the inventory, hosting an isolated tenant application.
+- **Scenario 2: Pooled N:1 Clustered Backends**: Multiple webservers share the same `external_fqdn` (or `backend_pool`), forming an active-active load-balanced pool with round-robin distribution and zero-downtime rolling maintenance.
+- **Scenario 3: Hybrid Architecture**: Clustered core services and isolated tenant webservers coexisting in the same deployment.
+
+Non-matching or unmapped hostnames/IPs are caught by a strict generic 404 fallback on the backend, preventing information disclosure or unintended virtual host leakage.
+
+For an in-depth comparison, architectural diagrams, state management guidance, and configuration examples, see the [Backend Webserver Topologies Guide](backend-topologies.md).
 
 ---
 

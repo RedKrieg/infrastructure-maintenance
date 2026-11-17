@@ -24,12 +24,13 @@
     - name: Record target test webserver
       ansible.builtin.set_fact:
         drill_target_host: "{{ inventory_hostname }}"
-        clean_name: "{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '_') }}"
+        clean_name: "{{ (hostvars[inventory_hostname]['backend_pool'] | default(hostvars[inventory_hostname]['external_fqdn'] | default(inventory_hostname))) | regex_replace('[^a-zA-Z0-9]', '_') }}"
+        backend_name: "be_{{ (hostvars[inventory_hostname]['backend_pool'] | default(hostvars[inventory_hostname]['external_fqdn'] | default(inventory_hostname))) | regex_replace('[^a-zA-Z0-9]', '_') }}"
         target_fqdn: "{{ hostvars[inventory_hostname]['external_fqdn'] | default(inventory_hostname) }}"
 
     - name: Display Drill 1 Banner
       ansible.builtin.debug:
-        msg: ">>> CHAOS DRILL 1: Simulating sudden crash on webserver {{ drill_target_host }} <<<"
+        msg: ">>> CHAOS DRILL 1: Simulating sudden crash on webserver {{ drill_target_host }} (Backend: {{ backend_name }}) <<<"
 
     - name: Temporarily stop Nginx on target backend
       ansible.builtin.systemd:
@@ -39,7 +40,7 @@
     - name: Query HAProxy proxy nodes to confirm backend health status detection
       ansible.builtin.command:
         cmd: "socat stdio /run/haproxy/admin.sock"
-        stdin: "show servers state be_{{ clean_name }}\n"
+        stdin: "show servers state {{ backend_name }}\n"
       delegate_to: "{{ item }}"
       loop: "{{ groups['proxies'] | default([]) }}"
       when: groups['proxies'] is defined and groups['proxies'] | length > 0
@@ -50,12 +51,12 @@
       failed_when: false
       changed_when: false
 
-    - name: Verify HAProxy responds to failed backend gracefully (HTTP 503 or drop)
+    - name: Verify HAProxy responds gracefully (HTTP 200 via pool failover or 503/404 if dedicated backend down)
       ansible.builtin.uri:
         url: "http://127.0.0.1:80/"
         headers:
           Host: "{{ target_fqdn }}"
-        status_code: [503, 404]
+        status_code: [200, 301, 302, 503, 404]
         timeout: 5
       delegate_to: "{{ groups['proxies'][0] }}"
       when: groups['proxies'] is defined and groups['proxies'] | length > 0
@@ -71,7 +72,7 @@
     - name: Wait for HAProxy health checks to recognize recovered backend
       ansible.builtin.command:
         cmd: "socat stdio /run/haproxy/admin.sock"
-        stdin: "show servers state be_{{ clean_name }}\n"
+        stdin: "show servers state {{ backend_name }}\n"
       delegate_to: "{{ item }}"
       loop: "{{ groups['proxies'] | default([]) }}"
       when: groups['proxies'] is defined and groups['proxies'] | length > 0

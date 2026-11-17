@@ -106,8 +106,14 @@ else
     EXPIRED_DOMAINS+=("{{ domain_name }}")
 fi
 {% else %}
+{% set unique_web_fqdns = [] %}
 {% for host in groups['webservers'] | default([]) %}
 {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
+{% if fqdn not in unique_web_fqdns %}
+{% set _ = unique_web_fqdns.append(fqdn) %}
+{% endif %}
+{% endfor %}
+{% for fqdn in unique_web_fqdns %}
 CERT_FILE="${CERTS_DIR}/{{ fqdn }}.pem"
 if [ -f "$CERT_FILE" ]; then
     if ! openssl x509 -checkend "$THRESHOLD_SECONDS" -noout -in "$CERT_FILE" >/dev/null 2>&1; then

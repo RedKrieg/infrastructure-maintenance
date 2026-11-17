@@ -116,11 +116,13 @@ haproxy_rate_limit_period: "10s"
 haproxy_rate_limit_req_rate: 300   # Max requests allowed in the period window (increased from 150)
 haproxy_rate_limit_status: 429     # HTTP 429 Too Many Requests
 
-# Backend Webserver HTTP Health Checking
+# Backend Webserver HTTP Health Checking & Load Balancing
 haproxy_backend_http_check: true
 haproxy_check_inter: "3s"
 haproxy_check_fall: 3
 haproxy_check_rise: 2
+haproxy_balance_algorithm: "roundrobin"
+haproxy_enable_cookie_persistence: false
 
 # Internal Backend SSL / Zero-Trust TLS to Webservers
 haproxy_backend_ssl: false

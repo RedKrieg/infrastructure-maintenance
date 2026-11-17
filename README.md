@@ -23,6 +23,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   └── production/                  # Production tier (Production Let's Encrypt CA, 60d retention)
 ├── docs/                            # Modular architecture and operational documentation
 │   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
+│   ├── backend-topologies.md        # Dedicated 1:1 vs. Pooled N:1 load-balanced webserver clusters
 │   ├── staging-production.md        # Staging vs. production environment strategy & ACME rate limit defense
 │   ├── keepalived-baremetal.md      # Bare Metal HA with Keepalived VRRP floating IP & health tracking
 │   ├── ssl-certificates.md          # Multi-node ACME line of succession, sync scripts & recovery
@@ -49,6 +50,10 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── oci-compute-setup.md         # OCI quickstart: oci CLI, VCN, Fault Domains & VM provisioning
 │   └── openstack-setup.md           # OpenStack quickstart: clouds.yaml, anti-affinity & Nova provisioning
 ├── examples/
+│   ├── topologies/                  # Pre-configured cluster backend topology scenarios
+│   │   ├── scenario-1-unique-clients/ # Dedicated 1:1 webservers for isolated client tenants
+│   │   ├── scenario-2-pooled-webservers/ # High-availability N:1 pooled webservers with round-robin
+│   │   └── scenario-3-hybrid/       # Clustered HA core site coexisting with dedicated tenant backends
 │   ├── alertmanager/                # Drop-in Alertmanager configuration templates
 │   │   ├── alertmanager-slack.yml   # Slack webhook notifications with channel routing
 │   │   ├── alertmanager-pagerduty.yml # PagerDuty Events API v2 on-call escalation

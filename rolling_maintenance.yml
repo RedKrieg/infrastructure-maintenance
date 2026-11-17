@@ -28,7 +28,7 @@
   tasks:
     - name: Compute backend and server identifiers for HAProxy
       ansible.builtin.set_fact:
-        backend_name: "be_{{ inventory_hostname | regex_replace('[^a-zA-Z0-9]', '_') }}"
+        backend_name: "be_{{ (hostvars[inventory_hostname]['backend_pool'] | default(hostvars[inventory_hostname]['external_fqdn'] | default(inventory_hostname))) | regex_replace('[^a-zA-Z0-9]', '_') }}"
         server_name: "{{ inventory_hostname }}"
 
     - name: Display webserver maintenance initiation
