@@ -1,0 +1,91 @@
+# ==============================================================================
+# Rclone Storage Backend Configuration Examples (vars/rclone.conf.example)
+# ==============================================================================
+# Copy this file or sections of it into ~/.config/rclone/rclone.conf on the
+# Ansible controller, or point backup_rclone_config to your custom config path.
+#
+# To interactively generate credentials:
+#   rclone config
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. AWS S3 / MinIO / Ceph / Cloudflare R2 / Wasabi
+# ------------------------------------------------------------------------------
+[s3-backup]
+type = s3
+provider = AWS
+access_key_id = AKIAIOSFODNN7EXAMPLE
+secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+region = us-east-1
+# For MinIO or private S3:
+# endpoint = https://minio.internal.example.com:9000
+
+# ------------------------------------------------------------------------------
+# 2. Cloudflare R2 (S3-Compatible)
+# ------------------------------------------------------------------------------
+[r2-backup]
+type = s3
+provider = Cloudflare
+access_key_id = your_r2_access_key_id
+secret_access_key = your_r2_secret_access_key
+endpoint = https://<account_id>.r2.cloudflarestorage.com
+acl = private
+
+# ------------------------------------------------------------------------------
+# 3. Backblaze B2 (Native B2 API)
+# ------------------------------------------------------------------------------
+[b2-backup]
+type = b2
+account = your_application_key_id
+key = your_application_key
+hard_delete = false
+
+# ------------------------------------------------------------------------------
+# 4. Google Cloud Storage (GCS)
+# ------------------------------------------------------------------------------
+[gcs-backup]
+type = google cloud storage
+project_number = your_gcp_project_id
+service_account_file = /path/to/gcp-sa-credentials.json
+bucket_policy_only = true
+location = us-central1
+
+# ------------------------------------------------------------------------------
+# 5. Microsoft Azure Blob Storage
+# ------------------------------------------------------------------------------
+[azureblob-backup]
+type = azureblob
+account = your_storage_account_name
+key = your_storage_account_access_key
+
+# ------------------------------------------------------------------------------
+# 6. Remote SFTP / SSH Storage Host
+# ------------------------------------------------------------------------------
+[sftp-backup]
+type = sftp
+host = backup.storage.internal
+user = backup-operator
+port = 22
+key_file = ~/.ssh/id_ed25519
+shell_type = unix
+
+# ------------------------------------------------------------------------------
+# 7. WebDAV / Nextcloud / ownCloud
+# ------------------------------------------------------------------------------
+[nextcloud-backup]
+type = webdav
+url = https://nextcloud.internal.example.com/remote.php/dav/files/backup-user/
+vendor = nextcloud
+user = backup-user
+pass = your_obfuscated_app_password
+
+# ------------------------------------------------------------------------------
+# 8. Rclone Crypt (Client-Side Zero-Knowledge Transparent Encryption)
+# Wraps any underlying remote above to encrypt file contents & names on the fly
+# ------------------------------------------------------------------------------
+[encrypted-backup]
+type = crypt
+remote = s3-backup:cluster-backups/encrypted
+password = your_obfuscated_encryption_password
+filename_encryption = standard
+directory_name_encryption = true

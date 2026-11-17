@@ -285,7 +285,9 @@
     - name: Find collected backup archives on controller
       ansible.builtin.find:
         paths: "{{ backup_local_dir }}/{{ backup_ts }}"
-        patterns: "*.tar.*"
+        patterns:
+          - "*.tar.*"
+          - "*.sql.gz"
       register: local_archives
 
     - name: Dispatch archives to remote SSH / SFTP backup server
@@ -314,6 +316,51 @@
         - backup_destination_type == 's3'
         - backup_s3_access_key | length > 0
         - local_archives.matched > 0
+      changed_when: true
+
+    # --------------------------------------------------------------------------
+    # Rclone Multi-Cloud Synchronization & Lifecycle Retention
+    # --------------------------------------------------------------------------
+    - name: Check for rclone installation on Ansible controller
+      ansible.builtin.command: which rclone
+      register: rclone_check
+      failed_when: false
+      changed_when: false
+      when: backup_destination_type == 'rclone'
+
+    - name: Ensure rclone is installed if missing
+      ansible.builtin.apt:
+        name: rclone
+        state: present
+      become: true
+      when:
+        - backup_destination_type == 'rclone'
+        - rclone_check.rc != 0
+        - backup_rclone_auto_install | default(true) | bool
+
+    - name: Synchronize backup archives to remote destination via rclone
+      ansible.builtin.command:
+        cmd: >
+          rclone copy {{ backup_local_dir }}/{{ backup_ts }}/
+          {{ backup_rclone_remote }}:{{ backup_rclone_path }}/{{ backup_ts }}/
+          {% if backup_rclone_config | default('') | length > 0 %}--config {{ backup_rclone_config }}{% endif %}
+          {% if backup_rclone_bandwidth_limit | default('') | length > 0 %}--bwlimit {{ backup_rclone_bandwidth_limit }}{% endif %}
+          {{ backup_rclone_flags | default('--fast-list --transfers 4 --checkers 8') }}
+      when:
+        - backup_destination_type == 'rclone'
+        - local_archives.matched > 0
+      changed_when: true
+
+    - name: Purge old backup snapshots on rclone remote exceeding retention window
+      ansible.builtin.command:
+        cmd: >
+          rclone delete {{ backup_rclone_remote }}:{{ backup_rclone_path }}/
+          --min-age {{ backup_retention_days | default(30) }}d
+          {% if backup_rclone_config | default('') | length > 0 %}--config {{ backup_rclone_config }}{% endif %}
+      when:
+        - backup_destination_type == 'rclone'
+        - backup_rclone_enable_retention_cleanup | default(true) | bool
+      failed_when: false
       changed_when: true
 
     - name: Display backup manifest summary

@@ -11,7 +11,7 @@ backup_staging_dir: "/var/backups/ansible-cluster/staging"
 backup_retention_days: 30
 backup_compression: "gz"
 
-# Destination type: "local", "remote_ssh", or "s3"
+# Destination type: "local", "remote_ssh", "s3", or "rclone"
 backup_destination_type: "local"
 
 # Local storage path on the Ansible controller / central storage host
@@ -31,6 +31,16 @@ backup_s3_region: "us-east-1"
 backup_s3_access_key: "{{ vault_backup_s3_access_key | default('') }}"
 backup_s3_secret_key: "{{ vault_backup_s3_secret_key | default('') }}"
 backup_s3_prefix: "cluster"
+
+# Rclone Multi-Cloud Settings (when backup_destination_type is 'rclone')
+# Supports 70+ backends: S3, MinIO, Cloudflare R2, Backblaze B2, GCS, Azure Blob, SFTP, WebDAV
+backup_rclone_remote: "cluster-backup"
+backup_rclone_path: "cluster-backups"
+backup_rclone_config: "" # Leave empty for ~/.config/rclone/rclone.conf or provide custom path
+backup_rclone_flags: "--fast-list --transfers 4 --checkers 8"
+backup_rclone_bandwidth_limit: "" # e.g. "10M" or "50M"
+backup_rclone_auto_install: true
+backup_rclone_enable_retention_cleanup: true
 
 # Component selectors
 backup_include_tls_and_acme: true

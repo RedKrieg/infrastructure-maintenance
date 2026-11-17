@@ -8,6 +8,7 @@
 #   - local:       Store archives locally on the Ansible controller or backup host.
 #   - remote_ssh:  Transfer archives to a remote backup server using SSH / SCP / Rsync.
 #   - s3:          Upload archives to an AWS S3 or S3-compatible (MinIO, R2, Ceph) bucket.
+#   - rclone:      Synchronize archives via Rclone to 70+ providers (S3, B2, GCS, Azure, SFTP, WebDAV).
 # ==============================================================================
 
 # Temporary staging directory on target nodes during archiving
@@ -15,7 +16,7 @@ backup_staging_dir: "/var/backups/ansible-cluster/staging"
 backup_retention_days: 30
 backup_compression: "gz"  # gz, bz2, xz
 
-# Destination type: "local", "remote_ssh", or "s3"
+# Destination type: "local", "remote_ssh", "s3", or "rclone"
 backup_destination_type: "local"
 
 # ------------------------------------------------------------------------------
@@ -41,6 +42,18 @@ backup_s3_region: "us-east-1"
 backup_s3_access_key: "{{ vault_backup_s3_access_key | default('') }}"
 backup_s3_secret_key: "{{ vault_backup_s3_secret_key | default('') }}"
 backup_s3_prefix: "cluster-backups"
+
+# ------------------------------------------------------------------------------
+# 4. Rclone Multi-Cloud Settings (Active when destination is 'rclone')
+# ------------------------------------------------------------------------------
+# Name of the remote configured in rclone.conf (e.g. s3-remote, b2-remote, gcs-remote, sftp-remote)
+backup_rclone_remote: "cluster-backup"
+backup_rclone_path: "cluster-backups"
+backup_rclone_config: "" # Leave blank to use ~/.config/rclone/rclone.conf or specify absolute path
+backup_rclone_flags: "--fast-list --transfers 4 --checkers 8"
+backup_rclone_bandwidth_limit: "" # e.g. "10M" or "50M" to avoid saturating network links
+backup_rclone_auto_install: true
+backup_rclone_enable_retention_cleanup: true
 
 # ------------------------------------------------------------------------------
 # Component Backup Selectors (Enable / Disable components)
