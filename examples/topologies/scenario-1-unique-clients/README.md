@@ -48,6 +48,26 @@ backend be_alpha_example_com
     server web-alpha 192.168.10.21:443 ssl verify required ca-file /etc/haproxy/certs/internal-ca.crt check
 ```
 
+## Database Layer (PostgreSQL or MySQL)
+
+In Scenario 1, the optional database tier can be deployed in two configurations:
+
+1. **Shared Multi-Tenant Database Node (`db-01`)**:
+   A single database instance (PostgreSQL preferred) hosting isolated databases and separate credentials per client:
+   - `alpha_db` (user: `alpha_user`) for `web-alpha`
+   - `beta_db` (user: `beta_user`) for `web-beta`
+   - `gamma_db` (user: `gamma_user`) for `web-gamma`
+   This is configured via `db_databases` in `inventory.ini`:
+   ```ini
+   [databases]
+   db-01 ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_engine=postgresql
+
+   [databases:vars]
+   db_databases=[{"name":"alpha_db","user":"alpha_user","password":"AlphaDBSecret2026!"},{"name":"beta_db","user":"beta_user","password":"BetaDBSecret2026!"},{"name":"gamma_db","user":"gamma_user","password":"GammaDBSecret2026!"}]
+   ```
+2. **Cloud-Native Managed Databases (AWS RDS / GCP Cloud SQL / Azure Flexible Server)**:
+   For cloud deployments, each tenant can point to an isolated database on a managed PostgreSQL instance with private VPC peering.
+
 ## User Experience & Operational Trade-offs
 
 | Dimension | Behavior in Scenario 1 |

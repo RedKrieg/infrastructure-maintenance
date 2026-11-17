@@ -24,6 +24,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 ├── docs/                            # Modular architecture and operational documentation
 │   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
 │   ├── backend-topologies.md        # Dedicated 1:1 vs. Pooled N:1 load-balanced webserver clusters
+│   ├── database-architecture.md     # Optional database tier: PostgreSQL, MySQL & Cloud-Native services
 │   ├── staging-production.md        # Staging vs. production environment strategy & ACME rate limit defense
 │   ├── keepalived-baremetal.md      # Bare Metal HA with Keepalived VRRP floating IP & health tracking
 │   ├── ssl-certificates.md          # Multi-node ACME line of succession, sync scripts & recovery
@@ -95,6 +96,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── node_exporter/               # Host metrics telemetry agent (port 9100) across all nodes
 │   ├── proxy/                       # HAProxy role (terminates SSL, Coraza WAF, routes 1:1 to backends)
 │   ├── webserver/                   # Backend Nginx role (generic 404 & internal TLS encryption)
+│   ├── database/                    # Optional Database role (PostgreSQL preferred & MySQL engines)
 │   ├── central_logging/             # Centralized log collection (server & shipper) with 60-day retention
 │   ├── prometheus_server/           # Standalone Prometheus server role (port 9090, 60d retention, alert rules)
 │   ├── grafana/                     # Grafana visualization server (port 3000, pre-built dashboards)

@@ -1,0 +1,102 @@
+---
+# ==============================================================================
+# Tasks: PostgreSQL Engine Provisioning & Configuration
+# ==============================================================================
+
+- name: Install PostgreSQL server and client libraries
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - python3-psycopg2
+    state: present
+    update_cache: false
+
+- name: Discover installed PostgreSQL version and configuration path
+  ansible.builtin.find:
+    paths: /etc/postgresql
+    file_type: directory
+    recurse: false
+  register: pg_version_dirs
+
+- name: Set PostgreSQL configuration directory
+  ansible.builtin.set_fact:
+    pg_conf_dir: "{{ (pg_version_dirs.files | map(attribute='path') | sort | last) ~ '/main' }}"
+
+- name: Configure PostgreSQL listen_addresses
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/postgresql.conf"
+    regexp: "^#?listen_addresses\\s*="
+    line: "listen_addresses = '{{ postgresql_listen_addresses }}'"
+    state: present
+  notify: restart postgresql
+
+- name: Configure PostgreSQL listening port
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/postgresql.conf"
+    regexp: "^#?port\\s*="
+    line: "port = {{ db_port }}"
+    state: present
+  notify: restart postgresql
+
+- name: Authorize trusted subnets in pg_hba.conf
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/pg_hba.conf"
+    line: "host    all             all             {{ item }}            {{ postgresql_auth_method }}"
+    insertafter: "^# IPv4 local connections:"
+    state: present
+  loop: "{{ db_trusted_subnets }}"
+  notify: restart postgresql
+
+- name: Allow PostgreSQL port through UFW from trusted subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ db_port | string }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: "PostgreSQL Database Traffic"
+  loop: "{{ db_trusted_subnets }}"
+  when: enable_ufw_firewall | default(true) | bool
+
+- name: Flush handlers to ensure PostgreSQL is running with new configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure PostgreSQL service is started and enabled
+  ansible.builtin.systemd:
+    name: postgresql
+    state: started
+    enabled: true
+
+# ------------------------------------------------------------------------------
+# User & Database Provisioning
+# ------------------------------------------------------------------------------
+- name: Create PostgreSQL application users
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    role_attr_flags: "LOGIN"
+    state: present
+  loop: "{{ active_db_list }}"
+  no_log: true
+
+- name: Create PostgreSQL application databases
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_db:
+    name: "{{ item.name }}"
+    owner: "{{ item.user }}"
+    state: present
+  loop: "{{ active_db_list }}"
+
+- name: Grant all privileges on databases to respective users
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_privs:
+    database: "{{ item.name }}"
+    roles: "{{ item.user }}"
+    type: database
+    privs: ALL
+    state: present
+  loop: "{{ active_db_list }}"

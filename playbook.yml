@@ -45,7 +45,25 @@
       tags: [proxy, haproxy, ssl, acme, certs, firewall, internal_ca]
 
 # ------------------------------------------------------------------------------
-# Play 3: Backend Webservers (Nginx, Zero-Trust TLS, Default 404 Catch-All)
+# Play 3: Optional Database Layer (PostgreSQL or MySQL)
+# ------------------------------------------------------------------------------
+- name: Provision Database Layer (PostgreSQL or MySQL)
+  hosts: databases
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: database
+      when:
+        - enable_database | default(true) | bool
+        - groups['databases'] is defined and groups['databases'] | length > 0
+      tags: [database, db, postgresql, mysql, sql]
+
+# ------------------------------------------------------------------------------
+# Play 4: Backend Webservers (Nginx, Zero-Trust TLS, Default 404 Catch-All)
 # ------------------------------------------------------------------------------
 - name: Provision Backend Webservers
   hosts: webservers
@@ -57,7 +75,7 @@
       tags: [webserver, nginx, sites, firewall, ssl, tls]
 
 # ------------------------------------------------------------------------------
-# Play 4: Finalize HAProxy Load Balancers & Keepalived VRRP Routing
+# Play 5: Finalize HAProxy Load Balancers & Keepalived VRRP Routing
 # ------------------------------------------------------------------------------
 - name: Finalize HAProxy Ingress Routing & High Availability
   hosts: proxies
@@ -77,7 +95,7 @@
       tags: [keepalived, ha, vrrp]
 
 # ------------------------------------------------------------------------------
-# Play 5: Prometheus Monitoring Server
+# Play 6: Prometheus Monitoring Server
 # ------------------------------------------------------------------------------
 - name: Provision Prometheus Monitoring Server
   hosts: monitoring
@@ -95,7 +113,7 @@
       tags: [grafana, monitoring, telemetry, dashboards]
 
 # ------------------------------------------------------------------------------
-# Play 6: Centralized Identity & Access Management (Teleport or FreeIPA Server)
+# Play 7: Centralized Identity & Access Management (Teleport or FreeIPA Server)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Auth & Proxy Server
   hosts: teleport_servers
@@ -124,7 +142,7 @@
       tags: [freeipa, freeipa_server, identity, auth]
 
 # ------------------------------------------------------------------------------
-# Play 7: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
+# Play 8: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Node Service on Cluster Nodes
   hosts: headless_nodes
@@ -147,7 +165,7 @@
       tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------
-# Play 8: Centralized Log Ingestion Server on Monitoring Node
+# Play 9: Centralized Log Ingestion Server on Monitoring Node
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Ingestion Server
   hosts: monitoring
@@ -159,7 +177,7 @@
       tags: [logging, central_logging, logging_server]
 
 # ------------------------------------------------------------------------------
-# Play 9: Centralized Log Shipper across Cluster Nodes
+# Play 10: Centralized Log Shipper across Cluster Nodes
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Shipper Clients
   hosts: headless_nodes

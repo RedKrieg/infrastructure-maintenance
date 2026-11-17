@@ -1,0 +1,26 @@
+---
+# ==============================================================================
+# Tasks: Database Role Orchestration (PostgreSQL & MySQL)
+# ==============================================================================
+
+- name: Validate database engine selection
+  ansible.builtin.assert:
+    that:
+      - db_engine in ['postgresql', 'mysql']
+    fail_msg: "Invalid db_engine '{{ db_engine }}'. Supported options are 'postgresql' (preferred) or 'mysql'."
+
+- name: Normalize database target list
+  ansible.builtin.set_fact:
+    active_db_list: >-
+      {{
+        db_databases if (db_databases is defined and db_databases | length > 0)
+        else [{'name': db_name, 'user': db_user, 'password': db_password}]
+      }}
+
+- name: Deploy PostgreSQL database engine
+  ansible.builtin.include_tasks: postgresql.yml
+  when: db_engine == 'postgresql'
+
+- name: Deploy MySQL database engine
+  ansible.builtin.include_tasks: mysql.yml
+  when: db_engine == 'mysql'

@@ -1,0 +1,103 @@
+---
+# ==============================================================================
+# Playbook: Provision Cloud-Native Azure Database for PostgreSQL Flexible Server
+# ==============================================================================
+# Provisions:
+#   1. Dedicated Delegated Subnet for PostgreSQL Flexible Server inside VNet
+#   2. Zone-Redundant Azure Database for PostgreSQL Flexible Server (v16)
+#   3. Managed application database (app_db)
+#   4. Outputs private VNet integrated connection endpoint
+#
+# Usage:
+#   ansible-playbook examples/provisioning/provision_azure_postgresql.yml
+# ==============================================================================
+
+- name: Provision Cloud-Native Azure Database for PostgreSQL Flexible Server
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_azure.yml
+
+  vars:
+    # Azure PostgreSQL Flexible Server Configuration
+    azure_postgres_server_name: "cluster-postgres-flex"
+    azure_postgres_subnet_name: "subnet-postgres"
+    azure_postgres_subnet_cidr: "10.240.2.0/24"
+    azure_postgres_version: "16"
+    azure_postgres_sku: "Standard_D2s_v3"
+    azure_postgres_tier: "GeneralPurpose"
+    azure_postgres_storage_gb: 32
+    azure_postgres_admin_user: "dbadmin"
+    azure_postgres_admin_password: "{{ vault_azure_postgres_password | default('SecretAzureDBPass2026!') }}"
+    azure_postgres_db_name: "app_db"
+    azure_postgres_ha_mode: "ZoneRedundant" # Cross-zone automated failover
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Delegated Subnet for PostgreSQL Flexible Server
+    # --------------------------------------------------------------------------
+    - name: Create Delegated Subnet for PostgreSQL Flexible Server
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ azure_resource_group }}"
+        virtual_network_name: "{{ azure_vnet_name }}"
+        name: "{{ azure_postgres_subnet_name }}"
+        address_prefix_cidr: "{{ azure_postgres_subnet_cidr }}"
+        delegations:
+          - name: "dlg-postgresql"
+            service_name: "Microsoft.DBforPostgreSQL/flexibleServers"
+        state: present
+      register: db_subnet
+
+    # --------------------------------------------------------------------------
+    # 2. Provision Azure PostgreSQL Flexible Server
+    # --------------------------------------------------------------------------
+    - name: Provision Zone-Redundant Azure PostgreSQL Flexible Server
+      azure.azcollection.azure_rm_postgresqlflexibleserver:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ azure_postgres_server_name }}"
+        location: "{{ azure_location }}"
+        version: "{{ azure_postgres_version }}"
+        sku_name: "{{ azure_postgres_sku }}"
+        tier: "{{ azure_postgres_tier }}"
+        storage_mb: "{{ azure_postgres_storage_gb * 1024 }}"
+        admin_username: "{{ azure_postgres_admin_user }}"
+        admin_password: "{{ azure_postgres_admin_password }}"
+        delegated_subnet_resource_id: "{{ db_subnet.state.id | default(omit) }}"
+        high_availability:
+          mode: "{{ azure_postgres_ha_mode }}"
+        backup_retention_days: 7
+        state: present
+      register: psql_server
+
+    - name: Create Application Database on Flexible Server
+      azure.azcollection.azure_rm_postgresqlflexibledatabase:
+        resource_group: "{{ azure_resource_group }}"
+        server_name: "{{ azure_postgres_server_name }}"
+        name: "{{ azure_postgres_db_name }}"
+        charset: "UTF8"
+        collation: "en_US.utf8"
+        state: present
+
+    # --------------------------------------------------------------------------
+    # 3. Connection Details & Inventory Guidance
+    # --------------------------------------------------------------------------
+    - name: Display Cloud-Native Azure PostgreSQL Summary
+      ansible.builtin.debug:
+        msg:
+          - "================================================================="
+          - "Azure Database for PostgreSQL Flexible Server Provisioned!"
+          - "Fully Qualified Domain: {{ azure_postgres_server_name }}.postgres.database.azure.com"
+          - "Port:                   5432"
+          - "Database Name:          {{ azure_postgres_db_name }}"
+          - "Administrator Login:    {{ azure_postgres_admin_user }}"
+          - "High Availability Mode: {{ azure_postgres_ha_mode }}"
+          - "================================================================="
+          - "Add the following to your inventory or group_vars/webservers.yml:"
+          - "  db_host: {{ azure_postgres_server_name }}.postgres.database.azure.com"
+          - "  db_port: 5432"
+          - "  db_name: {{ azure_postgres_db_name }}"
+          - "  db_user: {{ azure_postgres_admin_user }}"
+          - "  db_engine: postgresql"
+          - "================================================================="

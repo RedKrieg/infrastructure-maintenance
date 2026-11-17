@@ -1,0 +1,124 @@
+---
+# ==============================================================================
+# Playbook: Provision Cloud-Native GCP Cloud SQL for PostgreSQL
+# ==============================================================================
+# Provisions:
+#   1. Google Cloud SQL for PostgreSQL instance with private VPC networking
+#   2. High-Availability Regional deployment (automatic cross-zone failover)
+#   3. Application database (app_db) and service user
+#   4. Outputs private IP connection endpoint for webservers
+#
+# Usage:
+#   ansible-playbook examples/provisioning/provision_gcp_cloudsql_postgresql.yml
+# ==============================================================================
+
+- name: Provision Cloud-Native GCP Cloud SQL for PostgreSQL
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_gcp.yml
+
+  vars:
+    # Cloud SQL PostgreSQL Configuration
+    gcp_cloudsql_instance_name: "cluster-postgres-instance"
+    gcp_cloudsql_database_version: "POSTGRES_16"
+    gcp_cloudsql_tier: "db-custom-2-7680"
+    gcp_cloudsql_disk_size_gb: 20
+    gcp_cloudsql_db_name: "app_db"
+    gcp_cloudsql_user: "app_user"
+    gcp_cloudsql_password: "{{ vault_gcp_cloudsql_password | default('SecretGcpDbPass2026!') }}"
+    gcp_cloudsql_availability: "REGIONAL" # High Availability with automatic failover
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Validation & Pre-flight
+    # --------------------------------------------------------------------------
+    - name: Validate GCP project ID
+      ansible.builtin.fail:
+        msg: "Please set 'gcp_project_id' in vars_gcp.yml before running this playbook."
+      when: gcp_project_id == 'your-gcp-project-id' or gcp_project_id | length == 0
+
+    - name: Discover VPC Network
+      google.cloud.gcp_compute_network_info:
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        filters:
+          - "name = {{ gcp_network_name }}"
+      register: network_info
+
+    - name: Assert Network Exists
+      ansible.builtin.assert:
+        that:
+          - network_info.resources | length > 0
+        fail_msg: "Network {{ gcp_network_name }} not found. Run provision_gcp.yml first."
+
+    # --------------------------------------------------------------------------
+    # 2. Provision Cloud SQL for PostgreSQL Instance
+    # --------------------------------------------------------------------------
+    - name: Provision Regional Cloud SQL PostgreSQL Instance
+      google.cloud.gcp_sql_instance:
+        name: "{{ gcp_cloudsql_instance_name }}"
+        database_version: "{{ gcp_cloudsql_database_version }}"
+        region: "{{ gcp_region }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        settings:
+          tier: "{{ gcp_cloudsql_tier }}"
+          availability_type: "{{ gcp_cloudsql_availability }}"
+          data_disk_size_gb: "{{ gcp_cloudsql_disk_size_gb }}"
+          data_disk_type: "PD_SSD"
+          ip_configuration:
+            ipv4_enabled: false
+            private_network: "{{ network_info.resources[0].selfLink }}"
+          backup_configuration:
+            enabled: true
+            start_time: "03:00"
+        state: present
+      register: cloudsql_instance
+
+    - name: Create Application Database in Cloud SQL
+      google.cloud.gcp_sql_database:
+        name: "{{ gcp_cloudsql_db_name }}"
+        instance: "{{ gcp_cloudsql_instance_name }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+
+    - name: Create Application User in Cloud SQL
+      google.cloud.gcp_sql_user:
+        name: "{{ gcp_cloudsql_user }}"
+        password: "{{ gcp_cloudsql_password }}"
+        instance: "{{ gcp_cloudsql_instance_name }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        state: present
+      no_log: true
+
+    # --------------------------------------------------------------------------
+    # 3. Connection Details & Inventory Guidance
+    # --------------------------------------------------------------------------
+    - name: Display Cloud-Native GCP Cloud SQL Summary
+      ansible.builtin.debug:
+        msg:
+          - "================================================================="
+          - "GCP Cloud SQL PostgreSQL Instance Provisioned Successfully!"
+          - "Instance Name:    {{ gcp_cloudsql_instance_name }}"
+          - "Private IP:       {{ (cloudsql_instance.ipAddresses | selectattr('type', 'equalto', 'PRIVATE') | map(attribute='ipAddress') | first) | default('Assigned via Private Service Access') }}"
+          - "Port:             5432"
+          - "Database Name:    {{ gcp_cloudsql_db_name }}"
+          - "User:             {{ gcp_cloudsql_user }}"
+          - "Availability:     {{ gcp_cloudsql_availability }} (Cross-Zone Failover)"
+          - "================================================================="
+          - "Add the following to your inventory or group_vars/webservers.yml:"
+          - "  db_host: {{ (cloudsql_instance.ipAddresses | selectattr('type', 'equalto', 'PRIVATE') | map(attribute='ipAddress') | first) | default('10.128.0.50') }}"
+          - "  db_port: 5432"
+          - "  db_name: {{ gcp_cloudsql_db_name }}"
+          - "  db_user: {{ gcp_cloudsql_user }}"
+          - "  db_engine: postgresql"
+          - "================================================================="

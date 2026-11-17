@@ -227,6 +227,52 @@
         path: "{{ backup_staging_dir }}/monitoring_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
         state: absent
 
+- name: Backup Database Tier (PostgreSQL / MySQL)
+  hosts: databases
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Dump all PostgreSQL databases if postgresql service is active
+      ansible.builtin.shell:
+        cmd: "su - postgres -c 'pg_dumpall' | gzip > {{ backup_staging_dir }}/postgres_{{ inventory_hostname }}_{{ backup_ts }}.sql.gz"
+      failed_when: false
+      changed_when: true
+
+    - name: Dump all MySQL databases if mysql service is active
+      ansible.builtin.shell:
+        cmd: "mysqldump --all-databases --single-transaction | gzip > {{ backup_staging_dir }}/mysql_{{ inventory_hostname }}_{{ backup_ts }}.sql.gz"
+      failed_when: false
+      changed_when: true
+
+    - name: Find generated database SQL dumps
+      ansible.builtin.find:
+        paths: "{{ backup_staging_dir }}"
+        patterns: "*_{{ inventory_hostname }}_{{ backup_ts }}.sql.gz"
+      register: db_dump_files
+
+    - name: Fetch database dumps to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/{{ item.path | basename }}"
+        flat: true
+      loop: "{{ db_dump_files.files }}"
+
+    - name: Remove temporary database dump staging files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ db_dump_files.files }}"
+
 - name: Finalize Backup Dispatch & Offsite Synchronization
   hosts: localhost
   connection: local

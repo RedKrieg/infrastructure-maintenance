@@ -1,0 +1,63 @@
+---
+# ==============================================================================
+# Tasks: MySQL Engine Provisioning & Configuration
+# ==============================================================================
+
+- name: Install MySQL server and Python client libraries
+  ansible.builtin.apt:
+    name:
+      - mysql-server
+      - python3-pymysql
+    state: present
+    update_cache: false
+
+- name: Deploy custom MySQL cluster server configuration
+  ansible.builtin.copy:
+    dest: /etc/mysql/conf.d/cluster-db.cnf
+    mode: "0644"
+    content: |
+      # Managed by Ansible - Cluster Database Settings
+      [mysqld]
+      bind-address = {{ mysql_bind_address }}
+      port = {{ db_port }}
+      max_connections = {{ mysql_max_connections }}
+      default_authentication_plugin = {{ mysql_default_authentication_plugin }}
+  notify: restart mysql
+
+- name: Allow MySQL port through UFW from trusted subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ db_port | string }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: "MySQL Database Traffic"
+  loop: "{{ db_trusted_subnets }}"
+  when: enable_ufw_firewall | default(true) | bool
+
+- name: Flush handlers to ensure MySQL is running with new configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure MySQL service is started and enabled
+  ansible.builtin.systemd:
+    name: mysql
+    state: started
+    enabled: true
+
+# ------------------------------------------------------------------------------
+# User & Database Provisioning
+# ------------------------------------------------------------------------------
+- name: Create MySQL application databases
+  community.mysql.mysql_db:
+    name: "{{ item.name }}"
+    state: present
+  loop: "{{ active_db_list }}"
+
+- name: Create MySQL application users with network access
+  community.mysql.mysql_user:
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    host: "%"
+    priv: "{{ item.name }}.*:ALL"
+    state: present
+  loop: "{{ active_db_list }}"
+  no_log: true

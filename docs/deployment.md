@@ -54,11 +54,12 @@ Ready-to-use cloud-specific inventory templates are available in the `examples/i
 
 > [!TIP]
 > Comprehensive quickstart and automated VM provisioning guides are available for each platform:
-> - **[AWS EC2 Setup Guide](aws-ec2-setup.md)** (`examples/provisioning/provision_aws.yml`)
-> - **[GCP Compute Setup Guide](gcp-compute-setup.md)** (`examples/provisioning/provision_gcp.yml`)
-> - **[Azure Setup Guide](azure-setup.md)** (`examples/provisioning/provision_azure.yml`)
+> - **[AWS EC2 Setup Guide](aws-ec2-setup.md)** (`examples/provisioning/provision_aws.yml` & `provision_aws_rds_postgresql.yml`)
+> - **[GCP Compute Setup Guide](gcp-compute-setup.md)** (`examples/provisioning/provision_gcp.yml` & `provision_gcp_cloudsql_postgresql.yml`)
+> - **[Azure Setup Guide](azure-setup.md)** (`examples/provisioning/provision_azure.yml` & `provision_azure_postgresql.yml`)
 > - **[OCI Compute Setup Guide](oci-compute-setup.md)** (`examples/provisioning/provision_oci.yml`)
 > - **[OpenStack Setup Guide](openstack-setup.md)** (`examples/provisioning/provision_openstack.yml`)
+> - **[Database Architecture Guide](database-architecture.md)** (Self-hosted & cloud-native PostgreSQL / MySQL)
 
 ---
 

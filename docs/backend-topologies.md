@@ -286,6 +286,18 @@ Both topologies fully support the automated Zero-Trust Internal Certificate Auth
 
 ---
 
+## Optional Database Tier (PostgreSQL & MySQL)
+
+All three topologies support an optional database tier, deployable as either self-hosted hardened instances (`roles/database`) or cloud-native managed database services:
+
+- **Scenario 1**: Supports multi-tenant shared database nodes with isolated databases and credentials (`alpha_db`, `beta_db`, `gamma_db`), or dedicated database instances.
+- **Scenario 2**: Backed by a centralized high-availability database cluster (PostgreSQL preferred) or cloud-native services (AWS RDS, GCP Cloud SQL, Azure Flexible Server) shared across all pooled webservers.
+- **Scenario 3**: Accommodates both central core application databases and distinct tenant databases simultaneously.
+
+For full architectural designs, provisioning playbooks, and disaster recovery procedures, see the [Database Architecture Guide](database-architecture.md).
+
+---
+
 ## Ready-to-Use Topology Examples
 
 Pre-configured, syntax-validated inventories and detailed readmes are available in the repository:

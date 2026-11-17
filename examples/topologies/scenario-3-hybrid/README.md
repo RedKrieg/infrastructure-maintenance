@@ -54,6 +54,21 @@ frontend fe_https
     use_backend be_tenant_b_example_com if is_tenant_b_example_com
 ```
 
+## Database Layer (PostgreSQL or MySQL)
+
+In Scenario 3, the database layer accommodates both the clustered application and the isolated tenant sites:
+- **Central Core App DB (`app_db`)**: Dedicated to `web-pool-01` and `web-pool-02`.
+- **Tenant Databases (`tenant_a_db`, `tenant_b_db`)**: Dedicated to `web-tenant-a` and `web-tenant-b` respectively.
+
+This can be deployed on a shared database node (`db-01`) or partitioned across cloud-native managed databases:
+```ini
+[databases]
+db-01 ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_engine=postgresql
+
+[databases:vars]
+db_databases=[{"name":"app_db","user":"app_user","password":"CoreAppSecret2026!"},{"name":"tenant_a_db","user":"tenant_a_user","password":"TenantASecret2026!"},{"name":"tenant_b_db","user":"tenant_b_user","password":"TenantBSecret2026!"}]
+```
+
 ## Quick Start
 
 1. Deploy the hybrid cluster:

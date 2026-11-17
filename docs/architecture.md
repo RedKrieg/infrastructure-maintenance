@@ -73,6 +73,18 @@ For an in-depth comparison, architectural diagrams, state management guidance, a
 
 ---
 
+## Modular Database Tier (PostgreSQL, MySQL & Cloud-Native Services)
+
+The cluster provides an optional, modular database tier supporting both automated self-hosted instances and cloud-native managed database services:
+
+- **Engines**: **PostgreSQL** (preferred default with SCRAM-SHA-256 and JSONB) and **MySQL** (8.0).
+- **Self-Hosted (`roles/database`)**: Automated provisioning of hardened database nodes on cluster VMs with private subnet firewalling.
+- **Cloud-Native Managed Services**: Drop-in examples and integration with AWS RDS PostgreSQL, GCP Cloud SQL for PostgreSQL, Azure Database for PostgreSQL Flexible Server, and OCI PostgreSQL.
+
+For full architectural designs across all three topologies, provisioning guides, and disaster recovery procedures, see the [Database Architecture Guide](database-architecture.md).
+
+---
+
 ## Centralized Identity & Access Management (Teleport vs. FreeIPA)
 
 The cluster provides modular choices for identity and access management configured via `identity_provider`:

@@ -175,3 +175,66 @@
         - prometheus
         - grafana-server
       failed_when: false
+
+- name: Restore Database Tier (PostgreSQL / MySQL)
+  hosts: databases
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check for PostgreSQL backup dump
+      ansible.builtin.find:
+        paths: "{{ active_restore_dir }}"
+        patterns: "postgres_{{ inventory_hostname }}_*.sql.gz"
+      delegate_to: localhost
+      become: false
+      register: pg_dumps
+
+    - name: Restore PostgreSQL dump if present
+      when: pg_dumps.matched > 0
+      block:
+        - name: Copy PostgreSQL dump to database node
+          ansible.builtin.copy:
+            src: "{{ pg_dumps.files[0].path }}"
+            dest: "/tmp/restore_postgres.sql.gz"
+            mode: "0600"
+
+        - name: Ingest PostgreSQL dump
+          ansible.builtin.shell:
+            cmd: "gunzip -c /tmp/restore_postgres.sql.gz | su - postgres -c 'psql'"
+          changed_when: true
+
+        - name: Clean up temporary PostgreSQL restore file
+          ansible.builtin.file:
+            path: "/tmp/restore_postgres.sql.gz"
+            state: absent
+
+    - name: Check for MySQL backup dump
+      ansible.builtin.find:
+        paths: "{{ active_restore_dir }}"
+        patterns: "mysql_{{ inventory_hostname }}_*.sql.gz"
+      delegate_to: localhost
+      become: false
+      register: mysql_dumps
+
+    - name: Restore MySQL dump if present
+      when: mysql_dumps.matched > 0
+      block:
+        - name: Copy MySQL dump to database node
+          ansible.builtin.copy:
+            src: "{{ mysql_dumps.files[0].path }}"
+            dest: "/tmp/restore_mysql.sql.gz"
+            mode: "0600"
+
+        - name: Ingest MySQL dump
+          ansible.builtin.shell:
+            cmd: "gunzip -c /tmp/restore_mysql.sql.gz | mysql"
+          changed_when: true
+
+        - name: Clean up temporary MySQL restore file
+          ansible.builtin.file:
+            path: "/tmp/restore_mysql.sql.gz"
+            state: absent

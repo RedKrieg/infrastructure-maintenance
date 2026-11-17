@@ -56,6 +56,26 @@ backend be_app_example_com
     server web-03 192.168.10.23:443 ssl verify required ca-file /etc/haproxy/certs/internal-ca.crt check inter 3s fall 3 rise 2
 ```
 
+## Database Layer (PostgreSQL or MySQL)
+
+In Scenario 2, all pooled webservers (`web-01`, `web-02`, `web-03`) connect to a **centralized database tier** to share state:
+
+1. **Self-Hosted Centralized Database (`db-01`)**:
+   - Deploys PostgreSQL (preferred) or MySQL with access restricted strictly to private subnets via UFW and `pg_hba.conf` SCRAM-SHA-256.
+   - Database `app_db` and user `app_user` are provisioned automatically.
+   ```ini
+   [databases]
+   db-01 ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_engine=postgresql
+
+   [databases:vars]
+   db_name=app_db
+   db_user=app_user
+   db_password=AppDBSecret2026!
+   ```
+2. **Cloud-Native Managed Database (AWS RDS / GCP Cloud SQL / Azure Flexible Server)**:
+   - For mission-critical pooled clusters, cloud-native managed PostgreSQL is strongly recommended.
+   - Webservers connect directly to the managed private DNS endpoint (e.g. `cluster-postgres.c12345678901.us-east-1.rds.amazonaws.com`), providing multi-AZ automated failover and automated snapshots without running database daemons on VMs.
+
 ## User Experience & Operational Trade-offs
 
 | Dimension | Behavior in Scenario 2 |
