@@ -142,6 +142,14 @@ internal_ca_leaf_validity_days: 90
 internal_cert_renewal_threshold_days: 14
 internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
 
+# Deterministic Rank-Based Schedule for Internal CA Renewal Timer
+# Base execution hours (twice daily):
+internal_ca_timer_base_hours: "02,14"
+# Base execution minute for primary proxy (rank 0):
+internal_ca_timer_base_minute: 0
+# Deterministic minute offset per proxy rank (rank 0 = +0m, rank 1 = +10m, rank 2 = +20m):
+internal_ca_timer_rank_offset_minutes: 10
+
 # Logrotate Retention for Cluster Script Logs (60 days retention)
 haproxy_logrotate_interval: "daily"
 haproxy_logrotate_rotate: 60

@@ -37,7 +37,7 @@ To prevent multiple proxy nodes from renewing the root CA at the same time:
   1. The certificate enters the emergency fallback window (15 days minus rank offset: `proxy-02` = 15d, `proxy-03` = 14d).
   2. AND all higher-priority proxies are confirmed unreachable via ICMP and port 8444/SSH liveness checks.
 - **Process Concurrency Lock**: Local file locking (`flock`) on `/var/lock/internal-ca-renewal.lock` prevents overlapping executions.
-- **Timer Jitter**: Systemd timer includes `RandomizedDelaySec=1800` to stagger execution windows across the cluster.
+- **Deterministic Rank-Based Timer Offset**: `renew-internal-ca.timer` schedules execution deterministically based on cluster rank (`proxy-01` at 02:00 & 14:00, `proxy-02` at 02:10 & 14:10, `proxy-03` at 02:20 & 14:20, configured via `internal_ca_timer_rank_offset_minutes: 10`), completely eliminating simultaneous wakeups without random jitter.
 - **Peer Reconciliation on Recovery**: If a replica renews the CA during a primary outage, the primary automatically detects and adopts the newer CA upon recovery via `/usr/local/bin/check-and-adopt-cluster-certs.sh`.
 
 ### 2. Idempotent, Non-Destructive Ansible Runs

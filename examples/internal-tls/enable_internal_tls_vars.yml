@@ -41,6 +41,11 @@ internal_ca_renewal_threshold_days: 30
 internal_ca_fallback_renewal_days: 15
 internal_ca_leaf_validity_days: 90
 
+# Deterministic rank-based systemd timer schedule (base: 02:00, 14:00; +10m per rank offset)
+internal_ca_timer_base_hours: "02,14"
+internal_ca_timer_base_minute: 0
+internal_ca_timer_rank_offset_minutes: 10
+
 # ------------------------------------------------------------------------------
 # Webserver Configuration (group_vars/webservers.yml or playbook vars)
 # ------------------------------------------------------------------------------

@@ -2,9 +2,22 @@
 Description=Run Cluster Internal CA Renewal Check Twice Daily
 After=network.target
 
+{% set proxy_list = groups['proxies'] | default([inventory_hostname]) -%}
+{% set my_rank = proxy_list.index(inventory_hostname) if inventory_hostname in proxy_list else 0 -%}
+{% set base_min = internal_ca_timer_base_minute | default(0) | int -%}
+{% set step_min = internal_ca_timer_rank_offset_minutes | default(10) | int -%}
+{% set total_min = base_min + (my_rank * step_min) -%}
+{% set target_min = total_min % 60 -%}
+{% set hour_add = (total_min // 60) | int -%}
+{% set hours = (internal_ca_timer_base_hours | default('02,14')).split(',') -%}
+{% set computed_hours = [] -%}
+{% for h in hours -%}
+{%   set _ = computed_hours.append('%02d' % (((h | trim | int) + hour_add) % 24)) -%}
+{% endfor -%}
 [Timer]
-OnCalendar=*-*-* 00/12:00:00
-RandomizedDelaySec=1800
+# Deterministic rank-based schedule:
+# Node: {{ inventory_hostname }} | Cluster Rank: {{ my_rank }} | Offset: +{{ my_rank * step_min }}m
+OnCalendar=*-*-* {{ computed_hours | join(',') }}:{{ '%02d' % target_min }}:00
 Persistent=true
 
 [Install]

@@ -123,9 +123,13 @@ To guarantee that proxies never renew the root CA simultaneously or create diver
    - **Staggered Fallback Window**: Replicas ignore the 30-day threshold and evaluate an emergency fallback threshold (`internal_ca_fallback_renewal_days`, default: 15 days) staggered by 1 day per replica rank offset (`proxy-02` = 15d, `proxy-03` = 14d, etc.).
    - **Liveness Probing**: Even if the emergency threshold is reached, a replica will **never** renew if any higher-priority proxy is alive. It probes higher-priority proxies via ICMP, port 8444 HTTP `/health`, and SSH keyscan. Only if **all** higher-priority proxies are confirmed unreachable will the standby replica take over CA renewal and propagate it to surviving peers.
 
-3. **Concurrency Locks & Timer Jitter**:
+3. **Concurrency Locks & Deterministic Rank-Based Offsets**:
    - **File Lock**: Local executions acquire an exclusive non-blocking lock (`flock`) on `/var/lock/internal-ca-renewal.lock` to prevent overlapping runs on the same node.
-   - **Timer Jitter**: Systemd timer includes `RandomizedDelaySec=1800` (up to 30 minutes of random distribution) to eliminate simultaneous cron wakeups across the cluster.
+   - **Deterministic Rank-Based Schedule**: Rather than relying on non-deterministic random jitter, `renew-internal-ca.timer` schedules execution based on the proxy's cluster rank (`internal_ca_timer_rank_offset_minutes`, default: 10 minutes):
+     - `proxy-01` (Rank 0): `02:00:00` and `14:00:00`
+     - `proxy-02` (Rank 1): `02:10:00` and `14:10:00` (+10m)
+     - `proxy-03` (Rank 2): `02:20:00` and `14:20:00` (+20m)
+     This deterministic spacing guarantees that the primary authority runs first, completes renewal, and replicates the new certificate to peers before any replica timer elapses.
 
 4. **Boot-Time Reconciliation & Adoption (`check-and-adopt-cluster-certs.sh`)**:
    - If `proxy-01` suffers an extended outage during which `proxy-02` performed an emergency CA renewal, `proxy-01` will not blindly renew or revert the CA upon rebooting.
