@@ -1,0 +1,68 @@
+---
+# ==============================================================================
+# Tasks: PgBouncer Connection Pooler Deployment (Port 6432)
+# ==============================================================================
+
+- name: Install PgBouncer connection pooler
+  ansible.builtin.apt:
+    name: pgbouncer
+    state: present
+    update_cache: false
+
+- name: Configure PgBouncer main configuration file
+  ansible.builtin.copy:
+    dest: /etc/pgbouncer/pgbouncer.ini
+    owner: postgres
+    group: postgres
+    mode: "0640"
+    content: |
+      # Managed by Ansible - Cluster PgBouncer Connection Pooler
+      [databases]
+      * = host=127.0.0.1 port={{ db_port }}
+
+      [pgbouncer]
+      logfile = /var/log/postgresql/pgbouncer.log
+      pidfile = /var/run/postgresql/pgbouncer.pid
+      listen_addr = {{ pgbouncer_listen_addr }}
+      listen_port = {{ pgbouncer_port }}
+      auth_type = {{ pgbouncer_auth_type }}
+      auth_file = /etc/pgbouncer/userlist.txt
+      pool_mode = {{ pgbouncer_pool_mode }}
+      max_client_conn = {{ pgbouncer_max_client_conn }}
+      default_pool_size = {{ pgbouncer_default_pool_size }}
+      reserve_pool_size = {{ pgbouncer_reserve_pool_size }}
+      admin_users = postgres
+      stats_users = postgres
+      ignore_startup_parameters = extra_float_digits
+  notify: restart pgbouncer
+
+- name: Deploy PgBouncer user authentication file
+  ansible.builtin.copy:
+    dest: /etc/pgbouncer/userlist.txt
+    owner: postgres
+    group: postgres
+    mode: "0600"
+    content: |
+      # Managed by Ansible - User Authentication Map
+      "postgres" ""
+      {% for db in active_db_list %}
+      "{{ db.user }}" "{{ db.password }}"
+      {% endfor %}
+  notify: restart pgbouncer
+  no_log: true
+
+- name: Allow PgBouncer port through UFW from trusted subnets
+  community.general.ufw:
+    rule: allow
+    port: "{{ pgbouncer_port | string }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: "PgBouncer Connection Pooler"
+  loop: "{{ db_trusted_subnets }}"
+  when: enable_ufw_firewall | default(true) | bool
+
+- name: Ensure PgBouncer service is started and enabled
+  ansible.builtin.systemd:
+    name: pgbouncer
+    state: started
+    enabled: true

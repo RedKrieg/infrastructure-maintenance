@@ -48,6 +48,28 @@
   loop: "{{ db_trusted_subnets }}"
   notify: restart postgresql
 
+# ------------------------------------------------------------------------------
+# Replication & WAL Configuration (for Single-Primary & Replica Topologies)
+# ------------------------------------------------------------------------------
+- name: Configure replication WAL settings in postgresql.conf
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/postgresql.conf"
+    regexp: "^#?wal_level\\s*="
+    line: "wal_level = replica"
+    state: present
+  when: db_role in ['primary', 'standalone']
+  notify: restart postgresql
+
+- name: Authorize replication user in pg_hba.conf
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/pg_hba.conf"
+    line: "host    replication     {{ db_replication_user }}     {{ item }}            {{ postgresql_auth_method }}"
+    insertafter: "^# IPv4 local connections:"
+    state: present
+  loop: "{{ db_trusted_subnets }}"
+  when: db_role in ['primary', 'standalone']
+  notify: restart postgresql
+
 - name: Allow PostgreSQL port through UFW from trusted subnets
   community.general.ufw:
     rule: allow
@@ -68,6 +90,20 @@
     enabled: true
 
 # ------------------------------------------------------------------------------
+# Replication User Provisioning
+# ------------------------------------------------------------------------------
+- name: Create PostgreSQL streaming replication user
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_user:
+    name: "{{ db_replication_user }}"
+    password: "{{ db_replication_password }}"
+    role_attr_flags: "REPLICATION,LOGIN"
+    state: present
+  when: db_role in ['primary', 'standalone']
+  no_log: true
+
+# ------------------------------------------------------------------------------
 # User & Database Provisioning
 # ------------------------------------------------------------------------------
 - name: Create PostgreSQL application users
@@ -79,6 +115,7 @@
     role_attr_flags: "LOGIN"
     state: present
   loop: "{{ active_db_list }}"
+  when: db_role in ['primary', 'standalone']
   no_log: true
 
 - name: Create PostgreSQL application databases
@@ -89,6 +126,7 @@
     owner: "{{ item.user }}"
     state: present
   loop: "{{ active_db_list }}"
+  when: db_role in ['primary', 'standalone']
 
 - name: Grant all privileges on databases to respective users
   become: true
@@ -100,3 +138,11 @@
     privs: ALL
     state: present
   loop: "{{ active_db_list }}"
+  when: db_role in ['primary', 'standalone']
+
+# ------------------------------------------------------------------------------
+# Connection Pooling (PgBouncer)
+# ------------------------------------------------------------------------------
+- name: Deploy PgBouncer connection pooler
+  ansible.builtin.include_tasks: pgbouncer.yml
+  when: enable_pgbouncer | bool

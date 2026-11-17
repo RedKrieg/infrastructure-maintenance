@@ -47,6 +47,21 @@ postgresql_shared_buffers: "256MB"
 postgresql_auth_method: "scram-sha-256"
 postgresql_ssl: true
 
+# Database Clustering & Replication Role ('standalone', 'primary', or 'replica')
+db_role: "standalone"
+db_replication_user: "replicator"
+db_replication_password: "{{ vault_db_replication_password | default('ReplicationSecret2026!') }}"
+
+# Connection Pooling via PgBouncer (PostgreSQL)
+enable_pgbouncer: false
+pgbouncer_port: 6432
+pgbouncer_listen_addr: "0.0.0.0"
+pgbouncer_pool_mode: "transaction"
+pgbouncer_max_client_conn: 500
+pgbouncer_default_pool_size: 20
+pgbouncer_reserve_pool_size: 5
+pgbouncer_auth_type: "scram-sha-256"
+
 # MySQL Specific Tuning & Configuration
 mysql_bind_address: "0.0.0.0"
 mysql_max_connections: 100

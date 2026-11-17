@@ -5,6 +5,11 @@
     name: postgresql
     state: restarted
 
+- name: restart pgbouncer
+  ansible.builtin.systemd:
+    name: pgbouncer
+    state: restarted
+
 - name: restart mysql
   ansible.builtin.systemd:
     name: mysql

@@ -195,3 +195,82 @@
     - name: Confirm proxy is healthy and operational
       ansible.builtin.debug:
         msg: ">>> Proxy {{ inventory_hostname }} successfully updated and returned to service <<<"
+
+# ------------------------------------------------------------------------------
+# Play 3: Rolling Maintenance across Database Tier (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Zero-Downtime Rolling Maintenance for Database Tier
+  hosts: databases
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display database node maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on database node {{ inventory_hostname }} (Role: {{ db_role | default('standalone') }}) <<<"
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: db_apt_cache
+      retries: 3
+      delay: 5
+      until: db_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: db_reboot_file
+
+    - name: Reboot database node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting database node {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: db_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure database service is active
+      ansible.builtin.systemd:
+        name: "{{ 'postgresql' if (db_engine | default('postgresql') == 'postgresql') else 'mysql' }}"
+        state: started
+        enabled: true
+
+    - name: Verify PostgreSQL responsiveness with pg_isready
+      ansible.builtin.command:
+        cmd: "pg_isready -h 127.0.0.1 -p {{ db_port | default(5432) }}"
+      changed_when: false
+      when: db_engine | default('postgresql') == 'postgresql'
+      retries: 10
+      delay: 3
+      register: pg_ready_check
+      until: pg_ready_check.rc == 0
+
+    - name: Verify MySQL responsiveness with mysqladmin ping
+      ansible.builtin.command:
+        cmd: "mysqladmin ping"
+      changed_when: false
+      when: db_engine | default('postgresql') == 'mysql'
+      retries: 10
+      delay: 3
+      register: mysql_ready_check
+      until: mysql_ready_check.rc == 0
+
+    - name: Ensure PgBouncer connection pooler is active (if enabled)
+      ansible.builtin.systemd:
+        name: pgbouncer
+        state: started
+        enabled: true
+      when: enable_pgbouncer | default(false) | bool
+
+    - name: Confirm database node is healthy and restored
+      ansible.builtin.debug:
+        msg: ">>> Database node {{ inventory_hostname }} successfully updated and verified <<<"

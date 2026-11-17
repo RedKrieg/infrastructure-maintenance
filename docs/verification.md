@@ -39,6 +39,15 @@ The verification suite evaluates eight critical operational criteria:
    - Diagnostic validation via `tctl status`.
    - Node membership registration check (`tctl nodes ls`).
 
+7. **Database Tier & Connection Pooling**:
+   - Database service status (PostgreSQL or MySQL active and enabled).
+   - Local engine responsiveness (`pg_isready` on port 5432, `mysqladmin ping`).
+   - PgBouncer connection pooler state on port 6432 (when enabled).
+
+8. **Rclone Disaster Recovery Integration**:
+   - Live logical database dump execution (`pg_dumpall`, `mysqldump`).
+   - Multi-cloud remote snapshot transfer and retention pruning.
+
 ---
 
 ## Running the Verification Playbook

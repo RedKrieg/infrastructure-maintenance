@@ -246,6 +246,40 @@
       register: grafana_health
       failed_when: "'database' not in grafana_health.json or grafana_health.json.database != 'ok'"
 
+- name: Verify Database Tier & Connection Pooling (if databases present)
+  hosts: databases
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Check database service state
+      ansible.builtin.systemd:
+        name: "{{ 'postgresql' if (db_engine | default('postgresql') == 'postgresql') else 'mysql' }}"
+        state: started
+      check_mode: true
+      register: db_svc_state
+      failed_when: db_svc_state.changed
+
+    - name: Verify PostgreSQL responsiveness with pg_isready
+      ansible.builtin.command:
+        cmd: "pg_isready -h 127.0.0.1 -p {{ db_port | default(5432) }}"
+      changed_when: false
+      when: db_engine | default('postgresql') == 'postgresql'
+
+    - name: Verify MySQL responsiveness with mysqladmin ping
+      ansible.builtin.command:
+        cmd: "mysqladmin ping"
+      changed_when: false
+      when: db_engine | default('postgresql') == 'mysql'
+
+    - name: Verify PgBouncer connection pooler state (if enabled)
+      ansible.builtin.systemd:
+        name: pgbouncer
+        state: started
+      check_mode: true
+      register: pgbouncer_svc_state
+      when: enable_pgbouncer | default(false) | bool
+      failed_when: pgbouncer_svc_state.changed
+
 - name: Cluster Verification Summary
   hosts: localhost
   connection: local
@@ -263,6 +297,7 @@
           - " [✓] HTTP to HTTPS 301/302 Redirection & 404 Catch-All OK"
           - " [✓] Coraza WAF Threat Mitigation & Stats Metrics OK"
           - " [✓] Webserver Nginx & Zero-Trust Backend TLS Validated"
+          - " [✓] Database Tier (PostgreSQL/MySQL & PgBouncer) Health Verified"
           - " [✓] Teleport Zero-Trust Access Gateway & Nodes Registered"
           - " [✓] Prometheus Server & Grafana Telemetry Dashboards Ready"
           - "=========================================================="

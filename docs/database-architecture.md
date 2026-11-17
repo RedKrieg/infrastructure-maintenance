@@ -61,16 +61,54 @@ db-01 ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_engine=postgresql
 db_databases=[{"name":"alpha_db","user":"alpha_user","password":"AlphaSecret2026!"},{"name":"beta_db","user":"beta_user","password":"BetaSecret2026!"},{"name":"gamma_db","user":"gamma_user","password":"GammaSecret2026!"}]
 ```
 
-#### Scenario 2: Centralized Clustered Database
+#### Scenario 2: Single-Primary, Read Replicas & Connection Pooling (PgBouncer)
 ```ini
 [databases]
-db-01 ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_engine=postgresql
+# Primary Write Master (PgBouncer enabled for connection pooling on port 6432)
+db-primary   ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_role=primary enable_pgbouncer=true db_engine=postgresql
+# Streaming Read Replica for offloading read queries
+db-replica-1 ansible_host=192.168.10.52 internal_ip=192.168.10.52 db_role=replica db_engine=postgresql
 
 [databases:vars]
 db_name=app_db
 db_user=app_user
 db_password=AppSecret2026!
+db_replication_user=replicator
+db_replication_password=ReplSecret2026!
+
+# PgBouncer Connection Pooler Settings (Port 6432)
+pgbouncer_port=6432
+pgbouncer_pool_mode=transaction
 ```
+
+```
+┌────────────────────────────────────────────────────────┐
+│          Pooled Webservers (web-01, web-02, web-03)    │
+└──────────────┬──────────────────────────┬──────────────┘
+               │ Write Queries            │ Read Queries
+               │ (Port 6432)              │ (Port 5432)
+               ▼                          ▼
+┌──────────────────────────────┐   ┌──────────────────────────────┐
+│  PgBouncer Connection Pool   │   │  db-replica-1 (192.168.10.52)│
+│  Port 6432 (Transaction Mode)│   │  Streaming Read Replica      │
+└──────────────┬───────────────┘   └──────────────▲───────────────┘
+               │                                  │
+               ▼                                  │ Streaming WAL
+┌──────────────────────────────┐                  │ Replication
+│  db-primary (192.168.10.51)  │──────────────────┘
+│  Primary Write Master (5432) │
+└──────────────────────────────┘
+```
+
+##### Architectural Mechanics:
+1. **Connection Pooling via PgBouncer**:
+   - Web application workers open connections to `db-primary:6432`.
+   - PgBouncer runs in `transaction` pool mode, allowing hundreds of concurrent web application workers to share a small, high-performance pool of physical PostgreSQL backends (default: 20-50 connections), preventing RAM bloat and connection exhaustion.
+2. **Streaming Read Replication**:
+   - `db-replica-1` streams WAL segments from `db-primary` using the dedicated `replicator` account authorized in `pg_hba.conf`.
+   - Read-heavy queries, analytics, and reporting are routed directly to `db-replica-1:5432`, leaving the primary unencumbered for write transactions.
+3. **Alternative: Cloud-Native Managed Database**:
+   - In AWS/GCP/Azure, Multi-AZ RDS / Cloud SQL / Flexible Server provides automatic primary-standby failover and managed read replicas with zero manual WAL administration.
 
 #### Scenario 3: Hybrid Database Workload
 ```ini

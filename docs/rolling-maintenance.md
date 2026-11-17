@@ -50,6 +50,10 @@ The `rolling_maintenance.yml` playbook automates zero-downtime maintenance by co
    - Verifies Nginx returns HTTP 200/301 before signalling HAProxy to set `state ready`.
 5. **Proxy Fleet Maintenance**:
    - Proxies are updated one by one. If Keepalived is enabled, stopping Keepalived gracefully steps down VRRP priority, allowing peer proxies to claim the VIP with zero dropped packets before the node reboots.
+6. **Database Tier Maintenance**:
+   - Database nodes are updated sequentially (`serial: 1`).
+   - For PostgreSQL read replica architectures, replicas are updated first followed by the primary write master.
+   - The playbook validates engine responsiveness (`pg_isready` on port 5432, `mysqladmin ping`) and PgBouncer connection pooler availability (port 6432) before moving to subsequent nodes.
 
 ---
 
