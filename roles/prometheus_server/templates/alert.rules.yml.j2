@@ -59,3 +59,39 @@ groups:
         annotations:
           summary: "CRITICAL: Internal TLS certificate expiring in < 3 days on {{ $labels.instance }}"
           description: "Internal certificate {{ $labels.cert_name }} at {{ $labels.cert_path }} (role: {{ $labels.role }}) on host {{ $labels.instance }} expires in less than 3 days! Immediate automated renewal intervention required."
+
+      - alert: HostMemoryAvailableLow
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low available host memory on {{ $labels.instance }}"
+          description: "Host {{ $labels.instance }} has less than 10% memory available for more than 3 minutes. Consider scaling up instance tier."
+
+      - alert: RabbitMQMemoryAlarmActive
+        expr: rabbitmq_alarms_memory_used_watermark == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ memory alarm active on {{ $labels.instance }}"
+          description: "RabbitMQ node {{ $labels.instance }} exceeded its memory high watermark; incoming message publishers are blocked."
+
+      - alert: RabbitMQDiskFreeAlarmActive
+        expr: rabbitmq_alarms_free_disk_space_watermark == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ disk space alarm active on {{ $labels.instance }}"
+          description: "RabbitMQ node {{ $labels.instance }} fell below its disk free space limit; incoming message publishers are blocked."
+
+      - alert: RabbitMQQueueBacklogHigh
+        expr: rabbitmq_queue_messages_ready > 5000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue backlog elevated on {{ $labels.instance }}"
+          description: "Queue {{ $labels.queue }} on vhost {{ $labels.vhost }} has more than 5,000 ready messages pending worker consumption."

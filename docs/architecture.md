@@ -95,8 +95,26 @@ For detailed configuration, inventory patterns, and operational procedures, see 
 
 ---
 
-## Centralized Identity & Access Management (Teleport vs. FreeIPA)
+## Centralized Identity & Access Management (Teleport vs. FreeIPA vs. Both)
 
 The cluster provides modular choices for identity and access management configured via `identity_provider`:
 - **Teleport** (`identity_provider: "teleport"`): Zero-Trust modern SSH, short-lived certificates, and browser-based access console. See [teleport-access.md](teleport-access.md).
 - **FreeIPA** (`identity_provider: "freeipa"`): Enterprise Linux identity management featuring Kerberos KDC, LDAP 389 Directory Server, SSSD integration, centralized sudo rules, and centralized SSH key lookup. See [freeipa-identity.md](freeipa-identity.md).
+- **Dual Deployment** (`identity_provider: "both"`): Coexistence of FreeIPA for Linux POSIX accounts/SSSD and Teleport for edge boundary SSH gateway with PAM delegation.
+- **Break-Glass Basic Auth**: Native HTTP Basic Auth for administrative web interfaces (HAProxy stats UI, RabbitMQ management UI, Grafana) and local UNIX accounts provisioned on every node via `vars/admin_users.yml` for out-of-band console access.
+
+---
+
+## Anti-Affinity & Physical Failure Domain Isolation
+
+High availability requires strict separation of redundant instances across failure domains:
+- **Proxies & Clustered Webservers**: Distributed across distinct Availability Zones (AWS `us-east-1a/b/c`, GCP `us-central1-a/b/c`, Azure `zone: 1/2/3`), OCI Fault Domains (`FD-1/2/3`), or OpenStack Nova anti-affinity server groups (`proxy-anti-affinity` and `web-anti-affinity`).
+- **Database & Cache**: Primary write masters and streaming read replicas are physically separated across zones to eliminate correlated hardware failure.
+
+For the comprehensive cross-provider anti-affinity matrix, see [anti-affinity-and-resilience.md](anti-affinity-and-resilience.md).
+
+---
+
+## Resource Sizing & Zero-Downtime Vertical Scaling
+
+Cluster nodes include automated pre-flight memory validation (`enforce_min_memory_check: true`), service-level memory limiters (Redis LRU, RabbitMQ memory alarms, PostgreSQL shared buffers), and step-by-step zero-downtime rolling vertical migration procedures. See [resource-sizing-and-scaling.md](resource-sizing-and-scaling.md).

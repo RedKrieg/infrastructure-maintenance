@@ -28,6 +28,20 @@ inotify_max_user_instances: 512
 enable_conditional_swap: true
 swap_size_mb: 2048
 
+# Pre-flight Minimum Memory Requirements Check
+# Setting to true enforces minimum RAM assertions before package installation
+enforce_min_memory_check: false
+min_general_memory_mb: 800
+min_role_memory_mb:
+  proxies: 800           # 1GB VM class (t3.micro, e2-micro, B1s)
+  webservers: 800        # 1GB VM class
+  databases: 1800        # 2GB VM class (t3.small, e2-small, B2s)
+  redis_servers: 800     # 1GB VM class
+  rabbitmq_servers: 1800 # 2GB VM class (Erlang VM + mnesia overhead)
+  monitoring: 1800       # 2GB VM class (Prometheus TSDB + Grafana)
+  teleport_servers: 1800 # 2GB VM class
+  freeipa_servers: 1800  # 2GB VM class (389 Directory Server + KDC)
+
 # Core & Diagnostics Packages
 sysadmin_packages:
   # User requested tools

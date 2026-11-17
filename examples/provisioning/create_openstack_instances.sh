@@ -24,11 +24,17 @@ if ! openstack --os-cloud "${OS_CLOUD}" keypair show "${KEY_NAME}" &>/dev/null; 
   openstack --os-cloud "${OS_CLOUD}" keypair create --public-key "${HOME}/.ssh/id_ed25519.pub" "${KEY_NAME}"
 fi
 
-# 2. Server Group (Anti-Affinity)
+# 2. Server Groups (Anti-Affinity)
 SG_GRP_ID=$(openstack --os-cloud "${OS_CLOUD}" server group show proxy-anti-affinity -c id -f value 2>/dev/null || true)
 if [[ -z "${SG_GRP_ID}" ]]; then
   echo "[+] Creating Nova anti-affinity server group for proxies..."
   SG_GRP_ID=$(openstack --os-cloud "${OS_CLOUD}" server group create --policy anti-affinity proxy-anti-affinity -c id -f value)
+fi
+
+WEB_SG_GRP_ID=$(openstack --os-cloud "${OS_CLOUD}" server group show web-anti-affinity -c id -f value 2>/dev/null || true)
+if [[ -z "${WEB_SG_GRP_ID}" ]]; then
+  echo "[+] Creating Nova anti-affinity server group for webservers..."
+  WEB_SG_GRP_ID=$(openstack --os-cloud "${OS_CLOUD}" server group create --policy anti-affinity web-anti-affinity -c id -f value)
 fi
 
 # 3. Network & Subnet
@@ -85,6 +91,8 @@ for NAME in "${!SERVERS[@]}"; do
     HINT_OPT=""
     if [[ "${ROLE}" == "proxy" ]]; then
       HINT_OPT="--hint group=${SG_GRP_ID}"
+    elif [[ "${ROLE}" == "webserver" ]]; then
+      HINT_OPT="--hint group=${WEB_SG_GRP_ID}"
     fi
     openstack --os-cloud "${OS_CLOUD}" server create "${NAME}" \
       --flavor "${FLAVOR}" \

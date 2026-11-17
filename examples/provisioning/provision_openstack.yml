@@ -38,6 +38,14 @@
         state: present
       register: proxy_server_group
 
+    - name: Create Nova Anti-Affinity Server Group for Webservers
+      openstack.cloud.server_group:
+        cloud: "{{ os_cloud }}"
+        name: "{{ os_web_server_group_name | default('web-anti-affinity') }}"
+        policies: ["{{ os_web_server_group_policy | default('anti-affinity') }}"]
+        state: present
+      register: web_server_group
+
     # --------------------------------------------------------------------------
     # 2. Neutron Networking & Router
     # --------------------------------------------------------------------------
@@ -131,7 +139,12 @@
         nics:
           - net-name: "{{ os_network_name }}"
             fixed_ip: "{{ item.ip }}"
-        scheduler_hints: "{{ {'group': proxy_server_group.server_group.id} if item.anti_affinity else omit }}"
+        scheduler_hints: >-
+          {{
+            {'group': proxy_server_group.server_group.id} if (item.anti_affinity_group | default('proxy' if item.anti_affinity else '') == 'proxy')
+            else ({'group': web_server_group.server_group.id} if (item.anti_affinity_group | default('') == 'web')
+            else omit)
+          }}
         auto_ip: true
         wait: true
         state: present

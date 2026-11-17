@@ -160,7 +160,7 @@
 
   roles:
     - role: teleport_server
-      when: identity_provider | default('teleport') == 'teleport'
+      when: identity_provider | default('teleport') in ['teleport', 'both']
       tags: [teleport, teleport_server, auth, rbac]
 
 - name: Provision FreeIPA Centralized Identity Server
@@ -173,7 +173,7 @@
   roles:
     - role: freeipa_server
       when:
-        - identity_provider | default('teleport') == 'freeipa'
+        - identity_provider | default('teleport') in ['freeipa', 'both']
         - freeipa_deploy_server | default(true) | bool
       tags: [freeipa, freeipa_server, identity, auth]
 
@@ -187,7 +187,7 @@
 
   roles:
     - role: teleport_node
-      when: identity_provider | default('teleport') == 'teleport'
+      when: identity_provider | default('teleport') in ['teleport', 'both']
       tags: [teleport, teleport_node, ssh]
 
 - name: Provision FreeIPA Client Enrollment across Cluster Nodes
@@ -197,7 +197,7 @@
 
   roles:
     - role: freeipa_client
-      when: identity_provider | default('teleport') == 'freeipa'
+      when: identity_provider | default('teleport') in ['freeipa', 'both']
       tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------

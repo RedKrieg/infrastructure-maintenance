@@ -52,8 +52,9 @@ if openstack --os-cloud "${OS_CLOUD}" network show "${NETWORK_NAME}" &>/dev/null
   openstack --os-cloud "${OS_CLOUD}" network delete "${NETWORK_NAME}" || true
 fi
 
-# 5. Delete Server Group & Keypair
+# 5. Delete Server Groups & Keypair
 openstack --os-cloud "${OS_CLOUD}" server group delete proxy-anti-affinity || true
+openstack --os-cloud "${OS_CLOUD}" server group delete web-anti-affinity || true
 openstack --os-cloud "${OS_CLOUD}" keypair delete "${KEY_NAME}" || true
 
 echo "[✓] OpenStack cluster cleanup complete!"

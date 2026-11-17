@@ -20,7 +20,42 @@ The infrastructure supports two decoupled identity management architectures:
 
 ---
 
-## 2. Standing Up a Dedicated FreeIPA Instance
+## 2. Dual Identity Integration (`identity_provider: "both"`) & Break-Glass Access
+
+Organizations with rigorous enterprise governance can run **both Teleport and FreeIPA simultaneously** alongside out-of-band Basic Auth:
+
+```mermaid
+flowchart TD
+    User["Administrator / Engineer"] -->|Option A: Zero-Trust Gateway| TP["Teleport Proxy (Port 3080/3023)"]
+    User -->|Option B: Enterprise Kerberos / LDAP| IPA["FreeIPA KDC & LDAP (Port 88/389)"]
+    User -->|Option C: Out-of-Band Break-Glass| LocalSSH["Direct SSH (Port 22, Ed25519 Key)"]
+
+    TP -->|PAM Delegation| SSSD["Linux SSSD / PAM Engine"]
+    IPA -->|SSSD Client Enrollment| SSSD
+    LocalSSH -->|Local Shadow / Sudoers| LocalAuth["Local UNIX Accounts (admin_users)"]
+
+    SSSD --> TargetNode["Target Cluster Node"]
+    LocalAuth --> TargetNode
+```
+
+### How Coexistence Operates:
+1. **FreeIPA as POSIX & Directory Foundation**:
+   FreeIPA manages host enrollment, central POSIX user IDs, LDAP groups, centralized sudo policies, and Kerberos tickets.
+2. **Teleport as Edge Bastion & Audit Gateway**:
+   Teleport acts as the boundary gateway. When an engineer connects via `tsh ssh`, Teleport authenticates the session, opens an encrypted reverse tunnel, and authenticates against the host's Linux PAM stack—which delegates user lookup to SSSD and FreeIPA.
+3. **Emergency Break-Glass Access**:
+   `roles/admin_users` unconditionally provisions local administrator accounts from `vars/admin_users.yml` on every cluster node with local Ed25519 SSH keys and sudo rights. If both Teleport and FreeIPA are offline or experiencing network isolation, administrators can still access nodes directly via console or out-of-band SSH.
+4. **HTTP Basic Auth for Administrative Web UIs**:
+   Administrative interfaces across HAProxy stats (`8404`), RabbitMQ Management UI (`15672`), and Grafana (`3000`) support native HTTP Basic Authentication protected by IP whitelists.
+
+To enable dual deployment across all cluster nodes, set in `group_vars/all.yml` or your inventory:
+```yaml
+identity_provider: "both"
+```
+
+---
+
+## 3. Standing Up a Dedicated FreeIPA Instance
 
 When building a self-contained private cluster, you can provision a dedicated FreeIPA server on the `[freeipa_servers]` host group using the `freeipa_server` role.
 
@@ -73,7 +108,7 @@ The FreeIPA server requires the following ports opened across internal cluster s
 
 ---
 
-## 3. Connecting to an Existing FreeIPA Instance
+## 4. Connecting to an Existing FreeIPA Instance
 
 If your organization already operates an enterprise FreeIPA or Red Hat Directory Server (IdM) cluster, you can enroll the cluster nodes without provisioning a local FreeIPA server.
 
@@ -125,7 +160,7 @@ freeipa_admin_password: "{{ vault_freeipa_admin_password }}"
 
 ---
 
-## 4. Client SSSD, SSH & Sudo Integration
+## 5. Client SSSD, SSH & Sudo Integration
 
 Once a node is enrolled, `roles/freeipa_client` automatically hardens the authentication stack:
 
@@ -149,7 +184,7 @@ PAM auto-creates home directories upon first login using `oddjob-mkhomedir` and 
 
 ---
 
-## 5. Verification & Troubleshooting
+## 6. Verification & Troubleshooting
 
 ### Check Server Health
 On the FreeIPA server node:
@@ -179,7 +214,7 @@ sssctl user-checks <username>
 
 ---
 
-## 6. Playbook & Variable Reference
+## 7. Playbook & Variable Reference
 
 ### Role Variables (`freeipa_server`)
 | Variable | Default | Description |

@@ -9,3 +9,29 @@
       - ansible_os_family == 'Debian'
     fail_msg: "The system_base role requires a Debian/Ubuntu system."
   tags: [system, preflight]
+
+- name: Calculate host minimum required memory
+  ansible.builtin.set_fact:
+    host_required_memory_mb: >-
+      {{
+        min_memory_mb if (min_memory_mb is defined)
+        else (
+          ([min_general_memory_mb | default(800)] +
+           (group_names | map('extract', min_role_memory_mb | default({})) | select('defined') | list)) | max
+        )
+      }}
+  when: (enforce_min_memory_check | default(false) | bool) or (min_memory_mb is defined)
+  tags: [system, preflight, memory]
+
+- name: Validate host RAM meets service minimum requirements
+  ansible.builtin.assert:
+    that:
+      - ansible_memtotal_mb >= (host_required_memory_mb | int)
+    fail_msg: >-
+      Host '{{ inventory_hostname }}' has {{ ansible_memtotal_mb }} MB total RAM,
+      which does not satisfy the required minimum of {{ host_required_memory_mb }} MB for roles in groups {{ group_names }}.
+      Please scale up the instance tier or set 'enforce_min_memory_check: false' to override.
+  when:
+    - (enforce_min_memory_check | default(false) | bool) or (min_memory_mb is defined)
+    - host_required_memory_mb is defined
+  tags: [system, preflight, memory]
