@@ -68,6 +68,20 @@ In Scenario 1, the optional database tier can be deployed in two configurations:
 2. **Cloud-Native Managed Databases (AWS RDS / GCP Cloud SQL / Azure Flexible Server)**:
    For cloud deployments, each tenant can point to an isolated database on a managed PostgreSQL instance with private VPC peering.
 
+## Cache & Message Broker Layer (Redis & RabbitMQ)
+
+In Scenario 1, caching and queuing can be deployed either per-tenant or as a shared infrastructure layer:
+- **Redis (`redis-01`)**: Provides tenant-isolated Redis databases (db 0 for Alpha, db 1 for Beta, db 2 for Gamma) or dedicated Redis keyspaces with password authentication.
+- **RabbitMQ (`mq-01`)**: Provides tenant-isolated virtual hosts (`/alpha`, `/beta`, `/gamma`) with dedicated credentials and queues, or shared message passing.
+
+```ini
+[redis_servers]
+redis-01 ansible_host=192.168.10.61 internal_ip=192.168.10.61
+
+[rabbitmq_servers]
+mq-01 ansible_host=192.168.10.71 internal_ip=192.168.10.71 rabbitmq_mgmt_fqdn=mq.example.com
+```
+
 ## User Experience & Operational Trade-offs
 
 | Dimension | Behavior in Scenario 1 |

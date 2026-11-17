@@ -60,6 +60,7 @@ Ready-to-use cloud-specific inventory templates are available in the `examples/i
 > - **[OCI Compute Setup Guide](oci-compute-setup.md)** (`examples/provisioning/provision_oci.yml`)
 > - **[OpenStack Setup Guide](openstack-setup.md)** (`examples/provisioning/provision_openstack.yml`)
 > - **[Database Architecture Guide](database-architecture.md)** (Self-hosted & cloud-native PostgreSQL / MySQL)
+> - **[Cache & Queue Architecture Guide](cache-and-queue-architecture.md)** (Redis caching/sessions & RabbitMQ message broker)
 
 ---
 
@@ -119,6 +120,15 @@ ansible-playbook -i inventory.ini playbook.yml --tags proxy
 
 # Synchronize certificates only:
 ansible-playbook -i inventory.ini playbook.yml --tags certs
+
+# Provision or update Database tier only:
+ansible-playbook -i inventory.ini playbook.yml --tags database
+
+# Provision or update Redis in-memory cache tier only:
+ansible-playbook -i inventory.ini playbook.yml --tags redis
+
+# Provision or update RabbitMQ message broker tier only:
+ansible-playbook -i inventory.ini playbook.yml --tags rabbitmq
 
 # Provision or update backend webservers only:
 ansible-playbook -i inventory.ini playbook.yml --tags webserver

@@ -1,0 +1,41 @@
+---
+# ==============================================================================
+# Default Variables for Redis In-Memory Cache & Session Store Role
+# ==============================================================================
+
+# Master switch to enable Redis role execution
+enable_redis: true
+
+# Network Binding & Listening Port
+redis_port: 6379
+# Listen on internal IP or all interfaces (protected by firewall & requirepass)
+redis_bind_address: "0.0.0.0"
+redis_protected_mode: "yes"
+
+# Security & Authentication
+redis_password: "{{ vault_redis_password | default('RedisSecretPass2026!') }}"
+
+# Memory Management & Eviction Policy
+# Suitable for session management, response caching, and transient state
+redis_maxmemory: "512mb"
+redis_maxmemory_policy: "allkeys-lru"
+
+# Persistence Configuration (RDB Snapshots & Append-Only File)
+redis_save_schedules:
+  - "900 1"
+  - "300 10"
+  - "60 10000"
+redis_appendonly: "yes"
+redis_appendfsync: "everysec"
+
+# General Service Configuration
+redis_databases: 16
+redis_loglevel: "notice"
+redis_timeout: 0
+redis_tcp_keepalive: 300
+
+# Trusted private subnets authorized to connect to Redis (RFC 1918 defaults)
+redis_trusted_subnets:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"

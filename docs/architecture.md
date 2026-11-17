@@ -85,6 +85,16 @@ For full architectural designs across all three topologies, provisioning guides,
 
 ---
 
+## In-Memory Caching & Asynchronous Queuing (Redis & RabbitMQ)
+
+The architecture includes modular tiers for state decoupling and worker pipelines:
+- **Redis (`roles/redis`)**: In-memory cache and centralized session store essential for stateless pooled webservers (Scenario 2). Includes LRU eviction, dual RDB/AOF persistence, and cloud-native options (AWS ElastiCache, GCP Memorystore, Azure Cache for Redis).
+- **RabbitMQ (`roles/rabbitmq`)**: AMQP 0-9-1 message broker and task queue for background workers. Includes Management Web UI routed through HAProxy with TLS (`mq.<domain>`) and Prometheus telemetry metrics on port 15692. Cloud-native options include Amazon MQ for RabbitMQ.
+
+For detailed configuration, inventory patterns, and operational procedures, see the [Cache and Queue Architecture Guide](cache-and-queue-architecture.md).
+
+---
+
 ## Centralized Identity & Access Management (Teleport vs. FreeIPA)
 
 The cluster provides modular choices for identity and access management configured via `identity_provider`:

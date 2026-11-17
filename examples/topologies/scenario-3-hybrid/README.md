@@ -69,6 +69,20 @@ db-01 ansible_host=192.168.10.51 internal_ip=192.168.10.51 db_engine=postgresql
 db_databases=[{"name":"app_db","user":"app_user","password":"CoreAppSecret2026!"},{"name":"tenant_a_db","user":"tenant_a_user","password":"TenantASecret2026!"},{"name":"tenant_b_db","user":"tenant_b_user","password":"TenantBSecret2026!"}]
 ```
 
+## Cache & Message Broker Layer (Redis & RabbitMQ)
+
+In Scenario 3, Redis and RabbitMQ support both the core pooled application and dedicated client tenants:
+- **Redis (`redis-01`)**: Core webservers (`web-pool-01`, `web-pool-02`) share sessions in `db 0`, while isolated tenant apps use separate Redis logical databases (`db 1`, `db 2`).
+- **RabbitMQ (`mq-01`)**: Hosts the primary `/app` vhost for pooled asynchronous processing, alongside isolated vhosts (`/tenant-a`, `/tenant-b`) for tenant workers. Management UI is accessible at `mq.example.com` via HAProxy.
+
+```ini
+[redis_servers]
+redis-01 ansible_host=192.168.10.61 internal_ip=192.168.10.61
+
+[rabbitmq_servers]
+mq-01 ansible_host=192.168.10.71 internal_ip=192.168.10.71 rabbitmq_mgmt_fqdn=mq.example.com
+```
+
 ## Quick Start
 
 1. Deploy the hybrid cluster:

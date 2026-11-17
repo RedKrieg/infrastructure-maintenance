@@ -1,0 +1,125 @@
+---
+# ==============================================================================
+# Playbook: Provision Cloud-Native Amazon MQ for RabbitMQ
+# ==============================================================================
+# Provisions:
+#   1. Dedicated Security Group allowing AMQP port 5672 from cluster VPC
+#   2. Managed Amazon MQ RabbitMQ Broker (Single-Instance or Multi-AZ Cluster)
+#   3. Displays AMQP and Web Console endpoints for application worker queues
+#
+# Usage:
+#   ansible-playbook examples/provisioning/provision_aws_amazon_mq.yml
+# ==============================================================================
+
+- name: Provision Cloud-Native Amazon MQ for RabbitMQ
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_aws.yml
+
+  vars:
+    mq_broker_name: "cluster-rabbitmq"
+    mq_host_instance_type: "mq.t3.micro"
+    mq_engine_version: "3.13"
+    mq_user: "app_user"
+    mq_password: "{{ vault_aws_mq_password | default('SecretCloudMQPass2026!') }}"
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Discover Existing Cluster VPC & Subnets
+    # --------------------------------------------------------------------------
+    - name: Discover Cluster VPC
+      amazon.aws.ec2_vpc_net_info:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Name": "{{ aws_vpc_name }}"
+      register: vpc_info
+
+    - name: Assert VPC Exists
+      ansible.builtin.assert:
+        that:
+          - vpc_info.vpcs | length > 0
+        fail_msg: "VPC {{ aws_vpc_name }} not found. Run provision_aws.yml first."
+
+    - name: Set VPC ID Fact
+      ansible.builtin.set_fact:
+        cluster_vpc_id: "{{ vpc_info.vpcs[0].vpc_id }}"
+
+    - name: Discover VPC Subnets
+      amazon.aws.ec2_vpc_subnet_info:
+        region: "{{ aws_region }}"
+        filters:
+          vpc-id: "{{ cluster_vpc_id }}"
+      register: subnet_info
+
+    - name: Extract First Subnet ID
+      ansible.builtin.set_fact:
+        target_subnet_id: "{{ subnet_info.subnets[0].subnet_id }}"
+
+    # --------------------------------------------------------------------------
+    # 2. Amazon MQ Security Group
+    # --------------------------------------------------------------------------
+    - name: Create Amazon MQ Security Group
+      amazon.aws.ec2_security_group:
+        name: "cluster-mq-sg"
+        description: "Allow RabbitMQ AMQP (5672/5671) and Management (443/15672) from VPC"
+        vpc_id: "{{ cluster_vpc_id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports: [5671, 5672]
+            cidr_ip: "{{ aws_vpc_cidr }}"
+            rule_desc: "AMQP SSL from cluster VPC"
+          - proto: tcp
+            ports: [443, 15672]
+            cidr_ip: "{{ aws_vpc_cidr }}"
+            rule_desc: "RabbitMQ Web Console from cluster VPC"
+        rules_egress:
+          - proto: all
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "Allow outbound traffic"
+        state: present
+      register: mq_sg
+
+    # --------------------------------------------------------------------------
+    # 3. Provision Amazon MQ Broker (RabbitMQ)
+    # --------------------------------------------------------------------------
+    - name: Provision Amazon MQ RabbitMQ Broker
+      community.aws.mq_broker:
+        broker_name: "{{ mq_broker_name }}"
+        engine_type: "RABBITMQ"
+        engine_version: "{{ mq_engine_version }}"
+        host_instance_type: "{{ mq_host_instance_type }}"
+        deployment_mode: "SINGLE_INSTANCE"
+        publicly_accessible: false
+        auto_minor_version_upgrade: true
+        security_groups:
+          - "{{ mq_sg.group_id }}"
+        subnet_ids:
+          - "{{ target_subnet_id }}"
+        users:
+          - Username: "{{ mq_user }}"
+            Password: "{{ mq_password }}"
+            ConsoleAccess: true
+        state: present
+        region: "{{ aws_region }}"
+      register: mq_broker
+
+    # --------------------------------------------------------------------------
+    # 4. Output Connection Details
+    # --------------------------------------------------------------------------
+    - name: Display Amazon MQ Connection Details
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - " Amazon MQ RabbitMQ Broker Provisioned Successfully       "
+          - "=========================================================="
+          - " Broker Name:     {{ mq_broker_name }}"
+          - " Engine:          RabbitMQ {{ mq_engine_version }}"
+          - " Instance Type:   {{ mq_host_instance_type }}"
+          - " Broker ID:       {{ mq_broker.broker['BrokerId'] | default('Pending') }}"
+          - " VPC Subnet:      {{ target_subnet_id }}"
+          - " App User:        {{ mq_user }}"
+          - "=========================================================="

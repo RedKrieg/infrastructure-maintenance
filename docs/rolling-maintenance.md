@@ -54,6 +54,12 @@ The `rolling_maintenance.yml` playbook automates zero-downtime maintenance by co
    - Database nodes are updated sequentially (`serial: 1`).
    - For PostgreSQL read replica architectures, replicas are updated first followed by the primary write master.
    - The playbook validates engine responsiveness (`pg_isready` on port 5432, `mysqladmin ping`) and PgBouncer connection pooler availability (port 6432) before moving to subsequent nodes.
+7. **Redis Cache Tier Maintenance**:
+   - Redis nodes are updated sequentially (`serial: 1`).
+   - Reboots only if kernel updates require it; verifies `redis-cli ping` returns `PONG` with authentication before moving forward.
+8. **RabbitMQ Broker Tier Maintenance**:
+   - RabbitMQ nodes are updated sequentially (`serial: 1`).
+   - Runs `rabbitmq-diagnostics check_running` to ensure the Erlang VM and all plugins are healthy before proceeding.
 
 ---
 

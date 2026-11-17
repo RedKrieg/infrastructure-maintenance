@@ -91,6 +91,29 @@ In Scenario 2, all pooled webservers (`web-01`, `web-02`, `web-03`) connect to a
    - For mission-critical pooled clusters, cloud-native managed PostgreSQL is strongly recommended.
    - Webservers connect directly to the managed private DNS endpoint (e.g. `cluster-postgres.c12345678901.us-east-1.rds.amazonaws.com`), providing multi-AZ automated failover, read replicas, and automated snapshots without running database daemons on VMs.
 
+## Cache & Message Broker Layer (Redis & RabbitMQ)
+
+In a pooled N:1 architecture, webservers are stateless and cannot store sessions or transient job state in local memory. The infrastructure includes dedicated cache and broker tiers:
+
+1. **Redis In-Memory Cache & Shared Session Store (`redis-01`)**:
+   - Webservers store user HTTP sessions and cache expensive SQL query results in Redis.
+   - Configured with `maxmemory-policy: allkeys-lru` and dual persistence (RDB snapshotting + AOF fsync every second).
+   - Alternatively points to cloud-native AWS ElastiCache, GCP Memorystore, or Azure Cache for Redis.
+
+2. **RabbitMQ Task Queue & Broker (`mq-01`)**:
+   - Asynchronous worker jobs (emails, PDF generation, background syncs) are dispatched via AMQP 0-9-1.
+   - Includes RabbitMQ Management Web UI (port 15672) routed through HAProxy under `mq.example.com` (protected by admin IP whitelist).
+   - Exposes native Prometheus metrics on port 15692 scraped by the monitoring tier.
+   - Alternatively points to cloud-native Amazon MQ for RabbitMQ.
+
+```ini
+[redis_servers]
+redis-01 ansible_host=192.168.10.61 internal_ip=192.168.10.61
+
+[rabbitmq_servers]
+mq-01 ansible_host=192.168.10.71 internal_ip=192.168.10.71 rabbitmq_mgmt_fqdn=mq.example.com
+```
+
 ## User Experience & Operational Trade-offs
 
 | Dimension | Behavior in Scenario 2 |

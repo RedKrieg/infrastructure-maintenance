@@ -80,6 +80,22 @@ scrape_configs:
           role: 'fleet'
 {% endif %}
 
+{% if groups['rabbitmq_servers'] is defined and groups['rabbitmq_servers'] | length > 0 %}
+  # Scrape RabbitMQ Metrics (Prometheus Plugin)
+  - job_name: 'rabbitmq'
+    scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+{% for host in groups['rabbitmq_servers'] %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
+{% set target_port = hostvars[host]['rabbitmq_prometheus_port'] | default(15692) %}
+          - "{{ target_ip }}:{{ target_port }}"
+{% endfor %}
+        labels:
+          role: 'message_broker'
+{% endif %}
+
 {% if prometheus_custom_scrape_configs is defined and prometheus_custom_scrape_configs | length > 0 %}
 {{ prometheus_custom_scrape_configs | to_nice_yaml(indent=2) }}
 {% endif %}

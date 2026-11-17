@@ -280,6 +280,59 @@
       when: enable_pgbouncer | default(false) | bool
       failed_when: pgbouncer_svc_state.changed
 
+- name: Verify In-Memory Cache Tier (Redis)
+  hosts: redis_servers
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Check Redis service state
+      ansible.builtin.systemd:
+        name: redis-server
+        state: started
+      check_mode: true
+      register: redis_svc_state
+      failed_when: redis_svc_state.changed
+
+    - name: Verify Redis PING responsiveness
+      ansible.builtin.command:
+        cmd: >
+          redis-cli -p {{ redis_port | default(6379) }}
+          {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
+          ping
+      changed_when: false
+      register: redis_ping_out
+      failed_when: "'PONG' not in redis_ping_out.stdout"
+      no_log: true
+
+- name: Verify Message Broker Tier (RabbitMQ)
+  hosts: rabbitmq_servers
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Check RabbitMQ service state
+      ansible.builtin.systemd:
+        name: rabbitmq-server
+        state: started
+      check_mode: true
+      register: rmq_svc_state
+      failed_when: rmq_svc_state.changed
+
+    - name: Verify RabbitMQ node health and diagnostics
+      ansible.builtin.command:
+        cmd: rabbitmq-diagnostics check_running
+      changed_when: false
+
+    - name: Verify RabbitMQ Management API health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ rabbitmq_mgmt_port | default(15672) }}/api/health/checks/alarms"
+        method: GET
+        user: "{{ rabbitmq_admin_user | default('admin') }}"
+        password: "{{ rabbitmq_admin_password | default(vault_rabbitmq_admin_password | default('RabbitMQAdminSecret2026!')) }}"
+        force_basic_auth: true
+        status_code: 200
+        timeout: 5
+      register: rmq_api_resp
+
 - name: Cluster Verification Summary
   hosts: localhost
   connection: local
@@ -298,6 +351,8 @@
           - " [✓] Coraza WAF Threat Mitigation & Stats Metrics OK"
           - " [✓] Webserver Nginx & Zero-Trust Backend TLS Validated"
           - " [✓] Database Tier (PostgreSQL/MySQL & PgBouncer) Health Verified"
+          - " [✓] Redis In-Memory Cache & Session Store Responsive"
+          - " [✓] RabbitMQ Message Broker & Management API Operational"
           - " [✓] Teleport Zero-Trust Access Gateway & Nodes Registered"
           - " [✓] Prometheus Server & Grafana Telemetry Dashboards Ready"
           - "=========================================================="

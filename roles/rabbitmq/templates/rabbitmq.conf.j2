@@ -1,0 +1,23 @@
+# ==============================================================================
+# RabbitMQ Configuration - Managed by Ansible
+# ==============================================================================
+
+# TCP Listeners
+listeners.tcp.default = {{ rabbitmq_amqp_port }}
+
+# Management Plugin Web Listener
+management.tcp.port = {{ rabbitmq_mgmt_port }}
+
+# Prometheus Metrics Listener
+prometheus.tcp.port = {{ rabbitmq_prometheus_port }}
+
+# Resource Limits & Alarms
+vm_memory_high_watermark.relative = {{ rabbitmq_vm_memory_high_watermark }}
+disk_free_limit.absolute = {{ rabbitmq_disk_free_limit }}
+
+# User & Access Restrictions
+{% if rabbitmq_loopback_users | length == 0 %}
+loopback_users = none
+{% else %}
+loopback_users = {{ rabbitmq_loopback_users | join(', ') }}
+{% endif %}

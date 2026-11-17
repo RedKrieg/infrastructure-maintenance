@@ -274,3 +274,129 @@
     - name: Confirm database node is healthy and restored
       ansible.builtin.debug:
         msg: ">>> Database node {{ inventory_hostname }} successfully updated and verified <<<"
+
+# ------------------------------------------------------------------------------
+# Play 4: Rolling Maintenance across Redis Cache Tier (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Zero-Downtime Rolling Maintenance for Redis Cache Tier
+  hosts: redis_servers
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display Redis node maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on Redis node {{ inventory_hostname }} <<<"
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: redis_apt_cache
+      retries: 3
+      delay: 5
+      until: redis_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: redis_reboot_file
+
+    - name: Reboot Redis node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting Redis node {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: redis_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure Redis service is active
+      ansible.builtin.systemd:
+        name: redis-server
+        state: started
+        enabled: true
+
+    - name: Verify Redis PING responsiveness
+      ansible.builtin.command:
+        cmd: >
+          redis-cli -p {{ redis_port | default(6379) }}
+          {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
+          ping
+      changed_when: false
+      retries: 10
+      delay: 3
+      register: redis_ping_res
+      until: "'PONG' in redis_ping_res.stdout"
+      no_log: true
+
+    - name: Confirm Redis node is healthy and restored
+      ansible.builtin.debug:
+        msg: ">>> Redis node {{ inventory_hostname }} successfully updated and verified <<<"
+
+# ------------------------------------------------------------------------------
+# Play 5: Rolling Maintenance across RabbitMQ Tier (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Zero-Downtime Rolling Maintenance for RabbitMQ Message Broker Tier
+  hosts: rabbitmq_servers
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display RabbitMQ node maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on RabbitMQ node {{ inventory_hostname }} <<<"
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: rmq_apt_cache
+      retries: 3
+      delay: 5
+      until: rmq_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: rmq_reboot_file
+
+    - name: Reboot RabbitMQ node if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting RabbitMQ node {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: rmq_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure RabbitMQ service is active
+      ansible.builtin.systemd:
+        name: rabbitmq-server
+        state: started
+        enabled: true
+
+    - name: Verify RabbitMQ responsiveness with diagnostics
+      ansible.builtin.command:
+        cmd: rabbitmq-diagnostics check_running
+      changed_when: false
+      retries: 10
+      delay: 3
+      register: rmq_diag_res
+      until: rmq_diag_res.rc == 0
+
+    - name: Confirm RabbitMQ node is healthy and restored
+      ansible.builtin.debug:
+        msg: ">>> RabbitMQ node {{ inventory_hostname }} successfully updated and verified <<<"

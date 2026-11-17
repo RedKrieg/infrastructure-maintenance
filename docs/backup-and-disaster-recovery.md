@@ -67,6 +67,8 @@ For sample `rclone.conf` configurations across Cloudflare R2, Backblaze B2, AWS 
 | **Edge Proxies & VIP** | `proxies` | `/etc/haproxy/`, `/etc/keepalived/`, `/root/.acme.sh/` (TLS certs) |
 | **Webservers** | `webservers` | `/etc/nginx/`, `/etc/ssl/internal/`, `/var/www/` |
 | **Database Tier** | `databases` | Live compressed SQL dumps (`pg_dumpall`, `mysqldump`), `/etc/postgresql/`, `/etc/mysql/` |
+| **Redis Cache Tier** | `redis_servers` | Point-in-time snapshot (`dump.rdb`, `appendonly.aof`), `/etc/redis/redis.conf` |
+| **RabbitMQ Message Broker**| `rabbitmq_servers` | Schema & broker definitions export (JSON), `/etc/rabbitmq/`, `.erlang.cookie` |
 | **Teleport Gateway** | `teleport_servers` | `/etc/teleport.yaml`, `/var/lib/teleport/` (CA keys, state) |
 | **Monitoring Stack** | `monitoring` | `/etc/prometheus/`, `/etc/grafana/`, `/var/lib/grafana/grafana.db` |
 

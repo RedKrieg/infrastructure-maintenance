@@ -25,6 +25,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
 │   ├── backend-topologies.md        # Dedicated 1:1 vs. Pooled N:1 load-balanced webserver clusters
 │   ├── database-architecture.md     # Optional database tier: PostgreSQL, MySQL & Cloud-Native services
+│   ├── cache-and-queue-architecture.md # Optional Redis cache/sessions & RabbitMQ message broker
 │   ├── staging-production.md        # Staging vs. production environment strategy & ACME rate limit defense
 │   ├── keepalived-baremetal.md      # Bare Metal HA with Keepalived VRRP floating IP & health tracking
 │   ├── ssl-certificates.md          # Multi-node ACME line of succession, sync scripts & recovery
@@ -97,6 +98,8 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── proxy/                       # HAProxy role (terminates SSL, Coraza WAF, routes 1:1 to backends)
 │   ├── webserver/                   # Backend Nginx role (generic 404 & internal TLS encryption)
 │   ├── database/                    # Optional Database role (PostgreSQL preferred & MySQL engines)
+│   ├── redis/                       # Optional Redis role (in-memory caching & centralized session store)
+│   ├── rabbitmq/                    # Optional RabbitMQ role (AMQP message broker & task queue)
 │   ├── central_logging/             # Centralized log collection (server & shipper) with 60-day retention
 │   ├── prometheus_server/           # Standalone Prometheus server role (port 9090, 60d retention, alert rules)
 │   ├── grafana/                     # Grafana visualization server (port 3000, pre-built dashboards)
@@ -133,6 +136,9 @@ Comprehensive technical documentation is organized into modular guides in the [`
 | Document | Description | Key Topics Included |
 | :--- | :--- | :--- |
 | **[Architecture](docs/architecture.md)** | Cloud-Agnostic High-Availability Architecture | • Generic Layer 4 Ingress Load Balancer (TCP Passthrough)<br>• Transparent client IP preservation with zero cloud lock-in<br>• Provider drop-in mapping table (AWS NLB, GCP Passthrough, Azure LB, OCI NLB, Octavia, Bare Metal)<br>• RFC 1918 universal subnet compatibility & zero-cloud-agent model<br>• Dynamic 1:1 host-to-FQDN reverse proxy routing concept |
+| **[Backend Topologies](docs/backend-topologies.md)** | Dedicated 1:1 vs Pooled N:1 vs Hybrid Clusters | • Scenario 1: Dedicated 1:1 webservers for isolated client tenants<br>• Scenario 2: High-availability N:1 pooled webservers with round-robin<br>• Scenario 3: Clustered HA core site coexisting with dedicated tenant backends<br>• State management, session stickiness, and failure domain trade-offs |
+| **[Database Architecture](docs/database-architecture.md)** | PostgreSQL, MySQL & Cloud-Native Services | • PostgreSQL preferred default with SCRAM-SHA-256 and JSONB<br>• MySQL 8.0 support<br>• Scenario 1 multi-tenant partitioned databases<br>• Scenario 2 Single-Primary write master + streaming read replica + PgBouncer pooling (port 6432)<br>• Cloud-native managed database provisioning (AWS RDS, GCP Cloud SQL, Azure Flexible Server, OCI) |
+| **[Cache & Queue Architecture](docs/cache-and-queue-architecture.md)** | Redis Sessions/Cache & RabbitMQ Message Broker | • Redis in-memory cache and centralized session store for stateless pooled webservers<br>• LRU memory eviction and dual RDB/AOF persistence<br>• RabbitMQ AMQP 0-9-1 task queue and worker decoupling<br>• RabbitMQ Management Web UI routed through HAProxy with TLS (`mq.<domain>`) and Prometheus metrics (port 15692)<br>• Cloud-native provisioning (AWS ElastiCache, Amazon MQ, GCP Memorystore, Azure Cache) |
 | **[Staging vs. Production](docs/staging-production.md)** | Multi-Environment Decoupling & Strategy | • Decoupled environment structures under `inventories/staging/` and `inventories/production/`<br>• Let's Encrypt Staging CA (`acme_use_staging: true`) to prevent API rate limiting<br>• Environment-specific TSDB metrics retention (7d staging vs 60d production)<br>• Staging vs production domain segregation and notification routing |
 | **[Bare Metal HA (Keepalived)](docs/keepalived-baremetal.md)** | Layer 4 VRRP Ingress Redundancy | • High availability on bare metal / private clouds without managed cloud load balancers<br>• Automated health-checking tracking script (`check_haproxy.sh`) with dynamic priority reduction<br>• Kernel sysctl tuning (`net.ipv4.ip_nonlocal_bind = 1`) & UFW protocol 112 rules<br>• Unicast peer discovery and non-preemptive failback protection |
 | **[SSL Certificates & Failover](docs/ssl-certificates.md)** | Shared SSL Certificates, Succession & Recovery | • Cluster-wide HTTP-01 challenge routing via `backend be_acme`<br>• Automated `sync-haproxy-certs.sh` push over dedicated cluster SSH keys<br>• Rank-based fallback line of succession with 1-day staggered renewal windows<br>• Active SSH protocol negotiation checks (`ssh-keyscan` key exchange & RFC 4253 banner check)<br>• Boot-time reconciliation service (`haproxy-cert-reconcile.service`) & seamless rank resumption |

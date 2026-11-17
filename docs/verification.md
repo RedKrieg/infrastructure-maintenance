@@ -44,7 +44,16 @@ The verification suite evaluates eight critical operational criteria:
    - Local engine responsiveness (`pg_isready` on port 5432, `mysqladmin ping`).
    - PgBouncer connection pooler state on port 6432 (when enabled).
 
-8. **Rclone Disaster Recovery Integration**:
+8. **Redis In-Memory Cache Tier**:
+   - `redis-server` service state.
+   - PING/PONG responsiveness check using `redis-cli ping` with password authentication.
+
+9. **RabbitMQ Message Broker Tier**:
+   - `rabbitmq-server` service state.
+   - Diagnostic health validation via `rabbitmq-diagnostics check_running`.
+   - Management REST API alarm health endpoint (`/api/health/checks/alarms`).
+
+10. **Rclone Disaster Recovery Integration**:
    - Live logical database dump execution (`pg_dumpall`, `mysqldump`).
    - Multi-cloud remote snapshot transfer and retention pruning.
 
@@ -78,6 +87,9 @@ ok: [localhost] => {
         " [✓] HTTP to HTTPS 301/302 Redirection & 404 Catch-All OK",
         " [✓] Coraza WAF Threat Mitigation & Stats Metrics OK",
         " [✓] Webserver Nginx & Zero-Trust Backend TLS Validated",
+        " [✓] Database Tier (PostgreSQL/MySQL & PgBouncer) Health Verified",
+        " [✓] Redis In-Memory Cache & Session Store Responsive",
+        " [✓] RabbitMQ Message Broker & Management API Operational",
         " [✓] Teleport Zero-Trust Access Gateway & Nodes Registered",
         " [✓] Prometheus Server & Grafana Telemetry Dashboards Ready",
         "=========================================================="

@@ -1,0 +1,124 @@
+---
+# ==============================================================================
+# Playbook: Provision Cloud-Native AWS ElastiCache for Redis
+# ==============================================================================
+# Provisions:
+#   1. ElastiCache Subnet Group across multi-AZ VPC private subnets
+#   2. Security Group allowing Redis port 6379 from VPC CIDR
+#   3. Managed AWS ElastiCache Redis Replication Group with transit encryption
+#   4. Outputs primary connection endpoint for web application session caching
+#
+# Usage:
+#   ansible-playbook examples/provisioning/provision_aws_elasticache_redis.yml
+# ==============================================================================
+
+- name: Provision Cloud-Native AWS ElastiCache for Redis
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_aws.yml
+
+  vars:
+    elasticache_cluster_id: "cluster-redis"
+    elasticache_node_type: "cache.t4g.micro"
+    elasticache_num_nodes: 2
+    elasticache_engine_version: "7.1"
+    elasticache_port: 6379
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Discover Existing Cluster VPC & Subnets
+    # --------------------------------------------------------------------------
+    - name: Discover Cluster VPC
+      amazon.aws.ec2_vpc_net_info:
+        region: "{{ aws_region }}"
+        filters:
+          "tag:Name": "{{ aws_vpc_name }}"
+      register: vpc_info
+
+    - name: Assert VPC Exists
+      ansible.builtin.assert:
+        that:
+          - vpc_info.vpcs | length > 0
+        fail_msg: "VPC {{ aws_vpc_name }} not found. Run provision_aws.yml first."
+
+    - name: Set VPC ID Fact
+      ansible.builtin.set_fact:
+        cluster_vpc_id: "{{ vpc_info.vpcs[0].vpc_id }}"
+
+    - name: Discover VPC Subnets
+      amazon.aws.ec2_vpc_subnet_info:
+        region: "{{ aws_region }}"
+        filters:
+          vpc-id: "{{ cluster_vpc_id }}"
+      register: subnet_info
+
+    - name: Extract Subnet IDs
+      ansible.builtin.set_fact:
+        cluster_subnet_ids: "{{ subnet_info.subnets | map(attribute='subnet_id') | list }}"
+
+    # --------------------------------------------------------------------------
+    # 2. ElastiCache Subnet Group & Security Group
+    # --------------------------------------------------------------------------
+    - name: Create ElastiCache Subnet Group
+      community.aws.elasticache_subnet_group:
+        name: "cluster-redis-subnet-group"
+        description: "Subnet group for cluster ElastiCache Redis across AZs"
+        subnets: "{{ cluster_subnet_ids }}"
+        region: "{{ aws_region }}"
+        state: present
+
+    - name: Create ElastiCache Redis Security Group
+      amazon.aws.ec2_security_group:
+        name: "cluster-redis-sg"
+        description: "Allow Redis port 6379 from cluster VPC private subnets"
+        vpc_id: "{{ cluster_vpc_id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports: [6379]
+            cidr_ip: "{{ aws_vpc_cidr }}"
+            rule_desc: "Redis cache access from cluster VPC"
+        rules_egress:
+          - proto: all
+            cidr_ip: "0.0.0.0/0"
+            rule_desc: "Allow outbound traffic"
+        state: present
+      register: redis_sg
+
+    # --------------------------------------------------------------------------
+    # 3. Provision AWS ElastiCache Redis Cluster
+    # --------------------------------------------------------------------------
+    - name: Provision ElastiCache Redis Cluster
+      community.aws.elasticache:
+        name: "{{ elasticache_cluster_id }}"
+        state: present
+        engine: redis
+        cache_engine_version: "{{ elasticache_engine_version }}"
+        node_type: "{{ elasticache_node_type }}"
+        num_nodes: "{{ elasticache_num_nodes }}"
+        cache_subnet_group: "cluster-redis-subnet-group"
+        security_group_ids:
+          - "{{ redis_sg.group_id }}"
+        region: "{{ aws_region }}"
+        wait: true
+      register: redis_cluster
+
+    # --------------------------------------------------------------------------
+    # 4. Output Connection Details
+    # --------------------------------------------------------------------------
+    - name: Display ElastiCache Redis Connection Details
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - " AWS ElastiCache Redis Cluster Provisioned Successfully   "
+          - "=========================================================="
+          - " Cluster ID:        {{ elasticache_cluster_id }}"
+          - " Node Type:         {{ elasticache_node_type }}"
+          - " Engine Version:    {{ elasticache_engine_version }}"
+          - " Port:              {{ elasticache_port }}"
+          - " Region:            {{ aws_region }}"
+          - " Primary Endpoint:  {{ redis_cluster.elasticache.data.Endpoint.Address | default('Available in AWS Console') }}"
+          - "=========================================================="

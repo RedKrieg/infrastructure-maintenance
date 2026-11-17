@@ -273,6 +273,125 @@
         state: absent
       loop: "{{ db_dump_files.files }}"
 
+- name: Backup Redis In-Memory Cache Tier
+  hosts: redis_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Trigger Redis background save snapshot (bgsave)
+      ansible.builtin.command:
+        cmd: >
+          redis-cli -p {{ redis_port | default(6379) }}
+          {% if redis_password is defined and redis_password %} -a '{{ redis_password }}'{% endif %}
+          bgsave
+      failed_when: false
+      changed_when: true
+      no_log: true
+
+    - name: Wait for Redis background save to complete
+      ansible.builtin.pause:
+        seconds: 2
+
+    - name: Check candidate Redis backup files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/redis/dump.rdb
+        - /var/lib/redis/appendonly.aof
+        - /etc/redis/redis.conf
+      register: redis_stat_results
+
+    - name: Assemble existing Redis backup paths
+      ansible.builtin.set_fact:
+        redis_backup_paths: "{{ redis_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Archive Redis snapshot and configuration
+      community.general.archive:
+        path: "{{ redis_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/redis_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: redis_backup_paths | length > 0
+
+    - name: Fetch Redis archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/redis_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/redis_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: redis_backup_paths | length > 0
+
+    - name: Remove temporary Redis staging archive
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}/redis_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        state: absent
+
+- name: Backup RabbitMQ Message Broker Definitions & State
+  hosts: rabbitmq_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
+  tasks:
+    - name: Ensure remote staging directory exists
+      ansible.builtin.file:
+        path: "{{ backup_staging_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Export RabbitMQ schema and broker definitions
+      ansible.builtin.command:
+        cmd: "rabbitmqctl export_definitions {{ backup_staging_dir }}/rabbitmq_definitions_{{ inventory_hostname }}_{{ backup_ts }}.json"
+      failed_when: false
+      changed_when: true
+
+    - name: Check candidate RabbitMQ backup paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ backup_staging_dir }}/rabbitmq_definitions_{{ inventory_hostname }}_{{ backup_ts }}.json"
+        - /etc/rabbitmq
+        - /var/lib/rabbitmq/.erlang.cookie
+      register: rmq_stat_results
+
+    - name: Assemble existing RabbitMQ backup paths
+      ansible.builtin.set_fact:
+        rmq_backup_paths: "{{ rmq_stat_results.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+    - name: Archive RabbitMQ definitions and configuration
+      community.general.archive:
+        path: "{{ rmq_backup_paths }}"
+        dest: "{{ backup_staging_dir }}/rabbitmq_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        format: "{{ backup_compression }}"
+        mode: "0600"
+      when: rmq_backup_paths | length > 0
+
+    - name: Fetch RabbitMQ archive to Ansible controller
+      ansible.builtin.fetch:
+        src: "{{ backup_staging_dir }}/rabbitmq_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+        dest: "{{ backup_local_dir }}/{{ backup_ts }}/rabbitmq_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        flat: true
+      when: rmq_backup_paths | length > 0
+
+    - name: Remove temporary RabbitMQ staging files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ backup_staging_dir }}/rabbitmq_definitions_{{ inventory_hostname }}_{{ backup_ts }}.json"
+        - "{{ backup_staging_dir }}/rabbitmq_{{ inventory_hostname }}_{{ backup_ts }}.tar.{{ backup_compression }}"
+
 - name: Finalize Backup Dispatch & Offsite Synchronization
   hosts: localhost
   connection: local

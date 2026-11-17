@@ -63,7 +63,43 @@
       tags: [database, db, postgresql, mysql, sql]
 
 # ------------------------------------------------------------------------------
-# Play 4: Backend Webservers (Nginx, Zero-Trust TLS, Default 404 Catch-All)
+# Play 4: Optional In-Memory Cache & Session Store (Redis)
+# ------------------------------------------------------------------------------
+- name: Provision In-Memory Cache & Session Store (Redis)
+  hosts: redis_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: redis
+      when:
+        - enable_redis | default(true) | bool
+        - groups['redis_servers'] is defined and groups['redis_servers'] | length > 0
+      tags: [redis, cache, session]
+
+# ------------------------------------------------------------------------------
+# Play 5: Optional Message Broker & Task Queue (RabbitMQ)
+# ------------------------------------------------------------------------------
+- name: Provision Message Broker & Task Queue (RabbitMQ)
+  hosts: rabbitmq_servers
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: rabbitmq
+      when:
+        - enable_rabbitmq | default(true) | bool
+        - groups['rabbitmq_servers'] is defined and groups['rabbitmq_servers'] | length > 0
+      tags: [rabbitmq, queue, amqp, broker]
+
+# ------------------------------------------------------------------------------
+# Play 6: Backend Webservers (Nginx, Zero-Trust TLS, Default 404 Catch-All)
 # ------------------------------------------------------------------------------
 - name: Provision Backend Webservers
   hosts: webservers
@@ -75,7 +111,7 @@
       tags: [webserver, nginx, sites, firewall, ssl, tls]
 
 # ------------------------------------------------------------------------------
-# Play 5: Finalize HAProxy Load Balancers & Keepalived VRRP Routing
+# Play 7: Finalize HAProxy Load Balancers & Keepalived VRRP Routing
 # ------------------------------------------------------------------------------
 - name: Finalize HAProxy Ingress Routing & High Availability
   hosts: proxies
@@ -95,7 +131,7 @@
       tags: [keepalived, ha, vrrp]
 
 # ------------------------------------------------------------------------------
-# Play 6: Prometheus Monitoring Server
+# Play 8: Prometheus Monitoring Server
 # ------------------------------------------------------------------------------
 - name: Provision Prometheus Monitoring Server
   hosts: monitoring
@@ -113,7 +149,7 @@
       tags: [grafana, monitoring, telemetry, dashboards]
 
 # ------------------------------------------------------------------------------
-# Play 7: Centralized Identity & Access Management (Teleport or FreeIPA Server)
+# Play 9: Centralized Identity & Access Management (Teleport or FreeIPA Server)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Auth & Proxy Server
   hosts: teleport_servers
@@ -142,7 +178,7 @@
       tags: [freeipa, freeipa_server, identity, auth]
 
 # ------------------------------------------------------------------------------
-# Play 8: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
+# Play 10: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Node Service on Cluster Nodes
   hosts: headless_nodes
@@ -165,7 +201,7 @@
       tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------
-# Play 9: Centralized Log Ingestion Server on Monitoring Node
+# Play 11: Centralized Log Ingestion Server on Monitoring Node
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Ingestion Server
   hosts: monitoring
@@ -177,7 +213,7 @@
       tags: [logging, central_logging, logging_server]
 
 # ------------------------------------------------------------------------------
-# Play 10: Centralized Log Shipper across Cluster Nodes
+# Play 12: Centralized Log Shipper across Cluster Nodes
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Shipper Clients
   hosts: headless_nodes

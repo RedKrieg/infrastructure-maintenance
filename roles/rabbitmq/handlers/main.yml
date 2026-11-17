@@ -1,0 +1,9 @@
+---
+# ==============================================================================
+# Handlers: RabbitMQ Role
+# ==============================================================================
+
+- name: restart rabbitmq-server
+  ansible.builtin.systemd:
+    name: rabbitmq-server
+    state: restarted

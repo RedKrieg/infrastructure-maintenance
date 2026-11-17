@@ -1,0 +1,9 @@
+---
+# ==============================================================================
+# Handlers: Redis Role
+# ==============================================================================
+
+- name: restart redis-server
+  ansible.builtin.systemd:
+    name: redis-server
+    state: restarted

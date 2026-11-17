@@ -250,3 +250,97 @@
           ansible.builtin.file:
             path: "/tmp/restore_mysql.sql.gz"
             state: absent
+
+- name: Restore Redis In-Memory Cache Tier
+  hosts: redis_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check for Redis backup archive
+      ansible.builtin.find:
+        paths: "{{ active_restore_dir }}"
+        patterns: "redis_{{ inventory_hostname }}.tar.*"
+      delegate_to: localhost
+      become: false
+      register: redis_archives
+
+    - name: Restore Redis snapshot and configuration
+      when: redis_archives.matched > 0
+      block:
+        - name: Stop Redis service prior to state restoration
+          ansible.builtin.systemd:
+            name: redis-server
+            state: stopped
+
+        - name: Extract Redis archive to filesystem
+          ansible.builtin.unarchive:
+            src: "{{ redis_archives.files[0].path }}"
+            dest: "/"
+            remote_src: false
+
+        - name: Ensure correct Redis directory ownership and permissions
+          ansible.builtin.file:
+            path: /var/lib/redis
+            state: directory
+            owner: redis
+            group: redis
+            recurse: true
+
+        - name: Start Redis service with restored state
+          ansible.builtin.systemd:
+            name: redis-server
+            state: started
+
+- name: Restore RabbitMQ Message Broker Definitions & State
+  hosts: rabbitmq_servers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check for RabbitMQ backup archive
+      ansible.builtin.find:
+        paths: "{{ active_restore_dir }}"
+        patterns: "rabbitmq_{{ inventory_hostname }}.tar.*"
+      delegate_to: localhost
+      become: false
+      register: rmq_archives
+
+    - name: Restore RabbitMQ configuration and broker definitions
+      when: rmq_archives.matched > 0
+      block:
+        - name: Ensure temporary restore directory exists
+          ansible.builtin.file:
+            path: /tmp/rabbitmq_restore
+            state: directory
+            mode: "0700"
+
+        - name: Extract RabbitMQ archive
+          ansible.builtin.unarchive:
+            src: "{{ rmq_archives.files[0].path }}"
+            dest: /tmp/rabbitmq_restore
+            remote_src: false
+
+        - name: Find extracted schema definitions JSON file
+          ansible.builtin.find:
+            paths: /tmp/rabbitmq_restore
+            patterns: "rabbitmq_definitions_*.json"
+            recurse: true
+          register: rmq_json_files
+
+        - name: Import RabbitMQ broker definitions
+          ansible.builtin.command:
+            cmd: "rabbitmqctl import_definitions {{ rmq_json_files.files[0].path }}"
+          when: rmq_json_files.matched > 0
+          changed_when: true
+
+        - name: Clean up temporary RabbitMQ restore directory
+          ansible.builtin.file:
+            path: /tmp/rabbitmq_restore
+            state: absent

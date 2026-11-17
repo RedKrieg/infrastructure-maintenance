@@ -1,0 +1,59 @@
+---
+# ==============================================================================
+# Playbook: Provision Cloud-Native Azure Cache for Redis
+# ==============================================================================
+# Provisions:
+#   1. Managed Azure Cache for Redis (Standard / Premium with HA replication)
+#   2. Configures minimum TLS version (1.2) and secure port (6380)
+#   3. Displays hostname endpoint for web application session caching
+#
+# Usage:
+#   ansible-playbook examples/provisioning/provision_azure_cache_redis.yml
+# ==============================================================================
+
+- name: Provision Cloud-Native Azure Cache for Redis
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_azure.yml
+
+  vars:
+    azure_redis_name: "cluster-redis-cache"
+    azure_redis_sku_name: "standard" # High-availability replicated two-node cache
+    azure_redis_sku_size: "C1"      # 1 GB Cache
+    azure_redis_minimum_tls: "1.2"
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Provision Azure Cache for Redis
+    # --------------------------------------------------------------------------
+    - name: Provision Azure Cache for Redis Instance
+      azure.azcollection.azure_rm_rediscache:
+        resource_group: "{{ azure_resource_group }}"
+        name: "{{ azure_redis_name }}"
+        sku:
+          name: "{{ azure_redis_sku_name }}"
+          size: "{{ azure_redis_sku_size }}"
+        minimum_tls_version: "{{ azure_redis_minimum_tls }}"
+        enable_non_ssl_port: false
+        state: present
+      register: redis_cache
+
+    # --------------------------------------------------------------------------
+    # 2. Output Connection Details
+    # --------------------------------------------------------------------------
+    - name: Display Azure Cache for Redis Connection Details
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - " Azure Cache for Redis Provisioned Successfully           "
+          - "=========================================================="
+          - " Cache Name:      {{ azure_redis_name }}"
+          - " Resource Group:  {{ azure_resource_group }}"
+          - " SKU:             {{ azure_redis_sku_name }} {{ azure_redis_sku_size }}"
+          - " Hostname:        {{ redis_cache.host_name | default(azure_redis_name ~ '.redis.cache.windows.net') }}"
+          - " SSL Port:        6380"
+          - " Minimum TLS:     {{ azure_redis_minimum_tls }}"
+          - "=========================================================="

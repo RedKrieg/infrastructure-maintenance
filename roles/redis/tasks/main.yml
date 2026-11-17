@@ -1,0 +1,63 @@
+---
+# ==============================================================================
+# Tasks: Redis In-Memory Cache & Session Store Deployment
+# ==============================================================================
+
+- name: Install Redis server packages
+  ansible.builtin.apt:
+    name:
+      - redis-server
+      - python3-redis
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Redis working and log directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: redis
+    group: redis
+    mode: "0750"
+  loop:
+    - /var/lib/redis
+    - /var/log/redis
+
+- name: Deploy Redis server configuration
+  ansible.builtin.template:
+    src: redis.conf.j2
+    dest: /etc/redis/redis.conf
+    owner: redis
+    group: redis
+    mode: "0640"
+  notify: restart redis-server
+
+- name: Configure UFW firewall rules for Redis port
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ redis_port | string }}"
+    src: "{{ item }}"
+    comment: "Allow Redis traffic from trusted internal subnet {{ item }}"
+  loop: "{{ redis_trusted_subnets }}"
+  when: redis_trusted_subnets is defined and redis_trusted_subnets | length > 0
+
+- name: Ensure Redis service is running and enabled
+  ansible.builtin.systemd:
+    name: redis-server
+    state: started
+    enabled: true
+
+- name: Flush handlers to apply Redis configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify Redis service is responsive via redis-cli
+  ansible.builtin.command:
+    cmd: >
+      redis-cli -p {{ redis_port }}
+      {% if redis_password %} -a '{{ redis_password }}'{% endif %}
+      ping
+  register: redis_ping_result
+  changed_when: false
+  failed_when: "'PONG' not in redis_ping_result.stdout"
+  no_log: true

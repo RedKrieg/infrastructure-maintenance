@@ -1,0 +1,85 @@
+---
+# ==============================================================================
+# Playbook: Provision Cloud-Native Google Cloud Memorystore for Redis
+# ==============================================================================
+# Provisions:
+#   1. Google Cloud Memorystore for Redis instance in the cluster VPC
+#   2. High-Availability STANDARD_HA tier (automatic cross-zone failover)
+#   3. Displays private IP connection endpoint for web application session caching
+#
+# Usage:
+#   ansible-playbook examples/provisioning/provision_gcp_memorystore_redis.yml
+# ==============================================================================
+
+- name: Provision Cloud-Native GCP Memorystore for Redis
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - vars_gcp.yml
+
+  vars:
+    gcp_redis_instance_name: "cluster-redis-cache"
+    gcp_redis_tier: "STANDARD_HA" # Highly available primary and replica instances
+    gcp_redis_memory_size_gb: 1
+    gcp_redis_version: "REDIS_7_0"
+
+  tasks:
+    # --------------------------------------------------------------------------
+    # 1. Validation & Network Discovery
+    # --------------------------------------------------------------------------
+    - name: Validate GCP project ID
+      ansible.builtin.fail:
+        msg: "Please set 'gcp_project_id' in vars_gcp.yml before running this playbook."
+      when: gcp_project_id == 'your-gcp-project-id' or gcp_project_id | length == 0
+
+    - name: Discover VPC Network
+      google.cloud.gcp_compute_network_info:
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        filters:
+          - "name = {{ gcp_network_name }}"
+      register: network_info
+
+    - name: Assert Network Exists
+      ansible.builtin.assert:
+        that:
+          - network_info.resources | length > 0
+        fail_msg: "Network {{ gcp_network_name }} not found. Run provision_gcp.yml first."
+
+    # --------------------------------------------------------------------------
+    # 2. Provision GCP Memorystore Redis Instance
+    # --------------------------------------------------------------------------
+    - name: Provision GCP Memorystore Redis Instance
+      google.cloud.gcp_redis_instance:
+        name: "{{ gcp_redis_instance_name }}"
+        tier: "{{ gcp_redis_tier }}"
+        memory_size_gb: "{{ gcp_redis_memory_size_gb }}"
+        redis_version: "{{ gcp_redis_version }}"
+        authorized_network: "{{ network_info.resources[0].selfLink }}"
+        region: "{{ gcp_region }}"
+        project: "{{ gcp_project_id }}"
+        auth_kind: "{{ gcp_auth_kind }}"
+        service_account_file: "{{ gcp_cred_file | default(omit, true) }}"
+        auth_enabled: true
+        state: present
+      register: redis_instance
+
+    # --------------------------------------------------------------------------
+    # 3. Output Connection Details
+    # --------------------------------------------------------------------------
+    - name: Display GCP Memorystore Redis Connection Details
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - " Google Cloud Memorystore Redis Provisioned Successfully   "
+          - "=========================================================="
+          - " Instance Name:    {{ gcp_redis_instance_name }}"
+          - " Tier:             {{ gcp_redis_tier }}"
+          - " Memory:           {{ gcp_redis_memory_size_gb }} GiB"
+          - " Private Host IP:  {{ redis_instance.host | default('Pending') }}"
+          - " Port:             {{ redis_instance.port | default(6379) }}"
+          - " Region:           {{ gcp_region }}"
+          - "=========================================================="

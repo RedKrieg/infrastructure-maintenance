@@ -183,6 +183,19 @@ frontend fe_https
 {% endfor %}
 {% endif %}
 
+{% set rmq_hosts = groups['rabbitmq_servers'] | default(groups['rabbitmq'] | default([])) %}
+{% if rmq_hosts | length > 0 %}
+{% for host in rmq_hosts %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set rmq_host_fqdn = hostvars[host]['rabbitmq_mgmt_fqdn'] | default(rabbitmq_mgmt_fqdn | default('rabbitmq.' ~ domain_name)) %}
+    # Route for RabbitMQ Management UI: {{ rmq_host_fqdn }} (Protected by Admin ACL)
+    acl is_{{ clean_name }}_rmq hdr(host) -i {{ rmq_host_fqdn }}
+    acl is_allowed_admin_rmq src -f /etc/haproxy/stats_whitelist.lst
+    http-request deny deny_status 403 if is_{{ clean_name }}_rmq !is_allowed_admin_rmq
+    use_backend be_{{ clean_name }}_rmq if is_{{ clean_name }}_rmq
+{% endfor %}
+{% endif %}
+
     default_backend be_default_404
 
 # --- ACME Standalone Challenge Backend ---
@@ -282,6 +295,23 @@ backend be_{{ clean_name }}
     http-request set-header X-Forwarded-Proto https
     # Grafana Web UI operates on internal HTTP port 3000
     server {{ host }} {{ target_ip }}:3000 check inter 5s fall 3 rise 2
+{% endfor %}
+{% endif %}
+
+# --- Dedicated RabbitMQ Management UI Backends ---
+{% set rmq_hosts = groups['rabbitmq_servers'] | default(groups['rabbitmq'] | default([])) %}
+{% if rmq_hosts | length > 0 %}
+{% for host in rmq_hosts %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
+{% set target_port = hostvars[host]['rabbitmq_mgmt_port'] | default(15672) %}
+backend be_{{ clean_name }}_rmq
+    mode http
+    balance roundrobin
+    option forwardfor
+    http-request set-header X-Forwarded-Proto https
+    # RabbitMQ Management Web UI operates on internal port 15672
+    server {{ host }} {{ target_ip }}:{{ target_port }} check inter 5s fall 3 rise 2
 {% endfor %}
 {% endif %}
 
