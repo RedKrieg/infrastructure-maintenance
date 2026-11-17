@@ -28,9 +28,9 @@
       tags: [node_exporter, monitoring, telemetry]
 
 # ------------------------------------------------------------------------------
-# Play 2: Frontend HAProxy Load Balancers & SSL Certificate Orchestration
+# Play 2: Proxy Ingress Foundation & Cluster Internal CA Authority
 # ------------------------------------------------------------------------------
-- name: Provision Frontend HAProxy Proxies
+- name: Provision Proxy Ingress Foundation & Internal CA Authority
   hosts: proxies
   become: true
   gather_facts: true
@@ -40,13 +40,12 @@
 
   roles:
     - role: proxy
-      tags: [proxy, haproxy, ssl, acme, certs, firewall]
-
-    - role: keepalived
-      tags: [keepalived, ha, vrrp]
+      vars:
+        proxy_stage: "ca_foundation"
+      tags: [proxy, haproxy, ssl, acme, certs, firewall, internal_ca]
 
 # ------------------------------------------------------------------------------
-# Play 3: Backend Webservers (Nginx, Default 404 Catch-All)
+# Play 3: Backend Webservers (Nginx, Zero-Trust TLS, Default 404 Catch-All)
 # ------------------------------------------------------------------------------
 - name: Provision Backend Webservers
   hosts: webservers
@@ -55,10 +54,30 @@
 
   roles:
     - role: webserver
-      tags: [webserver, nginx, sites, firewall]
+      tags: [webserver, nginx, sites, firewall, ssl, tls]
 
 # ------------------------------------------------------------------------------
-# Play 4: Prometheus Monitoring Server
+# Play 4: Finalize HAProxy Load Balancers & Keepalived VRRP Routing
+# ------------------------------------------------------------------------------
+- name: Finalize HAProxy Ingress Routing & High Availability
+  hosts: proxies
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - vars/admin_users.yml
+
+  roles:
+    - role: proxy
+      vars:
+        proxy_stage: "routing"
+      tags: [proxy, haproxy, routing]
+
+    - role: keepalived
+      tags: [keepalived, ha, vrrp]
+
+# ------------------------------------------------------------------------------
+# Play 5: Prometheus Monitoring Server
 # ------------------------------------------------------------------------------
 - name: Provision Prometheus Monitoring Server
   hosts: monitoring
@@ -76,7 +95,7 @@
       tags: [grafana, monitoring, telemetry, dashboards]
 
 # ------------------------------------------------------------------------------
-# Play 5: Centralized Identity & Access Management (Teleport or FreeIPA Server)
+# Play 6: Centralized Identity & Access Management (Teleport or FreeIPA Server)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Auth & Proxy Server
   hosts: teleport_servers
@@ -105,7 +124,7 @@
       tags: [freeipa, freeipa_server, identity, auth]
 
 # ------------------------------------------------------------------------------
-# Play 6: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
+# Play 7: Identity Client Integration across Cluster Nodes (Teleport or FreeIPA)
 # ------------------------------------------------------------------------------
 - name: Provision Teleport Node Service on Cluster Nodes
   hosts: headless_nodes
@@ -128,7 +147,7 @@
       tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------
-# Play 7: Centralized Log Ingestion Server on Monitoring Node
+# Play 8: Centralized Log Ingestion Server on Monitoring Node
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Ingestion Server
   hosts: monitoring
@@ -140,7 +159,7 @@
       tags: [logging, central_logging, logging_server]
 
 # ------------------------------------------------------------------------------
-# Play 8: Centralized Log Shipper across Cluster Nodes
+# Play 9: Centralized Log Shipper across Cluster Nodes
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Shipper Clients
   hosts: headless_nodes

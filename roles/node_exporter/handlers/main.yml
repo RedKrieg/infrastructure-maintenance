@@ -1,0 +1,9 @@
+---
+# ==============================================================================
+# Handlers for node_exporter Role
+# ==============================================================================
+
+- name: Restart node_exporter
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    state: restarted

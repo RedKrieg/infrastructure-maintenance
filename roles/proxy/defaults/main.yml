@@ -3,6 +3,12 @@
 # Default Variables for proxy (HAProxy) Role
 # ==============================================================================
 
+# Execution stage for multi-play zero-outage orchestration:
+#   'all'           - Execute complete proxy role in a single pass (default)
+#   'ca_foundation' - Install prerequisites, UFW rules, external certs, and establish Internal CA signer
+#   'routing'       - Deploy HAProxy routing configuration (with verified backend SSL), service, and logs
+proxy_stage: "all"
+
 # HAProxy global settings
 haproxy_user: "haproxy"
 haproxy_group: "haproxy"
@@ -118,7 +124,22 @@ haproxy_check_rise: 2
 
 # Internal Backend SSL / Zero-Trust TLS to Webservers
 haproxy_backend_ssl: false
-haproxy_backend_ssl_verify: "none"
+# Verification mode: "required" with internal CA (default for Zero-Trust), or "none"
+haproxy_backend_ssl_verify: "required"
+haproxy_backend_ca_file: "/etc/haproxy/certs/internal-ca.crt"
+
+# Lightweight Internal CA Configuration
+enable_internal_ca: true
+internal_ca_dir: "/etc/ssl/internal/ca"
+internal_ca_cert: "{{ internal_ca_dir }}/cluster-ca.crt"
+internal_ca_key: "{{ internal_ca_dir }}/cluster-ca.key"
+internal_ca_srl: "{{ internal_ca_dir }}/cluster-ca.srl"
+internal_ca_signer_port: 8444
+internal_ca_validity_days: 730
+internal_ca_renewal_threshold_days: 30
+internal_ca_leaf_validity_days: 90
+internal_cert_renewal_threshold_days: 14
+internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
 
 # Logrotate Retention for Cluster Script Logs (60 days retention)
 haproxy_logrotate_interval: "daily"

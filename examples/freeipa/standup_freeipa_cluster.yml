@@ -32,9 +32,9 @@
       tags: [node_exporter, monitoring]
 
 # ------------------------------------------------------------------------------
-# Play 2: Frontend HAProxy Load Balancers & Edge Proxies
+# Play 2: Proxy Ingress Foundation & Cluster Internal CA Authority
 # ------------------------------------------------------------------------------
-- name: Provision Frontend HAProxy Proxies
+- name: Provision Proxy Ingress Foundation & Internal CA Authority
   hosts: proxies
   become: true
   gather_facts: true
@@ -43,13 +43,12 @@
 
   roles:
     - role: proxy
-      tags: [proxy, haproxy, ssl]
-
-    - role: keepalived
-      tags: [keepalived, ha]
+      vars:
+        proxy_stage: "ca_foundation"
+      tags: [proxy, haproxy, ssl, internal_ca]
 
 # ------------------------------------------------------------------------------
-# Play 3: Backend Webservers
+# Play 3: Backend Webservers (Zero-Trust Internal TLS)
 # ------------------------------------------------------------------------------
 - name: Provision Backend Webservers
   hosts: webservers
@@ -58,10 +57,29 @@
 
   roles:
     - role: webserver
-      tags: [webserver, nginx]
+      tags: [webserver, nginx, ssl, tls]
 
 # ------------------------------------------------------------------------------
-# Play 4: Prometheus & Grafana Monitoring Server
+# Play 4: Finalize HAProxy Load Balancers & Keepalived VRRP
+# ------------------------------------------------------------------------------
+- name: Finalize HAProxy Ingress Routing & High Availability
+  hosts: proxies
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: proxy
+      vars:
+        proxy_stage: "routing"
+      tags: [proxy, haproxy, routing]
+
+    - role: keepalived
+      tags: [keepalived, ha, vrrp]
+
+# ------------------------------------------------------------------------------
+# Play 5: Prometheus & Grafana Monitoring Server
 # ------------------------------------------------------------------------------
 - name: Provision Observability Tier
   hosts: monitoring
@@ -78,7 +96,7 @@
       tags: [grafana, monitoring]
 
 # ------------------------------------------------------------------------------
-# Play 5: Dedicated FreeIPA Server (Kerberos KDC, LDAP 389 Directory & Web UI)
+# Play 6: Dedicated FreeIPA Server (Kerberos KDC, LDAP 389 Directory & Web UI)
 # ------------------------------------------------------------------------------
 - name: Provision Dedicated FreeIPA Centralized Identity Server
   hosts: freeipa_servers
@@ -92,7 +110,7 @@
       tags: [freeipa, freeipa_server, identity, auth]
 
 # ------------------------------------------------------------------------------
-# Play 6: FreeIPA Client Enrollment across Cluster Nodes
+# Play 7: FreeIPA Client Enrollment across Cluster Nodes
 # ------------------------------------------------------------------------------
 - name: Enroll Cluster Nodes into FreeIPA Domain
   hosts: headless_nodes
@@ -104,7 +122,7 @@
       tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------
-# Play 7: Centralized Logging (Server & Shipper)
+# Play 8: Centralized Logging (Server & Shipper)
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Ingestion Server
   hosts: monitoring

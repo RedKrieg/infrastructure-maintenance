@@ -41,3 +41,21 @@ groups:
         annotations:
           summary: "Cluster monitoring target unreachable (instance {{ $labels.instance }})"
           description: "Scrape job {{ $labels.job }} target {{ $labels.instance }} has been unreachable for > 2 minutes."
+
+      - alert: InternalTLSCertificateExpiringSoon
+        expr: (x509_cert_expiry_timestamp_seconds - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Internal TLS certificate expiring soon on {{ $labels.instance }}"
+          description: "Internal certificate {{ $labels.cert_name }} at {{ $labels.cert_path }} (role: {{ $labels.role }}) on host {{ $labels.instance }} expires in less than 14 days. Verify that automated renewal is progressing."
+
+      - alert: InternalTLSCertificateExpirationCritical
+        expr: (x509_cert_expiry_timestamp_seconds - time()) / 86400 < 3
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: Internal TLS certificate expiring in < 3 days on {{ $labels.instance }}"
+          description: "Internal certificate {{ $labels.cert_name }} at {{ $labels.cert_path }} (role: {{ $labels.role }}) on host {{ $labels.instance }} expires in less than 3 days! Immediate automated renewal intervention required."

@@ -1,32 +1,72 @@
 ---
 # ==============================================================================
-# Internal TLS Certificate Provisioning for Webserver
+# Internal TLS Certificate Provisioning & Automated Renewal for Webserver
 # ==============================================================================
 
 - name: Manage Internal TLS Certificates for Zero-Trust Backend
   when: webserver_enable_ssl | bool
   tags: [webserver, ssl, tls]
   block:
-    - name: Ensure internal SSL certificate directory exists
+    - name: Ensure internal SSL certificate and prometheus directories exist
       ansible.builtin.file:
-        path: "{{ webserver_ssl_cert_dir }}"
+        path: "{{ item }}"
         state: directory
         owner: root
         group: root
         mode: "0750"
+      loop:
+        - "{{ webserver_ssl_cert_dir }}"
+        - "/var/lib/prometheus/node-exporter"
+
+    - name: Deploy automated internal certificate renewal script
+      ansible.builtin.template:
+        src: renew-internal-cert.sh.j2
+        dest: /usr/local/bin/renew-internal-cert.sh
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Deploy renew-internal-cert systemd service and timer
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "/etc/systemd/system/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - { src: "renew-internal-cert.service.j2", dest: "renew-internal-cert.service" }
+        - { src: "renew-internal-cert.timer.j2", dest: "renew-internal-cert.timer" }
+
+    - name: Enable and start renew-internal-cert timer
+      ansible.builtin.systemd:
+        name: renew-internal-cert.timer
+        state: started
+        enabled: true
+        daemon_reload: true
 
     - name: Check if internal certificate already exists
       ansible.builtin.stat:
         path: "{{ webserver_ssl_cert }}"
       register: internal_cert_stat
 
-    - name: Generate internal private key and self-signed certificate
+    - name: Request initial CA-signed certificate from active ingress proxy
+      ansible.builtin.command: /usr/local/bin/renew-internal-cert.sh --force
+      when: not internal_cert_stat.stat.exists
+      register: ca_sign_attempt
+      failed_when: false
+      changed_when: true
+
+    # Fallback to bootstrap self-signed if proxies are unreachable during offline staging
+    - name: Generate bootstrap self-signed certificate if proxy CA is unreachable
       ansible.builtin.command: >
-        openssl req -x509 -nodes -days 3650 -newkey rsa:2048
+        openssl req -x509 -nodes -days 30 -newkey rsa:2048
         -keyout {{ webserver_ssl_key }}
         -out {{ webserver_ssl_cert }}
         -subj "/CN={{ external_fqdn | default(inventory_hostname) }}/O=InternalCluster"
-      when: not internal_cert_stat.stat.exists
+      when:
+        - not internal_cert_stat.stat.exists
+        - ca_sign_attempt is defined
+        - ca_sign_attempt.rc != 0
       notify: Reload nginx
 
     - name: Secure internal TLS private key permissions
@@ -35,6 +75,7 @@
         owner: root
         group: www-data
         mode: "0640"
+      when: internal_cert_stat.stat.exists or (ca_sign_attempt is defined and ca_sign_attempt.rc == 0)
 
     - name: Set internal TLS public certificate permissions
       ansible.builtin.file:
@@ -42,3 +83,4 @@
         owner: root
         group: root
         mode: "0644"
+      when: internal_cert_stat.stat.exists or (ca_sign_attempt is defined and ca_sign_attempt.rc == 0)

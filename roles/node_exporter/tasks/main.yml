@@ -22,6 +22,24 @@
       loop: "{{ node_exporter_trusted_subnets }}"
       when: enable_ufw_firewall | default(true) | bool
 
+    - name: Ensure Prometheus textfile collector directory exists
+      ansible.builtin.file:
+        path: /var/lib/prometheus/node-exporter
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configure Prometheus node_exporter textfile collector
+      ansible.builtin.lineinfile:
+        path: /etc/default/prometheus-node-exporter
+        regexp: "^ARGS="
+        line: 'ARGS="--collector.textfile.directory=/var/lib/prometheus/node-exporter"'
+        state: present
+        create: true
+        mode: "0644"
+      notify: Restart node_exporter
+
     - name: Ensure prometheus-node-exporter service is enabled and started
       ansible.builtin.systemd:
         name: prometheus-node-exporter

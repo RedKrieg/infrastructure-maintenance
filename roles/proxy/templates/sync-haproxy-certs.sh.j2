@@ -40,6 +40,16 @@ if rsync -avz --delete \
     "root@${PEER_IP}" "systemctl reload haproxy" >> "$LOG_FILE" 2>&1; then
     log "SUCCESS: Synced and reloaded HAProxy on {{ proxy }} (${PEER_IP})"
 
+    # Sync internal CA directory and ensure signer service has latest CA on peer proxy
+    INTERNAL_CA_DIR="{{ internal_ca_dir }}"
+    if [ -d "$INTERNAL_CA_DIR" ]; then
+        rsync -avz \
+            -e "ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes" \
+            "${INTERNAL_CA_DIR}/" "root@${PEER_IP}:${INTERNAL_CA_DIR}/" >> "$LOG_FILE" 2>&1 || true
+        ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o BatchMode=yes \
+            "root@${PEER_IP}" "mkdir -p \$(dirname {{ haproxy_backend_ca_file }}) && cp -f ${INTERNAL_CA_DIR}/cluster-ca.crt {{ haproxy_backend_ca_file }} && systemctl restart internal-ca-signer 2>/dev/null || true" >> "$LOG_FILE" 2>&1 || true
+    fi
+
     # Sync acme.sh domain directories if they exist locally (wildcard or individual)
     for d in "${ACME_DIR}"/*_ecc; do
         if [ -d "$d" ]; then

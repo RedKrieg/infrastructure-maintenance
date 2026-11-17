@@ -33,3 +33,6 @@ vault_teleport_github_client_secret: "de4727a71a1497dabb476f9c59cd5cc490f3a475"
 vault_freeipa_admin_password: "VaultProtectedFreeIPAAdminPassword2026!"
 vault_freeipa_ds_password: "VaultProtectedFreeIPADSPassword2026!"
 vault_freeipa_client_otp: "VaultProtectedFreeIPAClientOTP2026"
+
+# Cluster Internal CA Client Signing Authorization Token
+vault_internal_ca_token: "VaultProtectedInternalCAToken2026!"

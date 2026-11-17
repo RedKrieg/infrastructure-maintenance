@@ -5,28 +5,42 @@
 
 - name: Install HAProxy and SSL Prerequisites
   ansible.builtin.include_tasks: packages.yml
+  when: proxy_stage | default('all') in ['all', 'ca_foundation']
   tags: [proxy, packages]
 
 - name: Configure UFW Firewall for Proxy Ports
   ansible.builtin.include_tasks: firewall.yml
+  when: proxy_stage | default('all') in ['all', 'ca_foundation']
   tags: [proxy, firewall]
 
 - name: Manage SSL Certificates & acme.sh on Proxies
   ansible.builtin.include_tasks: certs.yml
+  when: proxy_stage | default('all') in ['all', 'ca_foundation']
   tags: [proxy, ssl, certs]
+
+- name: Manage Cluster Internal Certificate Authority
+  ansible.builtin.include_tasks: internal_ca.yml
+  when:
+    - enable_internal_ca | default(true) | bool
+    - proxy_stage | default('all') in ['all', 'ca_foundation']
+  tags: [proxy, internal_ca, ssl, tls]
 
 - name: Configure HAProxy Stats Endpoint Access Control
   ansible.builtin.include_tasks: stats_whitelist.yml
+  when: proxy_stage | default('all') in ['all', 'ca_foundation']
   tags: [proxy, stats, security]
 
 - name: Configure Coraza Web Application Firewall (WAF)
   ansible.builtin.include_tasks: coraza_waf.yml
+  when: proxy_stage | default('all') in ['all', 'ca_foundation']
   tags: [proxy, haproxy, waf, coraza, security]
 
 - name: Deploy HAProxy Configuration & Manage Service
   ansible.builtin.include_tasks: config.yml
+  when: proxy_stage | default('all') in ['all', 'routing']
   tags: [proxy, haproxy]
 
 - name: Configure Logrotate for Proxy Cluster Scripts
   ansible.builtin.include_tasks: logrotate.yml
+  when: proxy_stage | default('all') in ['all', 'routing']
   tags: [proxy, logrotate, logs]

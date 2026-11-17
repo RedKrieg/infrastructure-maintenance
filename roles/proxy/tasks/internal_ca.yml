@@ -1,0 +1,149 @@
+---
+# ==============================================================================
+# Lightweight Cluster Internal CA & Replicated Signing Authority
+# Managed by Ansible - Deployed on HAProxy Ingress Proxies
+# ==============================================================================
+
+- name: Manage Cluster Internal Certificate Authority
+  tags: [proxy, internal_ca, ssl, tls]
+  block:
+    - name: Ensure internal CA directories exist on all proxies
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ internal_ca_dir }}"
+        - "/etc/haproxy/certs"
+        - "/var/lib/prometheus/node-exporter"
+
+    - name: Allow Internal CA Signer port through UFW from trusted cluster subnets
+      community.general.ufw:
+        rule: allow
+        port: "{{ internal_ca_signer_port | string }}"
+        proto: tcp
+        from_ip: "{{ item }}"
+        comment: "Cluster Internal CA Signer"
+      loop: "{{ internal_proxy_subnets }}"
+      when: enable_ufw_firewall | default(true) | bool
+
+    - name: Check if Internal Root CA certificate exists
+      ansible.builtin.stat:
+        path: "{{ internal_ca_cert }}"
+      register: internal_ca_stat
+
+    - name: Generate Cluster Internal Root CA on Primary Proxy
+      ansible.builtin.command: >
+        openssl req -x509 -new -nodes -sha256
+        -days {{ internal_ca_validity_days | default(730) }}
+        -newkey rsa:4096
+        -keyout {{ internal_ca_key }}
+        -out {{ internal_ca_cert }}
+        -subj "/CN=ClusterInternalRootCA/O=Infrastructure/OU=Security"
+        -addext "basicConstraints=critical,CA:TRUE"
+        -addext "keyUsage=critical,digitalSignature,cRLSign,keyCertSign"
+      when:
+        - inventory_hostname == cert_primary_host
+        - not internal_ca_stat.stat.exists
+      register: ca_gen_result
+
+    - name: Slurp Internal CA root certificate from primary proxy
+      ansible.builtin.slurp:
+        src: "{{ internal_ca_cert }}"
+      delegate_to: "{{ cert_primary_host }}"
+      run_once: true
+      register: slurped_internal_ca_cert
+
+    - name: Slurp Internal CA private key from primary proxy
+      ansible.builtin.slurp:
+        src: "{{ internal_ca_key }}"
+      delegate_to: "{{ cert_primary_host }}"
+      run_once: true
+      register: slurped_internal_ca_key
+
+    - name: Distribute Internal Root CA certificate across all proxies
+      ansible.builtin.copy:
+        dest: "{{ internal_ca_cert }}"
+        content: "{{ slurped_internal_ca_cert.content | b64decode }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Distribute Internal CA private key across all proxies
+      ansible.builtin.copy:
+        dest: "{{ internal_ca_key }}"
+        content: "{{ slurped_internal_ca_key.content | b64decode }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Copy Internal CA certificate to HAProxy trust location across all proxies
+      ansible.builtin.copy:
+        dest: "{{ haproxy_backend_ca_file }}"
+        content: "{{ slurped_internal_ca_cert.content | b64decode }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Deploy Internal CA Signer Python daemon
+      ansible.builtin.template:
+        src: internal-ca-signer.py.j2
+        dest: /usr/local/bin/internal-ca-signer.py
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Deploy internal-ca-signer systemd service
+      ansible.builtin.template:
+        src: internal-ca-signer.service.j2
+        dest: /etc/systemd/system/internal-ca-signer.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Deploy automated Internal CA renewal script
+      ansible.builtin.template:
+        src: renew-internal-ca.sh.j2
+        dest: /usr/local/bin/renew-internal-ca.sh
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Deploy renew-internal-ca systemd service and timer
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "/etc/systemd/system/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - { src: "renew-internal-ca.service.j2", dest: "renew-internal-ca.service" }
+        - { src: "renew-internal-ca.timer.j2", dest: "renew-internal-ca.timer" }
+
+    - name: Enable and start internal-ca-signer and renew-internal-ca timer
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - internal-ca-signer
+        - renew-internal-ca.timer
+
+    - name: Run initial Internal CA renewal check to populate metrics
+      ansible.builtin.command: /usr/local/bin/renew-internal-ca.sh
+      when: inventory_hostname == cert_primary_host
+      changed_when: false
+      failed_when: false
+
+    - name: Propagate newly generated Internal CA to replica proxies
+      ansible.builtin.command: /usr/local/bin/sync-haproxy-certs.sh
+      when:
+        - inventory_hostname == cert_primary_host
+        - ca_gen_result is defined
+        - ca_gen_result.changed
+        - (groups['proxies'] | default([]) | length) > 1
+      changed_when: false
+      failed_when: false

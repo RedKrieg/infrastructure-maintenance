@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+# ==============================================================================
+# Lightweight Cluster Internal CA Signer Daemon
+# Managed by Ansible - Runs on all HAProxy Ingress Proxies
+# Listens on internal port {{ internal_ca_signer_port }} to sign backend leaf certificates
+# ==============================================================================
+
+import os
+import sys
+import json
+import logging
+import subprocess
+import tempfile
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+LISTEN_HOST = "0.0.0.0"
+LISTEN_PORT = {{ internal_ca_signer_port }}
+CA_CERT_PATH = "{{ internal_ca_cert }}"
+CA_KEY_PATH = "{{ internal_ca_key }}"
+CA_SRL_PATH = "{{ internal_ca_srl }}"
+LEAF_DAYS = {{ internal_ca_leaf_validity_days | default(90) }}
+AUTH_TOKEN = "{{ internal_ca_token }}"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [internal-ca-signer] %(message)s",
+    handlers=[
+        logging.FileHandler("/var/log/internal-ca-signer.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+class InternalCASignerHandler(BaseHTTPRequestHandler):
+    def send_json(self, status_code, data):
+        payload = json.dumps(data).encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self):
+        if self.path in ("/health", "/status"):
+            ca_exists = os.path.exists(CA_CERT_PATH) and os.path.exists(CA_KEY_PATH)
+            self.send_json(200, {
+                "status": "healthy" if ca_exists else "degraded",
+                "ca_configured": ca_exists,
+                "role": "internal_ca_signer"
+            })
+            return
+
+        if self.path == "/ca.crt":
+            if not os.path.exists(CA_CERT_PATH):
+                self.send_json(404, {"error": "CA certificate not found on proxy"})
+                return
+            with open(CA_CERT_PATH, "rb") as f:
+                ca_bytes = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-x509-ca-cert")
+            self.send_header("Content-Length", str(len(ca_bytes)))
+            self.end_headers()
+            self.wfile.write(ca_bytes)
+            return
+
+        self.send_json(404, {"error": "Endpoint not found"})
+
+    def do_POST(self):
+        if self.path != "/sign":
+            self.send_json(404, {"error": "Endpoint not found"})
+            return
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length <= 0 or content_length > 65536:
+            self.send_json(400, {"error": "Invalid Content-Length"})
+            return
+
+        try:
+            body = self.rfile.read(content_length)
+            req_data = json.loads(body.decode("utf-8"))
+        except Exception as e:
+            self.send_json(400, {"error": f"Invalid JSON payload: {str(e)}"})
+            return
+
+        # Validate authentication token if provided in request
+        client_token = req_data.get("token", "")
+        if AUTH_TOKEN and client_token != AUTH_TOKEN:
+            logging.warning("Unauthorized signing attempt from %s (invalid token)", self.client_address[0])
+            self.send_json(403, {"error": "Forbidden: invalid internal CA token"})
+            return
+
+        csr_pem = req_data.get("csr", "").strip()
+        if not csr_pem or "-----BEGIN CERTIFICATE REQUEST-----" not in csr_pem:
+            self.send_json(400, {"error": "Missing or invalid CSR PEM block"})
+            return
+
+        client_host = req_data.get("hostname", self.client_address[0])
+        logging.info("Received signing request for host '%s' from %s", client_host, self.client_address[0])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csr_file = os.path.join(tmpdir, "req.csr")
+            ext_file = os.path.join(tmpdir, "ext.cnf")
+            out_cert = os.path.join(tmpdir, "cert.crt")
+
+            with open(csr_file, "w") as f:
+                f.write(csr_pem + "\n")
+
+            # Extract Subject Alternative Names (SANs) from CSR
+            san_cmd = [
+                "openssl", "req", "-noout", "-text", "-in", csr_file
+            ]
+            san_proc = subprocess.run(san_cmd, capture_output=True, text=True)
+            san_line = ""
+            for line in san_proc.stdout.splitlines():
+                if "X509v3 Subject Alternative Name:" in line:
+                    idx = san_proc.stdout.splitlines().index(line)
+                    if idx + 1 < len(san_proc.stdout.splitlines()):
+                        san_line = san_proc.stdout.splitlines()[idx + 1].strip()
+                        break
+
+            with open(ext_file, "w") as f:
+                f.write("basicConstraints = CA:FALSE\n")
+                f.write("keyUsage = digitalSignature, keyEncipherment\n")
+                f.write("extendedKeyUsage = serverAuth, clientAuth\n")
+                if san_line:
+                    f.write(f"subjectAltName = {san_line}\n")
+
+            # Sign the CSR with cluster internal CA
+            sign_cmd = [
+                "openssl", "x509", "-req",
+                "-in", csr_file,
+                "-CA", CA_CERT_PATH,
+                "-CAkey", CA_KEY_PATH,
+                "-CAcreateserial",
+                "-days", str(LEAF_DAYS),
+                "-sha256",
+                "-extfile", ext_file,
+                "-out", out_cert
+            ]
+            sign_proc = subprocess.run(sign_cmd, capture_output=True, text=True)
+            if sign_proc.returncode != 0:
+                logging.error("OpenSSL signing failed: %s", sign_proc.stderr)
+                self.send_json(500, {"error": "OpenSSL signature execution failed", "details": sign_proc.stderr})
+                return
+
+            with open(out_cert, "r") as f:
+                signed_pem = f.read()
+
+            logging.info("Successfully signed certificate for '%s' (valid for %d days)", client_host, LEAF_DAYS)
+            self.send_json(200, {
+                "status": "success",
+                "certificate": signed_pem,
+                "days_valid": LEAF_DAYS
+            })
+
+def run():
+    server_address = (LISTEN_HOST, LISTEN_PORT)
+    httpd = HTTPServer(server_address, InternalCASignerHandler)
+    logging.info("Cluster Internal CA Signer running on %s:%d", LISTEN_HOST, LISTEN_PORT)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.server_close()
+
+if __name__ == "__main__":
+    run()

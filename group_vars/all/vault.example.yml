@@ -26,3 +26,6 @@ vault_teleport_github_client_secret: "ReplaceWithYourGitHubOAuthClientSecret"
 vault_freeipa_admin_password: "ReplaceWithYourFreeIPAAdminPassword"
 vault_freeipa_ds_password: "ReplaceWithYourFreeIPADirectoryManagerPassword"
 vault_freeipa_client_otp: "ReplaceWithYourHostEnrollmentOTP"
+
+# Cluster Internal CA Client Signing Authorization Token
+vault_internal_ca_token: "ReplaceWithYourInternalCAToken"

@@ -195,7 +195,15 @@ backend be_acme
 {% set fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['ansible_fqdn'] | default(host)) %}
 {% set target_ip = hostvars[host]['ansible_host'] | default(host) %}
 {% set target_port = 443 if (haproxy_backend_ssl | default(false) | bool) else 80 %}
-{% set ssl_opts = 'ssl verify none' if (haproxy_backend_ssl | default(false) | bool) else '' %}
+{% if haproxy_backend_ssl | default(false) | bool %}
+{% if haproxy_backend_ssl_verify | default('required') == 'required' %}
+{% set ssl_opts = 'ssl verify required ca-file ' ~ haproxy_backend_ca_file %}
+{% else %}
+{% set ssl_opts = 'ssl verify none' %}
+{% endif %}
+{% else %}
+{% set ssl_opts = '' %}
+{% endif %}
 backend be_{{ clean_name }}
     mode http
     balance roundrobin
