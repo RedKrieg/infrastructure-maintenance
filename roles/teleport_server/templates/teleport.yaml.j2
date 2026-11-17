@@ -41,4 +41,5 @@ ssh_service:
   enabled: true
   labels:
     role: teleport-server
+    bastion: "true"
     hostname: "{{ inventory_hostname }}"

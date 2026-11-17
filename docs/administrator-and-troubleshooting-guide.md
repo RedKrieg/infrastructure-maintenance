@@ -52,18 +52,26 @@ flowchart TD
 Administrators have three distinct tiers for logging in:
 
 ### Tier 1: Zero-Trust Teleport Gateway (Standard Daily Operations)
+
+Install the helper bundle on your workstation once (`./examples/teleport/install_workstation_helpers.sh --proxy teleport.example.com:443`, see [examples/teleport/README.md](../examples/teleport/README.md)), or open a Bastion session on `teleport-01` where the helpers are pre-installed:
+
 ```bash
-# 1. Log in to the Teleport proxy:
-tsh login --proxy=teleport.example.com:3080
+# 1. Log in to the HAProxy-fronted Teleport proxy (or run `tlogin`):
+tsh login --proxy=teleport.example.com:443
 
-# 2. View available nodes:
-tsh ls
+# 2. View available nodes (look for bastion=true on teleport-01):
+tnodes   # or: tsh ls
 
-# 3. Connect to a target node:
-tsh ssh ubuntu@web-01
+# 3. Connect unprivileged to inspect logs/config:
+tssh ubuntu@web-01
 
-# 4. Request temporary elevated sudo rights (if a junior admin):
+# 4. If sudo is needed (junior admins), run tsudo from your WORKSTATION or BASTION
+#    BEFORE opening the SSH session (existing shells are not retroactively elevated):
 tsudo "Fixing Nginx configuration on web-01"
+# (Lead admin approves via `tapprove` or Web UI)
+tssh ubuntu@web-01   # New session now receives temporary 1h sudo
+# Drop elevated privileges after maintenance:
+tdrop
 ```
 
 ### Tier 2: FreeIPA Kerberos / SSSD (Enterprise Identity)

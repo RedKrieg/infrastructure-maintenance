@@ -5,7 +5,7 @@
 # ==============================================================================
 set -e
 
-DEFAULT_PROXY="{{ teleport_proxy_server }}"
+DEFAULT_PROXY="{{ teleport_public_addr | default('teleport.' ~ (domain_name | default('cluster.local')) ~ ':443') }}"
 PROXY="${TELEPORT_PROXY:-$DEFAULT_PROXY}"
 USER_ARG="${1:-${TELEPORT_USER:-$USER}}"
 

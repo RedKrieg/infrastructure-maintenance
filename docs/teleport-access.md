@@ -9,32 +9,34 @@ The suite includes complete **[Teleport](https://goteleport.com/)** integration 
 
 ## 1. Architecture Overview
 
-### Teleport Auth & Proxy Server (`roles/teleport_server`)
-- Acts as the cluster Certificate Authority and identity gateway.
-- Hosts the Web UI / API on port `3080` (or 443), SSH proxy on port `3023`, and reverse tunnel on port `3024`.
+### Teleport Auth, Proxy & Bastion Server (`roles/teleport_server`)
+- Acts as the cluster Certificate Authority, identity gateway, and **operator Bastion** (`bastion=true`).
+- Hosts the Web UI / API on port `3080` (fronted by HAProxy TLS on port `443`), SSH proxy on port `3023`, and reverse tunnel on port `3024`.
 - Manages centralized RBAC roles and user accounts.
+- Installs the full CLI helper suite (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`) globally in `/usr/local/bin` and stages a pre-configured **Workstation Bundle** at `/opt/teleport-workstation-bundle/teleport-workstation-helpers.tar.gz`.
 
 ### Teleport SSH Node Service (`roles/teleport_node`)
-- Runs on all cluster nodes (`proxies`, `webservers`, `monitoring`).
+- Runs strictly on workload nodes (`proxies`, `webservers`, `databases`, `redis_servers`, `rabbitmq_servers`, `monitoring`) — skipped automatically on `teleport_servers`.
+- Keeps target workload hosts minimal: runs only the reverse-tunnel SSH daemon with zero client wrapper clutter.
 - Establishes an outbound reverse tunnel back to the Teleport Proxy—nodes require **zero inbound open SSH ports** to the public internet.
 - **Automatic Host User Provisioning (`create_host_user_mode: keep`)**: Target OS user accounts (such as `junior` or `admin`) are automatically created on the fly when the user connects.
 
 ```
-                   Junior / Admin Workstation
-                               │
-                               ▼
-                 Teleport Proxy & Auth Server
-                 (Web/API: 3080 | SSH: 3023)
-                               │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-        │ Reverse Tunnel       │ Reverse Tunnel       │ Reverse Tunnel
-        │ (Port 3024)          │ (Port 3024)          │ (Port 3024)
-        ▼                      ▼                      ▼
-  ┌────────────┐         ┌────────────┐         ┌────────────┐
-  │  proxy-01  │         │   web-01   │         │ monitor-01 │
-  │ (SSH Node) │         │ (SSH Node) │         │ (SSH Node) │
-  └────────────┘         └────────────┘         └────────────┘
+         Operator / Junior Workstation
+      (Workstation Bundle installed locally)
+                         │
+                         ▼ HTTPS :443 / SSH :3023
+       Teleport Auth, Proxy & Bastion (`teleport-01`)
+    [Role: teleport-server, bastion=true, Bundle Staged]
+                         │
+        ┌────────────────┼────────────────┐
+        │ Reverse Tunnel │ Reverse Tunnel │ Reverse Tunnel
+        │ (Port 3024)    │ (Port 3024)    │ (Port 3024)
+        ▼                ▼                ▼
+  ┌────────────┐   ┌────────────┐   ┌────────────┐
+  │  proxy-01  │   │   web-01   │   │   db-01    │
+  │ (SSH Node) │   │ (SSH Node) │   │ (SSH Node) │
+  └────────────┘   └────────────┘   └────────────┘
 ```
 
 ---
@@ -51,59 +53,80 @@ Permissions are managed centrally through declarative Teleport roles without edi
 
 ---
 
-## 3. Junior Sudo Workflow & Helper Scripts
+## 3. Workstation Bundles & Teleport Bastion Helpers
 
-Pre-configured shell helpers and aliases are deployed to `/usr/local/bin` and `/etc/profile.d/teleport_helpers.sh` across all nodes so junior admins never need to memorize complex CLI flags:
+Target workload nodes (`web-01`, `db-01`, `proxy-01`) intentionally **do not** carry Teleport client CLI wrappers. Instead, helpers and shell aliases are delivered through two operator workflows:
+
+1. **Operator Workstation Bundle (Recommended)**:
+   Install the helpers on your laptop/workstation directly from this repo:
+   ```bash
+   ./examples/teleport/install_workstation_helpers.sh --proxy teleport.example.com:443
+   source ~/.config/teleport-helpers/teleport_helpers.sh
+   ```
+   Or fetch the environment-configured bundle generated on the Bastion (`teleport-01`):
+   ```bash
+   tsh login --proxy=teleport.example.com:443
+   tsh scp ubuntu@teleport-01:/opt/teleport-workstation-bundle/teleport-workstation-helpers.tar.gz /tmp/
+   mkdir -p /tmp/tp-bundle && tar -xzf /tmp/teleport-workstation-helpers.tar.gz -C /tmp/tp-bundle
+   /tmp/tp-bundle/install.sh
+   ```
+   See [examples/teleport/README.md](../examples/teleport/README.md) for complete setup details.
+2. **Teleport Server Bastion (`teleport-01`)**:
+   All helper binaries (`/usr/local/bin/teleport-*`) and system-wide aliases (`/etc/profile.d/teleport_helpers.sh`) are pre-installed on `[teleport_servers]` hosts (`bastion=true`) for operators working directly from a jump shell or Teleport Web terminal.
 
 | Helper Command | Short Alias | Purpose |
 | :--- | :--- | :--- |
-| `teleport-login [user]` | `tlogin` | Connects and authenticates to the Teleport cluster with pre-configured proxy address. |
-| `teleport-request-sudo [reason]` | `tsudo` | Prompts for a justification reason, requests `elevated-sudo`, and waits for approval. |
+| `teleport-login [user]` | `tlogin` | Connects and authenticates to the public HAProxy-fronted Teleport proxy (`teleport.<domain>:443`). |
+| `teleport-request-sudo [reason]` | `tsudo` | Requests temporary `elevated-sudo` certificate from your workstation/Bastion prior to SSHing. |
 | `teleport-status` | `tstatus` | Checks active session, remaining certificate TTL, and access request status. |
 | `teleport-drop-sudo` | `tdrop` | Drops elevated role immediately and reverts to unprivileged status. |
 | `teleport-ssh [user@]node` | `tssh` | Connects to a cluster node via Teleport SSH proxy (runs `tsh ls` if no node specified). |
-| `teleport-approve-sudo [id]` | `tapprove` | *(Lead Admin)* Interactively reviews and approves pending access requests. |
+| `teleport-approve-sudo [id]` | `tapprove` | *(Lead Admin)* Reviews and approves pending access requests via `tsh` or `tctl`. |
 
 ---
 
-## 4. Complete Junior Admin Workflow Example
+## 4. Complete Junior & Lead Administrator Workflows
 
-### Step 1: Login
+> [!IMPORTANT]
+> Teleport injects temporary `/etc/sudoers.d/` rules on the destination host **when an SSH connection is established** based on the roles inside your active certificate. Always request/activate elevation (`tsudo`) from your **workstation or Bastion**, then open a **new** `tssh <node>` session for sudo rights to take effect. Running `tsudo` inside an already-open unprivileged shell on `web-01` will not elevate that existing shell.
+
+### Step 1: Login from Workstation (or Bastion)
 ```bash
 tlogin junior
-# Authenticates via SSO/credentials to the Teleport cluster
+# Authenticates to teleport.example.com:443 with baseline 'junior' role
 ```
 
-### Step 2: Connect (Unprivileged)
+### Step 2: Inspect Nodes Unprivileged
 ```bash
-tssh web-01
-# Normal user permissions only. Running `sudo` is rejected.
+tnodes           # lists cluster hosts (including Bastion label bastion=true)
+tssh web-01      # SSH opens without sudo access to inspect logs or config
 ```
 
-### Step 3: Request Sudo Access
+### Step 3: Request Sudo Access (on Workstation / Bastion)
+Exit the unprivileged session (or use another local terminal tab) and request elevation:
 ```bash
 tsudo "Need to restart HAProxy and verify SSL logs"
 # Submits request and waits for lead admin approval:
 # [*] Waiting for lead administrator approval (Press Ctrl+C to cancel wait)...
 ```
 
-### Step 4: Lead Admin Approves (from another terminal or Web UI)
+### Step 4: Lead Admin Approves (from Lead Admin Workstation, Bastion, or Web UI)
 ```bash
 tapprove
-# Lists pending requests and approves the junior's ticket
+# Lists pending requests and approves the junior operator's ticket via tsh/tctl
 ```
 
-### Step 5: Junior Receives Immediate Sudo Access
-Upon approval, `tsudo` automatically activates the elevated certificate:
+### Step 5: Open a New Elevated Session
+Once approved, `tsudo` updates your active workstation/Bastion certificate. Connect cleanly to apply `host_sudoers`:
 ```bash
-# [✓] Access request APPROVED! You now have temporary sudo privileges (1 hour expiration).
-sudo systemctl restart haproxy    # Sudo works!
+tssh web-01
+sudo systemctl restart nginx    # Works cleanly for the 1-hour elevated window!
 ```
 
 ### Step 6: Drop Sudo When Done
 ```bash
-tdrop
-# [✓] Elevated sudo privileges successfully dropped. Reverted to standard unprivileged role.
+exit                            # Return to workstation/Bastion
+tdrop                           # Drop elevated role back to standard unprivileged access
 ```
 
 ---

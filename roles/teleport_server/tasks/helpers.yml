@@ -1,25 +1,74 @@
 ---
 # ==============================================================================
-# Deploy Teleport Server Approval Helper Scripts
+# Deploy Teleport Bastion Helpers & Generate Workstation Bundle on teleport_servers
 # ==============================================================================
 
-- name: Deploy Teleport access request approval helper script
+- name: Deploy Teleport Bastion CLI helper scripts to /usr/local/bin
   ansible.builtin.template:
-    src: teleport-approve-sudo.j2
-    dest: /usr/local/bin/teleport-approve-sudo
+    src: "{{ item.src }}"
+    dest: "/usr/local/bin/{{ item.dest }}"
     owner: root
     group: root
     mode: "0755"
-  tags: [teleport, teleport_server, helpers]
+  loop:
+    - { src: "teleport-login.j2", dest: "teleport-login" }
+    - { src: "teleport-request-sudo.j2", dest: "teleport-request-sudo" }
+    - { src: "teleport-status.j2", dest: "teleport-status" }
+    - { src: "teleport-drop-sudo.j2", dest: "teleport-drop-sudo" }
+    - { src: "teleport-ssh.j2", dest: "teleport-ssh" }
+    - { src: "teleport-approve-sudo.j2", dest: "teleport-approve-sudo" }
+  tags: [teleport, teleport_server, helpers, bastion]
 
-- name: Deploy approver alias to /etc/profile.d/teleport_approver.sh
-  ansible.builtin.copy:
-    dest: /etc/profile.d/teleport_approver.sh
+- name: Deploy unified Teleport shell aliases to /etc/profile.d/teleport_helpers.sh
+  ansible.builtin.template:
+    src: teleport_helpers.sh.j2
+    dest: /etc/profile.d/teleport_helpers.sh
     owner: root
     group: root
     mode: "0644"
-    content: |
-      # /etc/profile.d/teleport_approver.sh
-      # Managed by Ansible - Convenient Teleport approval alias
-      alias tapprove='teleport-approve-sudo'
-  tags: [teleport, teleport_server, helpers]
+  tags: [teleport, teleport_server, helpers, bastion]
+
+- name: Remove legacy separate approver alias file if present
+  ansible.builtin.file:
+    path: /etc/profile.d/teleport_approver.sh
+    state: absent
+  tags: [teleport, teleport_server, helpers, bastion]
+
+- name: Ensure Teleport workstation helper bundle directory exists
+  ansible.builtin.file:
+    path: /opt/teleport-workstation-bundle
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [teleport, teleport_server, helpers, bundle]
+
+- name: Stage pre-configured workstation helper scripts into bundle directory
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/opt/teleport-workstation-bundle/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { src: "teleport-login.j2", dest: "teleport-login", mode: "0755" }
+    - { src: "teleport-request-sudo.j2", dest: "teleport-request-sudo", mode: "0755" }
+    - { src: "teleport-status.j2", dest: "teleport-status", mode: "0755" }
+    - { src: "teleport-drop-sudo.j2", dest: "teleport-drop-sudo", mode: "0755" }
+    - { src: "teleport-ssh.j2", dest: "teleport-ssh", mode: "0755" }
+    - { src: "teleport-approve-sudo.j2", dest: "teleport-approve-sudo", mode: "0755" }
+    - { src: "teleport_helpers.sh.j2", dest: "teleport_helpers.sh", mode: "0644" }
+    - { src: "install-workstation-bundle.sh.j2", dest: "install.sh", mode: "0755" }
+  tags: [teleport, teleport_server, helpers, bundle]
+
+- name: Package downloadable Teleport workstation helper tarball
+  community.general.archive:
+    path: /opt/teleport-workstation-bundle/
+    dest: /opt/teleport-workstation-bundle/teleport-workstation-helpers.tar.gz
+    exclude_path:
+      - /opt/teleport-workstation-bundle/teleport-workstation-helpers.tar.gz
+    format: gz
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [teleport, teleport_server, helpers, bundle]

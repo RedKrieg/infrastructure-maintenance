@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Teleport Workstation Helper Bundle Installer
+# Packaged from cluster Bastion ({{ inventory_hostname }})
+# Default Proxy: {{ teleport_public_addr | default('teleport.' ~ (domain_name | default('cluster.local')) ~ ':443') }}
+# ==============================================================================
+set -euo pipefail
+
+BUNDLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ "$(id -u)" -eq 0 ]; then
+    DEFAULT_PREFIX="/usr/local/bin"
+    ALIAS_DEST="/etc/profile.d/teleport_helpers.sh"
+else
+    DEFAULT_PREFIX="${HOME}/.local/bin"
+    ALIAS_DEST="${HOME}/.config/teleport-helpers/teleport_helpers.sh"
+fi
+
+PREFIX="${1:-${PREFIX:-${DEFAULT_PREFIX}}}"
+mkdir -p "${PREFIX}"
+
+SCRIPTS=(
+    "teleport-login"
+    "teleport-request-sudo"
+    "teleport-status"
+    "teleport-drop-sudo"
+    "teleport-ssh"
+    "teleport-approve-sudo"
+)
+
+for s in "${SCRIPTS[@]}"; do
+    install -m 0755 "${BUNDLE_DIR}/${s}" "${PREFIX}/${s}"
+done
+
+mkdir -p "$(dirname "${ALIAS_DEST}")"
+install -m 0644 "${BUNDLE_DIR}/teleport_helpers.sh" "${ALIAS_DEST}"
+
+if [ "$(id -u)" -ne 0 ]; then
+    SOURCE_LINE="[ -f \"${ALIAS_DEST}\" ] && source \"${ALIAS_DEST}\""
+    for rc in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+        if [ -f "${rc}" ] && ! grep -Fq "${ALIAS_DEST}" "${rc}"; then
+            {
+                echo ""
+                echo "# Teleport Workstation Helpers"
+                echo "${SOURCE_LINE}"
+            } >> "${rc}"
+            echo "Added Teleport helper aliases to ${rc}"
+        fi
+    done
+    case ":${PATH}:" in
+        *":${PREFIX}:"*) ;;
+        *) echo "NOTE: Add ${PREFIX} to your PATH (e.g. export PATH=\"${PREFIX}:\$PATH\")." ;;
+    esac
+fi
+
+echo "[✓] Teleport workstation helpers installed to ${PREFIX}"
+echo "[✓] Alias definitions installed at ${ALIAS_DEST}"
+echo "    Reload your shell or run: source \"${ALIAS_DEST}\""

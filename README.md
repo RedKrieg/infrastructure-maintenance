@@ -74,6 +74,9 @@ A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and
 │   ├── internal-tls/                # Zero-Trust Internal CA & mTLS reference configuration examples
 │   │   ├── enable_internal_tls_vars.yml # Complete proxy & backend internal TLS variable reference
 │   │   └── README.md                # Setup, succession failover & verification guide
+│   ├── teleport/                    # Teleport Workstation Helper Bundle & Bastion guide
+│   │   ├── install_workstation_helpers.sh # Portable workstation CLI wrapper & alias installer
+│   │   └── README.md                # Workstation install, bastion jump-host & JIT sudo guide
 │   ├── alertmanager/                # Drop-in Alertmanager configuration templates
 │   │   ├── alertmanager-slack.yml   # Slack webhook notifications with channel routing
 │   │   ├── alertmanager-pagerduty.yml # PagerDuty Events API v2 on-call escalation
@@ -129,8 +132,8 @@ A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and
 │   ├── central_logging/             # Centralized log collection (server & shipper) with 60-day retention
 │   ├── prometheus_server/           # Standalone Prometheus server role (port 9090, 60d retention, alert rules)
 │   ├── grafana/                     # Grafana visualization server (port 3000, pre-built dashboards)
-│   ├── teleport_server/             # Teleport Auth & Proxy Service role (ports 3080/3023/3024)
-│   ├── teleport_node/               # Teleport SSH Node Service role (reverse tunnels, JIT host users)
+│   ├── teleport_server/             # Teleport Auth, Proxy & Bastion role (ports 3080/3023/3024, bundle builder)
+│   ├── teleport_node/               # Teleport SSH Node reverse-tunnel daemon on target hosts (no client helpers)
 │   ├── freeipa_server/              # FreeIPA Centralized Identity Server role (Kerberos, LDAP 389/636, Web UI)
 │   └── freeipa_client/              # FreeIPA Client Enrollment & SSSD Centralized Authentication role
 ├── tests/
