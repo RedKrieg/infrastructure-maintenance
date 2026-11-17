@@ -17,8 +17,8 @@ This guide defines the end-to-end operational procedures for rotating all creden
 | **Redis Auth (`requirepass`)** | `group_vars/all/vault.yml` | 90 days | **Yes** (via runtime `CONFIG SET`) | Redis, Application workers |
 | **RabbitMQ User Credentials** | `group_vars/all/vault.yml` | 90 days | **Yes** (via `rabbitmqctl change_password`)| RabbitMQ, Celery/Worker processes |
 | **RabbitMQ Erlang Cookie** | `/var/lib/rabbitmq/.erlang.cookie` | On compromise only | **No** (requires rolling restart) | RabbitMQ cluster nodes |
-| **Internal Root CA Private Key** | Controller `/etc/ssl/internal-ca/` | 5–10 years | **Yes** (via dual trust-anchor window)| HAProxy proxy, Backend webservers |
-| **Internal Leaf TLS Certificates** | Target `/etc/ssl/internal/` | 90 days (auto-renewed at 30) | **Yes** (graceful Nginx/HAProxy reload) | HAProxy backend, Webserver Nginx |
+| **Internal Root CA Private Key** | Primary Proxy `/etc/ssl/internal/ca/` | 730 days (auto-renewed at 30) | **Yes** (automated proxy sync) | HAProxy proxies, all TLS clients |
+| **Internal Leaf TLS Certificates** | All Fleet Nodes `/etc/ssl/internal/` | 90 days (auto-renewed at 14) | **Yes** (graceful service reload) | HAProxy, Nginx, Telemetry, Data/Broker TLS |
 | **Edge ACME TLS Certificates** | Master Proxy `/root/.acme.sh/` | 60 days (automated via ACME) | **Yes** (automated cron sync) | HAProxy frontend ingress |
 | **Teleport Node Join Token** | `group_vars/all/vault.yml` | 90 days (or dynamic TTLs) | **Yes** (existing nodes stay joined) | Teleport proxy & enrolled agents |
 | **FreeIPA Admin & DM Passwords** | FreeIPA LDAP directory | 90 days | **Yes** (via `ipa passwd` / `ldappasswd`)| FreeIPA KDC, Directory Server |
@@ -199,49 +199,49 @@ The Erlang cookie (`/var/lib/rabbitmq/.erlang.cookie`) allows RabbitMQ nodes in 
 ## 6. Internal Root CA & Leaf Certificate Lifecycle
 
 ### Architecture:
-- **Root CA**: Valid for 3,650 days (10 years). Located on Ansible controller (`/etc/ssl/internal-ca/`).
-- **Leaf Certificates**: Valid for 90 days. Installed on webservers (`/etc/ssl/internal/server.crt`).
-- **Trust Anchor**: `internal-ca.crt` mounted on HAProxy load balancers (`/etc/ssl/certs/internal-ca.crt`).
+- **Root CA**: Valid for 730 days (2 years), ECDSA P-384 (`secp384r1` with SHA-384). Hosted on the primary ingress proxy at `/etc/ssl/internal/ca/cluster-ca.crt` and `/etc/ssl/internal/ca/cluster-ca.key`, replicated across peer proxies via `/usr/local/bin/sync-haproxy-certs.sh`, and automatically renewed at the 30-day threshold by `/usr/local/bin/renew-internal-ca.sh` (`renew-internal-ca.timer`).
+- **Leaf Certificates**: Valid for 90 days. Signed via `internal-ca-signer` (Port 8444) and installed across fleet nodes at `/etc/ssl/internal/server.crt` and `/etc/ssl/internal/server.key`, automatically renewing at 14 days via `/usr/local/bin/renew-internal-cert.sh`.
+- **Trust Anchor**: `/etc/haproxy/certs/internal-ca.crt` on HAProxy proxies and `/etc/ssl/certs/internal-ca.crt` (registered in the OS trust store at `/usr/local/share/ca-certificates/cluster-internal-ca.crt`) on all enrolled nodes.
 
 ```mermaid
 flowchart LR
-    RootCA["Controller Root CA<br>(internal-ca.key / crt)"] -->|Issues 90-Day Leaf| Web["Webserver Backend<br>(server.crt / server.key)"]
-    RootCA -->|Distributes Trust Bundle| Proxy["HAProxy Fleet<br>(internal-ca.crt)"]
-    Proxy -->|Validates Peer Cert| Web
+    RootCA["Primary Proxy Root CA<br>(/etc/ssl/internal/ca/cluster-ca.key & crt)"] -->|Replicates via SSH| PeerProxy["Replica Proxies & Signer API (:8444)"]
+    PeerProxy -->|Issues 90-Day Leaf| Fleet["Fleet Nodes<br>(/etc/ssl/internal/server.crt & key)"]
+    RootCA -->|Populates Trust Store| Trust["/etc/haproxy/certs/internal-ca.crt &<br>/etc/ssl/certs/internal-ca.crt"]
+    Trust -->|Validates Peer Certs| Fleet
 ```
 
 ### Staged Leaf Certificate Rotation (Scheduled or Pre-Expiry)
 
-1. Force certificate regeneration and distribution:
+1. Force immediate leaf certificate regeneration across fleet nodes using the autonomous client script:
    ```bash
-   ansible-playbook -i inventory.ini playbook.yml --tags internal_tls -e "internal_ca_force_renew=true"
+   ansible all -i inventory.ini -m command -a "/usr/local/bin/renew-internal-cert.sh --force" --become
    ```
-2. Reload backend webservers:
+2. Verify expiration dates and active TLS daemons:
    ```bash
-   ansible webservers -i inventory.ini -m systemd -a "name=nginx state=reloaded" --become
+   ansible webservers -i inventory.ini -m command -a "openssl x509 -enddate -noout -in /etc/ssl/internal/server.crt" --become
    ```
-3. HAProxy verifies the new leaf certificate seamlessly on its next health check probe.
+   `/usr/local/bin/renew-internal-cert.sh` automatically reloads active services (Nginx, Rsyslog, Node Exporter) without dropping connections, and HAProxy validates the new leaf certificate on the next health probe.
 
-### Emergency Root CA Revocation & Replacement
+### Emergency Root CA Key Revocation & Replacement
 
-If the private key of the internal Root CA (`internal-ca.key`) is compromised:
+If the private key of the internal Root CA (`/etc/ssl/internal/ca/cluster-ca.key`) is compromised:
 
-1. **Generate New Root CA** on controller with a distinct identifier (`internal-ca-v2.crt`).
+1. **Generate New Root CA** on the primary proxy (`cert_primary_host`) with a fresh ECDSA P-384 keypair at `/etc/ssl/internal/ca/cluster-ca-v2.{key,crt}`.
 2. **Create Combined Trust Bundle**:
-   Concatenate the new and old Root CAs into a unified bundle:
+   Temporarily combine old and new CA certificates while nodes re-enroll:
    ```bash
-   cat internal-ca.crt internal-ca-v2.crt > /etc/ssl/certs/internal-ca-bundle.crt
+   cat /etc/ssl/internal/ca/cluster-ca.crt /etc/ssl/internal/ca/cluster-ca-v2.crt > /etc/haproxy/certs/internal-ca.crt
    ```
-3. **Deploy Combined Bundle to HAProxy**:
-   Deploy the bundle to `/etc/ssl/certs/internal-ca.crt` on all proxies and reload HAProxy:
+3. **Sync Bundle & Reload HAProxy Proxies**:
+   Synchronize `/etc/haproxy/certs/internal-ca.crt` across proxies and reload HAProxy (`systemctl reload haproxy`) so HAProxy accepts certificates signed by either the old or new CA during cutover.
+4. **Promote New CA on Signer Proxies & Re-Issue Leaf Certificates**:
+   Replace `cluster-ca.key` and `cluster-ca.crt` with the `v2` files across `/etc/ssl/internal/ca/` on all proxies, run `/usr/local/bin/sync-haproxy-certs.sh`, restart `internal-ca-signer`, and force leaf renewal fleet-wide:
    ```bash
-   ansible proxies -i inventory.ini -m systemd -a "name=haproxy state=reloaded" --become
+   ansible all -i inventory.ini -m command -a "/usr/local/bin/renew-internal-cert.sh --force" --become
    ```
-   *HAProxy will now accept certificates signed by either the old or new Root CA.*
-4. **Issue New Leaf Certificates to Webservers**:
-   Sign new webserver certificates using `internal-ca-v2.key` and reload Nginx across webservers.
 5. **Prune Old Root CA**:
-   Replace the bundle on HAProxy with only `internal-ca-v2.crt` and reload HAProxy.
+   Replace `/etc/haproxy/certs/internal-ca.crt` across proxies with only the new `cluster-ca.crt` and reload HAProxy.
 
 ---
 

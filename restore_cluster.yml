@@ -54,8 +54,8 @@
           - "Source Archive Directory: {{ active_restore_dir }}"
           - "=================================================="
 
-- name: Restore Frontend Load Balancers & Edge Proxies
-  hosts: proxies
+- name: Restore FreeIPA Identity Server Tier
+  hosts: freeipa_servers
   gather_facts: false
   become: true
   vars_files:
@@ -63,59 +63,26 @@
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
-    - name: Check if proxy backup archive exists on controller
+    - name: Check if FreeIPA backup archive exists on controller
       ansible.builtin.stat:
-        path: "{{ active_restore_dir }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        path: "{{ active_restore_dir }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
       delegate_to: localhost
       become: false
-      register: proxy_archive_stat
+      register: ipa_archive_stat
 
-    - name: Unarchive proxy configuration and certificates to root
-      ansible.builtin.unarchive:
-        src: "{{ active_restore_dir }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
-        dest: /
-        owner: root
-        group: root
-      when: proxy_archive_stat.stat.exists
-      notify: Restart proxy services
-
-  handlers:
-    - name: Restart proxy services
-      ansible.builtin.systemd:
-        name: "{{ item }}"
-        state: restarted
-      loop:
-        - haproxy
-        - keepalived
-      failed_when: false
-
-- name: Restore Backend Webservers & Application Nodes
-  hosts: webservers
-  gather_facts: false
-  become: true
-  vars_files:
-    - vars/backup_config.yml
-  vars:
-    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
-  tasks:
-    - name: Check if webserver backup archive exists on controller
-      ansible.builtin.stat:
-        path: "{{ active_restore_dir }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
-      delegate_to: localhost
-      become: false
-      register: web_archive_stat
-
-    - name: Unarchive webserver configuration and files to root
-      ansible.builtin.unarchive:
-        src: "{{ active_restore_dir }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
-        dest: /
-      when: web_archive_stat.stat.exists
-      notify: Restart nginx
+    - name: Restore FreeIPA configuration and directory state
+      when: ipa_archive_stat.stat.exists
+      block:
+        - name: Unarchive FreeIPA state to filesystem root
+          ansible.builtin.unarchive:
+            src: "{{ active_restore_dir }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+            dest: /
+          notify: Restart FreeIPA service
 
   handlers:
-    - name: Restart nginx
+    - name: Restart FreeIPA service
       ansible.builtin.systemd:
-        name: nginx
+        name: ipa
         state: restarted
       failed_when: false
 
@@ -154,39 +121,6 @@
         state: started
         enabled: true
       when: tp_archive_stat.stat.exists
-
-- name: Restore Prometheus & Grafana Monitoring Tier
-  hosts: monitoring
-  gather_facts: false
-  become: true
-  vars_files:
-    - vars/backup_config.yml
-  vars:
-    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
-  tasks:
-    - name: Check if monitoring archive exists on controller
-      ansible.builtin.stat:
-        path: "{{ active_restore_dir }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
-      delegate_to: localhost
-      become: false
-      register: mon_archive_stat
-
-    - name: Unarchive monitoring configuration and dashboards to root
-      ansible.builtin.unarchive:
-        src: "{{ active_restore_dir }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
-        dest: /
-      when: mon_archive_stat.stat.exists
-      notify: Restart monitoring services
-
-  handlers:
-    - name: Restart monitoring services
-      ansible.builtin.systemd:
-        name: "{{ item }}"
-        state: restarted
-      loop:
-        - prometheus
-        - grafana-server
-      failed_when: false
 
 - name: Restore Database Tier (PostgreSQL / MySQL)
   hosts: databases
@@ -345,8 +279,8 @@
             path: /tmp/rabbitmq_restore
             state: absent
 
-- name: Restore FreeIPA Identity Server Tier
-  hosts: freeipa_servers
+- name: Restore Prometheus & Grafana Monitoring Tier
+  hosts: monitoring
   gather_facts: false
   become: true
   vars_files:
@@ -354,26 +288,91 @@
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
-    - name: Check if FreeIPA backup archive exists on controller
+    - name: Check if monitoring archive exists on controller
       ansible.builtin.stat:
-        path: "{{ active_restore_dir }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        path: "{{ active_restore_dir }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
       delegate_to: localhost
       become: false
-      register: ipa_archive_stat
+      register: mon_archive_stat
 
-    - name: Restore FreeIPA configuration and directory state
-      when: ipa_archive_stat.stat.exists
-      block:
-        - name: Unarchive FreeIPA state to filesystem root
-          ansible.builtin.unarchive:
-            src: "{{ active_restore_dir }}/freeipa_{{ inventory_hostname }}.tar.{{ backup_compression }}"
-            dest: /
-          notify: Restart FreeIPA service
+    - name: Unarchive monitoring configuration and dashboards to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/monitoring_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+      when: mon_archive_stat.stat.exists
+      notify: Restart monitoring services
 
   handlers:
-    - name: Restart FreeIPA service
+    - name: Restart monitoring services
       ansible.builtin.systemd:
-        name: ipa
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - prometheus
+        - grafana-server
+      failed_when: false
+
+- name: Restore Backend Webservers & Application Nodes
+  hosts: webservers
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if webserver backup archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: web_archive_stat
+
+    - name: Unarchive webserver configuration and files to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/webserver_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+      when: web_archive_stat.stat.exists
+      notify: Restart nginx
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.systemd:
+        name: nginx
         state: restarted
       failed_when: false
 
+- name: Restore Frontend Load Balancers & Edge Proxies
+  hosts: proxies
+  gather_facts: false
+  become: true
+  vars_files:
+    - vars/backup_config.yml
+  vars:
+    active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
+  tasks:
+    - name: Check if proxy backup archive exists on controller
+      ansible.builtin.stat:
+        path: "{{ active_restore_dir }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+      delegate_to: localhost
+      become: false
+      register: proxy_archive_stat
+
+    - name: Unarchive proxy configuration and certificates to root
+      ansible.builtin.unarchive:
+        src: "{{ active_restore_dir }}/proxy_{{ inventory_hostname }}.tar.{{ backup_compression }}"
+        dest: /
+        owner: root
+        group: root
+      when: proxy_archive_stat.stat.exists
+      notify: Restart proxy services
+
+  handlers:
+    - name: Restart proxy services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - haproxy
+        - keepalived
+      failed_when: false

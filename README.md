@@ -68,6 +68,12 @@ A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and
 │   │   ├── scenario-1-unique-clients/ # Dedicated 1:1 webservers for isolated client tenants
 │   │   ├── scenario-2-pooled-webservers/ # High-availability N:1 pooled webservers with round-robin
 │   │   └── scenario-3-hybrid/       # Clustered HA core site coexisting with dedicated tenant backends
+│   ├── freeipa/                     # FreeIPA standup & existing enterprise domain enrollment examples
+│   │   ├── standup_freeipa_cluster.yml # Standalone cluster with dedicated FreeIPA server
+│   │   └── enroll_existing_freeipa.yml # Enrolling nodes into an existing FreeIPA / Red Hat IdM domain
+│   ├── internal-tls/                # Zero-Trust Internal CA & mTLS reference configuration examples
+│   │   ├── enable_internal_tls_vars.yml # Complete proxy & backend internal TLS variable reference
+│   │   └── README.md                # Setup, succession failover & verification guide
 │   ├── alertmanager/                # Drop-in Alertmanager configuration templates
 │   │   ├── alertmanager-slack.yml   # Slack webhook notifications with channel routing
 │   │   ├── alertmanager-pagerduty.yml # PagerDuty Events API v2 on-call escalation
@@ -85,10 +91,17 @@ A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and
 │   │   ├── aws_ec2.yml              # AWS EC2 dynamic inventory plugin configuration
 │   │   ├── gcp_compute.yml          # GCP dynamic inventory plugin configuration
 │   │   └── azure_rm.yml             # Microsoft Azure dynamic inventory plugin configuration
-│   └── provisioning/                # Cloud VM and network provisioning automation
+│   └── provisioning/                # Cloud VM, managed service & network provisioning automation
 │       ├── provision_aws.yml        # Ansible playbook provisioning AWS VPC, subnets & EC2 instances
+│       ├── provision_aws_rds_postgresql.yml # Managed AWS RDS PostgreSQL provisioning
+│       ├── provision_aws_elasticache_redis.yml # Managed AWS ElastiCache Redis provisioning
+│       ├── provision_aws_amazon_mq.yml # Managed AWS Amazon MQ RabbitMQ provisioning
 │       ├── provision_gcp.yml        # Ansible playbook provisioning GCP VPC, firewalls & VMs
+│       ├── provision_gcp_cloudsql_postgresql.yml # Managed GCP Cloud SQL PostgreSQL provisioning
+│       ├── provision_gcp_memorystore_redis.yml # Managed GCP Memorystore Redis provisioning
 │       ├── provision_azure.yml      # Ansible playbook provisioning Azure VNet, NSG & VMs
+│       ├── provision_azure_postgresql.yml # Managed Azure Database for PostgreSQL provisioning
+│       ├── provision_azure_cache_redis.yml # Managed Azure Cache for Redis provisioning
 │       ├── provision_oci.yml        # Ansible playbook provisioning OCI VCN, subnets & VMs
 │       ├── provision_openstack.yml  # Ansible playbook provisioning OpenStack networks & Nova VMs
 │       ├── deprovision_*.yml        # Teardown playbooks for clean resource removal
@@ -106,7 +119,8 @@ A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and
 │   ├── security/                    # Host security, UFW rate limiting & SSH hardening (MaxAuthTries 10)
 │   ├── admin_users/                 # Per-user provisioning, dotfiles & venv tooling
 │   ├── keepalived/                  # Bare metal HA with VRRP floating IP & health check scripts
-│   ├── node_exporter/               # Host metrics telemetry agent (port 9100) across all nodes
+│   ├── internal_ca_client/          # Fleet-wide Internal CA trust store & 90-day leaf cert enrollment
+│   ├── node_exporter/               # Host metrics telemetry agent (port 9100, optional HTTPS) across all nodes
 │   ├── proxy/                       # HAProxy role (terminates SSL, Coraza WAF, routes 1:1 to backends)
 │   ├── webserver/                   # Backend Nginx role (generic 404 & internal TLS encryption)
 │   ├── database/                    # Optional Database role (PostgreSQL preferred & MySQL engines)

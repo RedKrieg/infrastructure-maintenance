@@ -95,6 +95,8 @@ frontend fe_http
     # Redirect all normal HTTP traffic to HTTPS
     http-request redirect scheme https unless is_acme_challenge
 
+{% set has_stats_whitelist = (haproxy_enable_stats | default(true) | bool) and ((haproxy_stats_allowed_ips is defined and haproxy_stats_allowed_ips | length > 0) or (admin_trusted_cidrs is defined and admin_trusted_cidrs | length > 0) or (groups['monitoring'] is defined and groups['monitoring'] | length > 0)) %}
+
 # --- HTTPS Frontend (Port {{ haproxy_bind_https_port }}) ---
 # SSL is decoded and terminated here across all certificates in {{ haproxy_certs_dir }}
 frontend fe_https
@@ -162,10 +164,13 @@ frontend fe_https
 {% for host in tp_hosts %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set fqdn = hostvars[host]['external_fqdn'] | default(teleport_fqdn | default('teleport.' ~ domain_name)) %}
-    # Route for Teleport Web UI / Proxy: {{ fqdn }} (Protected by Admin ACL)
+    # Route for Teleport Web UI / Proxy: {{ fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
+
     acl is_{{ clean_name }} hdr(host) -i {{ fqdn }}
+{% if has_stats_whitelist %}
     acl is_allowed_admin_tp src -f /etc/haproxy/stats_whitelist.lst
     http-request deny deny_status 403 if is_{{ clean_name }} !is_allowed_admin_tp
+{% endif %}
     use_backend be_{{ clean_name }} if is_{{ clean_name }}
 {% endfor %}
 {% endif %}
@@ -175,10 +180,13 @@ frontend fe_https
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
 {% set monitoring_host_fqdn = hostvars[host]['monitoring_fqdn'] | default(monitoring_fqdn | default('monitoring.' ~ domain_name)) %}
-    # Route for Grafana & Monitoring UI: {{ grafana_host_fqdn }} / {{ monitoring_host_fqdn }} (Protected by Admin ACL)
+    # Route for Grafana & Monitoring UI: {{ grafana_host_fqdn }} / {{ monitoring_host_fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
+
     acl is_{{ clean_name }} hdr(host) -i {{ grafana_host_fqdn }} {{ monitoring_host_fqdn }}
+{% if has_stats_whitelist %}
     acl is_allowed_admin_mon src -f /etc/haproxy/stats_whitelist.lst
     http-request deny deny_status 403 if is_{{ clean_name }} !is_allowed_admin_mon
+{% endif %}
     use_backend be_{{ clean_name }} if is_{{ clean_name }}
 {% endfor %}
 {% endif %}
@@ -188,11 +196,30 @@ frontend fe_https
 {% for host in rmq_hosts %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set rmq_host_fqdn = hostvars[host]['rabbitmq_mgmt_fqdn'] | default(rabbitmq_mgmt_fqdn | default('rabbitmq.' ~ domain_name)) %}
-    # Route for RabbitMQ Management UI: {{ rmq_host_fqdn }} (Protected by Admin ACL)
+    # Route for RabbitMQ Management UI: {{ rmq_host_fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
+
     acl is_{{ clean_name }}_rmq hdr(host) -i {{ rmq_host_fqdn }}
+{% if has_stats_whitelist %}
     acl is_allowed_admin_rmq src -f /etc/haproxy/stats_whitelist.lst
     http-request deny deny_status 403 if is_{{ clean_name }}_rmq !is_allowed_admin_rmq
+{% endif %}
     use_backend be_{{ clean_name }}_rmq if is_{{ clean_name }}_rmq
+{% endfor %}
+{% endif %}
+
+{% set ipa_hosts = groups['freeipa_servers'] | default([]) %}
+{% if ipa_hosts | length > 0 %}
+{% for host in ipa_hosts %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set ipa_host_fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['freeipa_server_fqdn'] | default(freeipa_server_fqdn | default('ipa.' ~ (freeipa_domain | default(domain_name | default('example.com')))))) %}
+    # Route for FreeIPA Identity Web UI: {{ ipa_host_fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
+
+    acl is_{{ clean_name }}_ipa hdr(host) -i {{ ipa_host_fqdn }}
+{% if has_stats_whitelist %}
+    acl is_allowed_admin_ipa src -f /etc/haproxy/stats_whitelist.lst
+    http-request deny deny_status 403 if is_{{ clean_name }}_ipa !is_allowed_admin_ipa
+{% endif %}
+    use_backend be_{{ clean_name }}_ipa if is_{{ clean_name }}_ipa
 {% endfor %}
 {% endif %}
 
@@ -324,6 +351,24 @@ backend be_{{ clean_name }}_rmq
 {% endfor %}
 {% endif %}
 
+# --- Dedicated FreeIPA Identity Web UI Backends ---
+{% set ipa_hosts = groups['freeipa_servers'] | default([]) %}
+{% if ipa_hosts | length > 0 %}
+{% for host in ipa_hosts %}
+{% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
+{% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
+{% set ipa_host_fqdn = hostvars[host]['external_fqdn'] | default(hostvars[host]['freeipa_server_fqdn'] | default(freeipa_server_fqdn | default('ipa.' ~ (freeipa_domain | default(domain_name | default('example.com')))))) %}
+backend be_{{ clean_name }}_ipa
+    mode http
+    balance roundrobin
+    option forwardfor
+    http-request set-header Host {{ ipa_host_fqdn }}
+    http-request set-header X-Forwarded-Proto https
+    # FreeIPA Web UI listens on HTTPS port 443 (Dogtag PKI cert)
+    server {{ host }} {{ target_ip }}:443 ssl verify none check inter 5s fall 3 rise 2
+{% endfor %}
+{% endif %}
+
 # --- Dedicated Teleport SSH Proxy Frontend (Port 3023 TCP) ---
 {% set tp_hosts = groups['teleport_servers'] | default(groups['teleport'] | default([])) %}
 {% if tp_hosts | length > 0 %}
@@ -336,8 +381,10 @@ frontend fe_teleport_ssh
     mode tcp
     option tcplog
     timeout client 1h
+{% if has_stats_whitelist %}
     acl is_allowed_admin_tcp src -f /etc/haproxy/stats_whitelist.lst
     tcp-request connection reject unless is_allowed_admin_tcp
+{% endif %}
     default_backend be_teleport_ssh
 
 backend be_teleport_ssh

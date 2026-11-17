@@ -66,6 +66,9 @@ The `rolling_maintenance.yml` playbook automates zero-downtime maintenance by co
 10. **Monitoring & Telemetry Tier Maintenance**:
    - Monitoring instances are updated sequentially (`serial: 1`).
    - Verifies Prometheus `/-/healthy` and Grafana `/api/health` HTTP endpoints respond with HTTP 200 before proceeding.
+11. **Teleport Access Gateway Tier Maintenance**:
+   - Teleport auth/proxy gateways are updated sequentially (`serial: 1`).
+   - Reboots only if kernel updates require it; ensures `teleport` is active and verifies responsiveness with `tctl status` before proceeding.
 
 ---
 

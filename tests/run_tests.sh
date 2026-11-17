@@ -105,16 +105,16 @@ done
 
 echo ""
 echo "================================================================="
-echo " 6. Jinja2, Python, JSON & Alertmanager YAML Validation"
+echo " 6. Jinja2, Python, JSON, YAML & Markdown Link Validation"
 echo "================================================================="
 python3 - <<'EOF'
-import glob, json, py_compile, sys
+import glob, json, os, py_compile, re, sys
 import jinja2, yaml
 
 errors = []
 env = jinja2.Environment()
 
-j2_files = sorted(glob.glob("roles/**/*.j2", recursive=True))
+j2_files = sorted(glob.glob("**/*.j2", recursive=True))
 for p in j2_files:
     with open(p, encoding="utf-8") as f:
         try:
@@ -140,14 +140,34 @@ for p in json_files:
             errors.append(f"JSON parse error in {p}: {e}")
 print(f"  [✓] Validated {len(json_files)} JSON files")
 
-am_files = sorted(glob.glob("examples/alertmanager/*.yml", recursive=True))
-for p in am_files:
+yml_files = sorted(set(
+    glob.glob("**/*.yml", recursive=True)
+    + glob.glob("**/*.yaml", recursive=True)
+    + glob.glob(".github/**/*.yml", recursive=True)
+))
+for p in yml_files:
     with open(p, encoding="utf-8") as f:
         try:
-            yaml.safe_load(f)
+            list(yaml.safe_load_all(f))
         except Exception as e:
             errors.append(f"YAML parse error in {p}: {e}")
-print(f"  [✓] Validated {len(am_files)} Alertmanager YAML files")
+print(f"  [✓] Validated {len(yml_files)} YAML files")
+
+link_re = re.compile(r"\[[^\]]+\]\(([^)#]*)(?:#[^)]*)?\)")
+md_files = sorted(glob.glob("**/*.md", recursive=True))
+checked_links = 0
+for md in md_files:
+    with open(md, encoding="utf-8") as f:
+        content = f.read()
+    for m in link_re.finditer(content):
+        target = m.group(1).strip()
+        if not target or target.startswith(("http://", "https://", "mailto:", "conversation://", "file://")):
+            continue
+        checked_links += 1
+        resolved = os.path.normpath(os.path.join(os.path.dirname(md), target))
+        if not os.path.exists(resolved):
+            errors.append(f"Broken relative link in {md}: {target} -> {resolved}")
+print(f"  [✓] Verified {checked_links} relative links across {len(md_files)} Markdown files")
 
 if errors:
     for err in errors:

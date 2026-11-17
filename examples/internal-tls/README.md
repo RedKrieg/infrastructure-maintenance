@@ -44,12 +44,12 @@ To prevent multiple proxy nodes from renewing the root CA at the same time:
 Ansible plays are engineered to be strictly non-destructive on subsequent runs:
 - **Root CA**: Generated on `proxy-01` using ECDSA P-384 (`secp384r1` with SHA-384) only if `/etc/ssl/internal/ca/cluster-ca.crt` is missing. Existing or auto-renewed CAs are never regenerated.
 - **Cluster Sync**: CA keys and certificates are slurped and distributed only to uninitialized proxies lacking CA files. Existing proxies retain their active certificates.
-- **Webserver Certificates**: Initial signing via `/usr/local/bin/renew-internal-cert.sh --force` runs only if `/etc/ssl/internal/webserver.crt` does not exist. Subsequent Ansible runs skip certificate generation entirely.
+- **Webserver Certificates**: Initial signing via `/usr/local/bin/renew-internal-cert.sh --force` runs only if `/etc/ssl/internal/server.crt` does not exist. Subsequent Ansible runs skip certificate generation entirely.
 - **Trust Stores**: HAProxy backend CA files are maintained from the local proxy's active CA copy.
 
 ### 3. Rank-Based Client Failover
 Backend webservers execute `/usr/local/bin/renew-internal-cert.sh` daily via systemd timer:
-- Inspects `/etc/ssl/internal/webserver.crt`. If remaining validity is $\le 14$ days, renewal initiates.
+- Inspects `/etc/ssl/internal/server.crt`. If remaining validity is $\le 14$ days, renewal initiates.
 - Submits CSR containing full SANs to `http://<proxy-ip>:8444/sign`.
 - If `proxy-01` fails to respond or reports degraded health, the client automatically falls back to `proxy-02`, then `proxy-03`.
 - On successful signature, the certificate is updated, latest CA is fetched, and Nginx reloads gracefully.

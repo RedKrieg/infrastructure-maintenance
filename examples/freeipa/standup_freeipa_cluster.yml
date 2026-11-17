@@ -28,9 +28,6 @@
     - role: admin_users
       tags: [admin_users, users]
 
-    - role: node_exporter
-      tags: [node_exporter, monitoring]
-
 # ------------------------------------------------------------------------------
 # Play 2: Proxy Ingress Foundation & Cluster Internal CA Authority
 # ------------------------------------------------------------------------------
@@ -46,6 +43,24 @@
       vars:
         proxy_stage: "ca_foundation"
       tags: [proxy, haproxy, ssl, internal_ca]
+
+# ------------------------------------------------------------------------------
+# Play 2.5: Fleet-Wide Internal CA Enrollment & Zero-Trust TLS
+# ------------------------------------------------------------------------------
+- name: Enroll Fleet Nodes with Cluster Internal CA & Zero-Trust TLS
+  hosts: all
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: internal_ca_client
+      when: enable_internal_tls | default(false) | bool or webserver_enable_ssl | default(false) | bool
+      tags: [internal_ca_client, internal_tls, ssl, tls, ca]
+
+    - role: node_exporter
+      tags: [node_exporter, monitoring]
 
 # ------------------------------------------------------------------------------
 # Play 3: Backend Webservers (Zero-Trust Internal TLS)

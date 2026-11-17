@@ -59,8 +59,8 @@ internal_cert_renewal_threshold_days: 14
 
 # Directory for internal certificate and key storage
 webserver_ssl_cert_dir: "/etc/ssl/internal"
-webserver_ssl_cert: "/etc/ssl/internal/webserver.crt"
-webserver_ssl_key: "/etc/ssl/internal/webserver.key"
-webserver_ssl_ca_cert: "/etc/ssl/internal/cluster-ca.crt"
+webserver_ssl_cert: "/etc/ssl/internal/server.crt"
+webserver_ssl_key: "/etc/ssl/internal/server.key"
+webserver_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
 webserver_ssl_curve: "secp384r1"
 webserver_ssl_digest: "sha384"

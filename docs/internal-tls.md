@@ -93,12 +93,12 @@ internal_cert_renewal_threshold_days: 14
 
 ### 2. In `roles/webserver/defaults/main.yml` (or `group_vars/webservers.yml`):
 ```yaml
-# Enable HTTPS on backend Nginx instances
-webserver_enable_ssl: true
+# Enable HTTPS on backend Nginx instances (inherits from global enable_internal_tls)
+webserver_enable_ssl: "{{ enable_internal_tls | default(false) | bool }}"
 webserver_ssl_cert_dir: "/etc/ssl/internal"
-webserver_ssl_cert: "/etc/ssl/internal/webserver.crt"
-webserver_ssl_key: "/etc/ssl/internal/webserver.key"
-webserver_ssl_ca_cert: "/etc/ssl/internal/cluster-ca.crt"
+webserver_ssl_cert: "/etc/ssl/internal/server.crt"
+webserver_ssl_key: "/etc/ssl/internal/server.key"
+webserver_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
 
 # Automated Certificate Renewal Configuration (ECDSA P-384)
 webserver_ssl_curve: "secp384r1"
@@ -118,8 +118,8 @@ vault_internal_ca_token: "YourSecretInternalCAToken2026!"
 ## Autonomous Lifecycle & Failover Mechanisms
 
 ### 1. Leaf Certificate Auto-Renewal & Proxy Failover (`renew-internal-cert.sh`)
-Backend webservers execute `/usr/local/bin/renew-internal-cert.sh` daily via the `renew-internal-cert.timer` systemd timer:
-1. **Threshold Assessment**: Evaluates `/etc/ssl/internal/webserver.crt`. If remaining validity is $\le 14$ days (or cert is missing), renewal initiates.
+Backend webservers and fleet nodes execute `/usr/local/bin/renew-internal-cert.sh` via the `renew-internal-cert.timer` systemd timer:
+1. **Threshold Assessment**: Evaluates `/etc/ssl/internal/server.crt`. If remaining validity is $\le 14$ days (or cert is missing), renewal initiates.
 2. **CSR Generation**: Generates an ECDSA P-384 private key (`secp384r1`, if missing) and CSR containing complete Subject Alternative Names signed with SHA-384:
    ```
    DNS:web1.example.com, DNS:web-01, IP:10.0.1.11
@@ -133,7 +133,7 @@ Backend webservers execute `/usr/local/bin/renew-internal-cert.sh` daily via the
    curl -s -X POST -H "Content-Type: application/json" -d '{"csr": "...", "hostname": "web-01", "token": "..."}' http://10.0.1.10:8444/sign
    ```
    - If `proxy-01` is offline or fails, the client logs a warning and immediately falls back to `proxy-02`.
-   - Once signed, the certificate is installed at `/etc/ssl/internal/webserver.crt`, the latest CA root is fetched from `/ca.crt`, and Nginx is reloaded gracefully (`systemctl reload nginx`).
+   - Once signed, the certificate is installed at `/etc/ssl/internal/server.crt`, the latest CA root is fetched from `/ca.crt` to `/etc/ssl/certs/internal-ca.crt` and updated in the OS trust store, and active TLS services (Nginx, Rsyslog, Node Exporter) are reloaded gracefully.
 
 ### 2. Root CA Auto-Renewal & Simultaneous Renewal Prevention (`renew-internal-ca.sh`)
 To guarantee that proxies never renew the root CA simultaneously or create divergent certificates, renewal employs a multi-tiered authority and watchdog model:
@@ -173,9 +173,9 @@ Because certificate renewals occur continuously and autonomously on systemd time
    - CA slurping and distribution across proxies runs strictly for uninitialized nodes lacking CA files (`when: not internal_ca_stat.stat.exists`). Existing proxies keep their active certificates untouched.
    - HAProxy's trust copy (`/etc/haproxy/certs/internal-ca.crt`) is maintained locally from the host's own active `/etc/ssl/internal/ca/cluster-ca.crt`.
 
-2. **Webserver Leaf Certificate Preservation**:
-   - In `roles/webserver/tasks/tls.yml`, Ansible inspects `/etc/ssl/internal/webserver.crt` via `stat`.
-   - Initial CA signing (`/usr/local/bin/renew-internal-cert.sh --force`) executes strictly `when: not internal_cert_stat.stat.exists`.
+2. **Webserver & Node Leaf Certificate Preservation**:
+   - In `roles/internal_ca_client/tasks/main.yml` and `roles/webserver/tasks/tls.yml`, Ansible inspects `/etc/ssl/internal/server.crt` via `stat`.
+   - Initial CA signing (`/usr/local/bin/renew-internal-cert.sh --force`) executes strictly `when: not internal_cert_stat.stat.exists` (or `not node_cert_stat.stat.exists`).
    - If a valid or auto-renewed certificate is already present, Ansible skips certificate issuance entirely.
 
 3. **Zero Configuration Drift or Clashes**:
@@ -187,7 +187,7 @@ Because certificate renewals occur continuously and autonomously on systemd time
 
 To prevent false-positive HAProxy health check drops when standing up new servers or spinning up clusters:
 1. **Stage 1 (Proxies)**: Initial CA root is generated on `proxy-01`, replicated to all peer proxies, and the `internal-ca-signer` daemon starts on port `8444`.
-2. **Stage 2 (Webservers)**: Webservers request their initial certificate from the active proxy CA, establish `/etc/ssl/internal/webserver.crt`, and start Nginx on port `443`.
+2. **Stage 2 (Fleet & Webservers)**: Cluster nodes and webservers request their initial certificate from the active proxy CA, establish `/etc/ssl/internal/server.crt`, and start Nginx on port `443`.
 3. **Stage 3 (Proxies)**: HAProxy is configured with `ssl verify required ca-file /etc/haproxy/certs/internal-ca.crt` and starts/reloads.
 
 Because backend webservers are already serving valid HTTPS when HAProxy begins health checks, upstream verification passes on the very first probe with zero dropped client connections.
@@ -220,10 +220,10 @@ curl -s http://10.0.1.10:8444/ca.crt | openssl x509 -text -noout
 ```
 
 ### 2. Verify Client Certificate Expiration & Renewal
-On a backend webserver:
+On any fleet node or backend webserver:
 ```bash
 # Check current certificate expiration
-openssl x509 -enddate -noout -in /etc/ssl/internal/webserver.crt
+openssl x509 -enddate -noout -in /etc/ssl/internal/server.crt
 
 # Force manual renewal test against proxy succession line
 /usr/local/bin/renew-internal-cert.sh --force

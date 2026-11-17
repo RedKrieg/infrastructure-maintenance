@@ -197,9 +197,9 @@
         msg: ">>> Proxy {{ inventory_hostname }} successfully updated and returned to service <<<"
 
 # ------------------------------------------------------------------------------
-# Play 3: Rolling Maintenance across Database Tier (Serial: 1)
+# Play 3a: Rolling Maintenance across Database Read Replicas First (Serial: 1)
 # ------------------------------------------------------------------------------
-- name: Zero-Downtime Rolling Maintenance for Database Tier
+- name: Zero-Downtime Rolling Maintenance for Database Read Replicas
   hosts: databases
   serial: 1
   become: true
@@ -207,73 +207,158 @@
   vars:
     force_reboot: false
   tasks:
-    - name: Display database node maintenance initiation
-      ansible.builtin.debug:
-        msg: ">>> Starting rolling maintenance on database node {{ inventory_hostname }} (Role: {{ db_role | default('standalone') }}) <<<"
+    - name: Maintain database read replica nodes before primary
+      when: (db_role | default('standalone')) == 'replica'
+      block:
+        - name: Display database replica maintenance initiation
+          ansible.builtin.debug:
+            msg: ">>> Starting rolling maintenance on database replica {{ inventory_hostname }} <<<"
 
-    - name: Update APT package cache
-      ansible.builtin.apt:
-        update_cache: true
-      register: db_apt_cache
-      retries: 3
-      delay: 5
-      until: db_apt_cache is succeeded
+        - name: Update APT package cache on replica
+          ansible.builtin.apt:
+            update_cache: true
+          register: db_rep_apt_cache
+          retries: 3
+          delay: 5
+          until: db_rep_apt_cache is succeeded
 
-    - name: Apply security and OS package updates (preserving configurations)
-      ansible.builtin.apt:
-        upgrade: dist
-        dpkg_options: 'force-confdef,force-confold'
+        - name: Apply security and OS package updates on replica (preserving configurations)
+          ansible.builtin.apt:
+            upgrade: dist
+            dpkg_options: 'force-confdef,force-confold'
 
-    - name: Check if kernel reboot is required
-      ansible.builtin.stat:
-        path: /var/run/reboot-required
-      register: db_reboot_file
+        - name: Check if kernel reboot is required on replica
+          ansible.builtin.stat:
+            path: /var/run/reboot-required
+          register: db_rep_reboot_file
 
-    - name: Reboot database node if updates require it
-      ansible.builtin.reboot:
-        msg: "Rebooting database node {{ inventory_hostname }} following rolling system upgrades"
-        connect_timeout: 10
-        reboot_timeout: 300
-        pre_reboot_delay: 2
-        post_reboot_delay: 5
-      when: db_reboot_file.stat.exists or (force_reboot | bool)
+        - name: Reboot database replica if updates require it
+          ansible.builtin.reboot:
+            msg: "Rebooting database replica {{ inventory_hostname }} following rolling system upgrades"
+            connect_timeout: 10
+            reboot_timeout: 300
+            pre_reboot_delay: 2
+            post_reboot_delay: 5
+          when: db_rep_reboot_file.stat.exists or (force_reboot | bool)
 
-    - name: Ensure database service is active
-      ansible.builtin.systemd:
-        name: "{{ 'postgresql' if (db_engine | default('postgresql') == 'postgresql') else 'mysql' }}"
-        state: started
-        enabled: true
+        - name: Ensure database service is active on replica
+          ansible.builtin.systemd:
+            name: "{{ 'postgresql' if (db_engine | default('postgresql') == 'postgresql') else 'mysql' }}"
+            state: started
+            enabled: true
 
-    - name: Verify PostgreSQL responsiveness with pg_isready
-      ansible.builtin.command:
-        cmd: "pg_isready -h 127.0.0.1 -p {{ db_port | default(5432) }}"
-      changed_when: false
-      when: db_engine | default('postgresql') == 'postgresql'
-      retries: 10
-      delay: 3
-      register: pg_ready_check
-      until: pg_ready_check.rc == 0
+        - name: Verify PostgreSQL replica responsiveness with pg_isready
+          ansible.builtin.command:
+            cmd: "pg_isready -h 127.0.0.1 -p {{ db_port | default(5432) }}"
+          changed_when: false
+          when: db_engine | default('postgresql') == 'postgresql'
+          retries: 10
+          delay: 3
+          register: pg_rep_ready_check
+          until: pg_rep_ready_check.rc == 0
 
-    - name: Verify MySQL responsiveness with mysqladmin ping
-      ansible.builtin.command:
-        cmd: "mysqladmin ping"
-      changed_when: false
-      when: db_engine | default('postgresql') == 'mysql'
-      retries: 10
-      delay: 3
-      register: mysql_ready_check
-      until: mysql_ready_check.rc == 0
+        - name: Verify MySQL replica responsiveness with mysqladmin ping
+          ansible.builtin.command:
+            cmd: "mysqladmin ping"
+          changed_when: false
+          when: db_engine | default('postgresql') == 'mysql'
+          retries: 10
+          delay: 3
+          register: mysql_rep_ready_check
+          until: mysql_rep_ready_check.rc == 0
 
-    - name: Ensure PgBouncer connection pooler is active (if enabled)
-      ansible.builtin.systemd:
-        name: pgbouncer
-        state: started
-        enabled: true
-      when: enable_pgbouncer | default(false) | bool
+        - name: Ensure PgBouncer connection pooler is active on replica (if enabled)
+          ansible.builtin.systemd:
+            name: pgbouncer
+            state: started
+            enabled: true
+          when: enable_pgbouncer | default(false) | bool
 
-    - name: Confirm database node is healthy and restored
-      ansible.builtin.debug:
-        msg: ">>> Database node {{ inventory_hostname }} successfully updated and verified <<<"
+        - name: Confirm database replica is healthy and restored
+          ansible.builtin.debug:
+            msg: ">>> Database replica {{ inventory_hostname }} successfully updated and verified <<<"
+
+# ------------------------------------------------------------------------------
+# Play 3b: Rolling Maintenance across Database Primary / Standalone Nodes (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Zero-Downtime Rolling Maintenance for Database Primary / Standalone Tier
+  hosts: databases
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Maintain primary or standalone database nodes
+      when: (db_role | default('standalone')) != 'replica'
+      block:
+        - name: Display database node maintenance initiation
+          ansible.builtin.debug:
+            msg: ">>> Starting rolling maintenance on database node {{ inventory_hostname }} (Role: {{ db_role | default('standalone') }}) <<<"
+
+        - name: Update APT package cache
+          ansible.builtin.apt:
+            update_cache: true
+          register: db_apt_cache
+          retries: 3
+          delay: 5
+          until: db_apt_cache is succeeded
+
+        - name: Apply security and OS package updates (preserving configurations)
+          ansible.builtin.apt:
+            upgrade: dist
+            dpkg_options: 'force-confdef,force-confold'
+
+        - name: Check if kernel reboot is required
+          ansible.builtin.stat:
+            path: /var/run/reboot-required
+          register: db_reboot_file
+
+        - name: Reboot database node if updates require it
+          ansible.builtin.reboot:
+            msg: "Rebooting database node {{ inventory_hostname }} following rolling system upgrades"
+            connect_timeout: 10
+            reboot_timeout: 300
+            pre_reboot_delay: 2
+            post_reboot_delay: 5
+          when: db_reboot_file.stat.exists or (force_reboot | bool)
+
+        - name: Ensure database service is active
+          ansible.builtin.systemd:
+            name: "{{ 'postgresql' if (db_engine | default('postgresql') == 'postgresql') else 'mysql' }}"
+            state: started
+            enabled: true
+
+        - name: Verify PostgreSQL responsiveness with pg_isready
+          ansible.builtin.command:
+            cmd: "pg_isready -h 127.0.0.1 -p {{ db_port | default(5432) }}"
+          changed_when: false
+          when: db_engine | default('postgresql') == 'postgresql'
+          retries: 10
+          delay: 3
+          register: pg_ready_check
+          until: pg_ready_check.rc == 0
+
+        - name: Verify MySQL responsiveness with mysqladmin ping
+          ansible.builtin.command:
+            cmd: "mysqladmin ping"
+          changed_when: false
+          when: db_engine | default('postgresql') == 'mysql'
+          retries: 10
+          delay: 3
+          register: mysql_ready_check
+          until: mysql_ready_check.rc == 0
+
+        - name: Ensure PgBouncer connection pooler is active (if enabled)
+          ansible.builtin.systemd:
+            name: pgbouncer
+            state: started
+            enabled: true
+          when: enable_pgbouncer | default(false) | bool
+
+        - name: Confirm database node is healthy and restored
+          ansible.builtin.debug:
+            msg: ">>> Database node {{ inventory_hostname }} successfully updated and verified <<<"
 
 # ------------------------------------------------------------------------------
 # Play 4: Rolling Maintenance across Redis Cache Tier (Serial: 1)
@@ -540,4 +625,66 @@
     - name: Confirm Monitoring node is healthy and restored
       ansible.builtin.debug:
         msg: ">>> Monitoring node {{ inventory_hostname }} successfully updated and verified <<<"
+
+# ------------------------------------------------------------------------------
+# Play 8: Rolling Maintenance across Teleport Access Gateway Tier (Serial: 1)
+# ------------------------------------------------------------------------------
+- name: Rolling Maintenance for Teleport Zero-Trust Access Gateway Tier
+  hosts: teleport_servers
+  serial: 1
+  become: true
+  gather_facts: true
+  vars:
+    force_reboot: false
+  tasks:
+    - name: Display Teleport node maintenance initiation
+      ansible.builtin.debug:
+        msg: ">>> Starting rolling maintenance on Teleport gateway {{ inventory_hostname }} <<<"
+
+    - name: Update APT package cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: tp_apt_cache
+      retries: 3
+      delay: 5
+      until: tp_apt_cache is succeeded
+
+    - name: Apply security and OS package updates (preserving configurations)
+      ansible.builtin.apt:
+        upgrade: dist
+        dpkg_options: 'force-confdef,force-confold'
+
+    - name: Check if kernel reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: tp_reboot_file
+
+    - name: Reboot Teleport gateway if updates require it
+      ansible.builtin.reboot:
+        msg: "Rebooting Teleport gateway {{ inventory_hostname }} following rolling system upgrades"
+        connect_timeout: 10
+        reboot_timeout: 300
+        pre_reboot_delay: 2
+        post_reboot_delay: 5
+      when: tp_reboot_file.stat.exists or (force_reboot | bool)
+
+    - name: Ensure Teleport service is active
+      ansible.builtin.systemd:
+        name: teleport
+        state: started
+        enabled: true
+
+    - name: Verify Teleport gateway responsiveness
+      ansible.builtin.command:
+        cmd: tctl status
+      changed_when: false
+      retries: 10
+      delay: 3
+      register: tp_status_res
+      until: tp_status_res.rc == 0
+      failed_when: false
+
+    - name: Confirm Teleport gateway is healthy and restored
+      ansible.builtin.debug:
+        msg: ">>> Teleport gateway {{ inventory_hostname }} successfully updated and verified <<<"
 
