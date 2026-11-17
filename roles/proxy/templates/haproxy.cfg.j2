@@ -163,7 +163,7 @@ frontend fe_https
 {% if tp_hosts | length > 0 %}
 {% for host in tp_hosts %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set fqdn = hostvars[host]['external_fqdn'] | default(teleport_fqdn | default('teleport.' ~ domain_name)) %}
+{% set fqdn = hostvars[host]['external_fqdn'] | default(teleport_fqdn | default('teleport.' ~ (domain_name | default('example.com')))) %}
     # Route for Teleport Web UI / Proxy: {{ fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
 
     acl is_{{ clean_name }} hdr(host) -i {{ fqdn }}
@@ -178,8 +178,8 @@ frontend fe_https
 {% if groups['monitoring'] is defined and groups['monitoring'] | length > 0 %}
 {% for host in groups['monitoring'] %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
-{% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
-{% set monitoring_host_fqdn = hostvars[host]['monitoring_fqdn'] | default(monitoring_fqdn | default('monitoring.' ~ domain_name)) %}
+{% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ (domain_name | default('example.com')))) %}
+{% set monitoring_host_fqdn = hostvars[host]['monitoring_fqdn'] | default(monitoring_fqdn | default('monitoring.' ~ (domain_name | default('example.com')))) %}
     # Route for Grafana & Monitoring UI: {{ grafana_host_fqdn }} / {{ monitoring_host_fqdn }}{% if has_stats_whitelist %} (Protected by Admin ACL){% endif %}
 
     acl is_{{ clean_name }} hdr(host) -i {{ grafana_host_fqdn }} {{ monitoring_host_fqdn }}
@@ -313,7 +313,7 @@ backend be_{{ clean_name }}
 {% for host in groups['monitoring'] %}
 {% set clean_name = host | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set target_ip = hostvars[host]['internal_ip'] | default(hostvars[host]['ansible_host'] | default(host)) %}
-{% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ domain_name)) %}
+{% set grafana_host_fqdn = hostvars[host]['grafana_fqdn'] | default(grafana_fqdn | default('grafana.' ~ (domain_name | default('example.com')))) %}
 {% set grafana_tls = hostvars[host]['grafana_enable_tls'] | default(enable_internal_tls | default(false)) | bool %}
 backend be_{{ clean_name }}
     mode http

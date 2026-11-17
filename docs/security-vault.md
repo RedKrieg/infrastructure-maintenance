@@ -6,12 +6,11 @@ This project integrates **Ansible Vault** to secure sensitive credentials—such
 
 ## 1. Vault Directory Structure
 
-Global defaults and encrypted vault variables are centralized in `group_vars/all/`, which Ansible automatically loads for all hosts and roles:
+Global defaults and encrypted vault variables are centralized in `group_vars/all/vault.yml`, which Ansible automatically loads for all hosts and roles:
 
 ```
 group_vars/
 ├── all/
-│   ├── common.yml           # Non-secret cluster SSOT defaults (domain, FQDNs, TLS toggle)
 │   ├── vault.yml            # Active secrets (encrypt with ansible-vault)
 │   └── vault.example.yml    # Unencrypted reference template
 ├── proxies.yml              # Cluster-level proxy overrides
