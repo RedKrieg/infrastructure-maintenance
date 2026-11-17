@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for Cluster Internal TLS Certificate Renewal
+
+[Timer]
+OnCalendar={{ internal_cert_timer_calendar | default('*-*-* 03,15:00:00') }}
+RandomizedDelaySec={{ internal_cert_timer_random_delay | default('10m') }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

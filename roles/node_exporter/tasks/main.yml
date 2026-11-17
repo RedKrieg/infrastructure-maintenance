@@ -30,11 +30,35 @@
         group: root
         mode: "0755"
 
-    - name: Configure Prometheus node_exporter textfile collector
+    - name: Ensure Prometheus configuration directory exists
+      ansible.builtin.file:
+        path: /etc/prometheus
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: node_exporter_enable_tls | bool
+
+    - name: Deploy Node Exporter TLS web-config file
+      ansible.builtin.copy:
+        dest: "{{ node_exporter_web_config_path }}"
+        content: |
+          tls_server_config:
+            cert_file: {{ node_exporter_ssl_cert }}
+            key_file: {{ node_exporter_ssl_key }}
+            client_ca_file: {{ node_exporter_ca_cert }}
+            client_auth_type: VerifyClientCertIfGiven
+        owner: root
+        group: root
+        mode: "0640"
+      when: node_exporter_enable_tls | bool
+      notify: Restart node_exporter
+
+    - name: Configure Prometheus node_exporter arguments
       ansible.builtin.lineinfile:
         path: /etc/default/prometheus-node-exporter
         regexp: "^ARGS="
-        line: 'ARGS="--collector.textfile.directory=/var/lib/prometheus/node-exporter"'
+        line: 'ARGS="--collector.textfile.directory=/var/lib/prometheus/node-exporter{{ " --web.config.file=" ~ node_exporter_web_config_path if (node_exporter_enable_tls | bool) else "" }}"'
         state: present
         create: true
         mode: "0644"

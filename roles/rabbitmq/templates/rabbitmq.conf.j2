@@ -5,6 +5,16 @@
 # TCP Listeners
 listeners.tcp.default = {{ rabbitmq_amqp_port }}
 
+{% if rabbitmq_enable_tls | default(enable_internal_tls | default(false)) | bool %}
+# Zero-Trust TLS AMQP Listener (Port 5671)
+listeners.ssl.default = {{ rabbitmq_amqp_ssl_port | default(5671) }}
+ssl_options.cacertfile = {{ rabbitmq_ca_cert | default('/etc/ssl/certs/internal-ca.crt') }}
+ssl_options.certfile   = {{ rabbitmq_ssl_cert | default('/etc/ssl/internal/server.crt') }}
+ssl_options.keyfile    = {{ rabbitmq_ssl_key | default('/etc/ssl/internal/server.key') }}
+ssl_options.verify     = verify_peer
+ssl_options.fail_if_no_peer_cert = false
+{% endif %}
+
 # Management Plugin Web Listener
 management.tcp.port = {{ rabbitmq_mgmt_port }}
 

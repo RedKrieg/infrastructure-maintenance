@@ -10,5 +10,29 @@ $ActionResumeRetryCount -1
 $ActionQueueSaveOnShutdown on
 $ActionQueueMaxDiskSpace 1g
 
-# Forward all local logs to the centralized log server via TCP
+{% if logging_enable_tls | bool %}
+# ------------------------------------------------------------------------------
+# Zero-Trust Encrypted Forwarding via GnuTLS and Cluster Internal CA
+# ------------------------------------------------------------------------------
+global(
+    DefaultNetstreamDriver="gtls"
+    DefaultNetstreamDriverCAFile="{{ logging_ca_file }}"
+    DefaultNetstreamDriverCertFile="{{ logging_cert_file }}"
+    DefaultNetstreamDriverKeyFile="{{ logging_key_file }}"
+)
+
+# Forward all local logs via encrypted TLS TCP (Port {{ logging_tls_port }})
+action(
+    type="omfwd"
+    target="{{ logging_server_host }}"
+    port="{{ logging_tls_port }}"
+    protocol="tcp"
+    StreamDriver="gtls"
+    StreamDriverMode="1"
+    StreamDriverAuthMode="x509/certvalid"
+    StreamDriverPermittedPeers=["*"]
+)
+{% else %}
+# Forward all local logs to the centralized log server via standard TCP
 *.* @@{{ logging_server_host }}:{{ logging_port }}
+{% endif %}

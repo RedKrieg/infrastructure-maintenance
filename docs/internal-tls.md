@@ -18,31 +18,53 @@ To satisfy strict Zero-Trust and compliance mandates (e.g., **NIST SP 800-207**,
 ## Traffic Flow & Cryptographic Verification
 
 ```
-[Public Client]
-       │
-       │ HTTPS (Port 443 - Public Let's Encrypt / Wildcard Cert)
-       ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│ Ingress Proxies (proxy-01, proxy-02, proxy-03)                         │
-│   • Terminates Public TLS                                              │
-│   • Evaluates Rate Limiting, WAF (Coraza), and Admin ACL               │
-│   • Hosts Replicated Internal Root CA (/etc/ssl/internal/ca/)          │
-│   • Runs Internal CA Signer Service (:8444, restricted to VPC subnets) │
-│   • Re-encrypts outbound traffic to upstream backends (Port 443)       │
-│   • Validates backend identity: `ssl verify required ca-file ...`      │
-└────────────────────────────────────┬───────────────────────────────────┘
-                                     │
-                                     │ HTTPS (Port 443 - CA-Signed Internal TLS)
-                                     │ Strict Peer Verification (ca-file /etc/haproxy/certs/internal-ca.crt)
-                                     ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│ Backend Webservers (web-01, web-02, web-03)                            │
-│   • Nginx listens on 443 with CA-signed certificate (webserver.crt)    │
-│   • Auto-renewal daemon (/usr/local/bin/renew-internal-cert.sh)        │
-│   • 14-day expiration threshold with automatic proxy failover          │
-│   • Exports expiration telemetry to Prometheus Node Exporter           │
-└────────────────────────────────────────────────────────────────────────┘
+                                  [Public Internet Client]
+                                             │
+                                             │ HTTPS :443 (Public Let's Encrypt / Wildcard Cert)
+                                             ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Ingress Proxies (proxy-01, proxy-02, proxy-03)                                         │
+│   • Terminates Public TLS                                                              │
+│   • Evaluates Rate Limiting, WAF (Coraza), and Admin ACL                               │
+│   • Hosts Replicated Internal Root CA (/etc/ssl/internal/ca/)                          │
+│   • Runs Internal CA Signer Service (:8444, restricted to VPC subnets)                 │
+│   • Re-encrypts outbound traffic to upstream backends (Port 443)                       │
+│   • Validates backend identity: `ssl verify required ca-file ...`                      │
+└───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                            │
+                     ┌──────────────────────┴──────────────────────┐
+                     │ HTTPS :443 (Internal CA-Signed)             │
+                     ▼                                             ▼
+┌────────────────────────────────────────┐   ┌────────────────────────────────────────┐
+│ Backend Webservers (webservers)        │   │ Observability & Identity Tiers         │
+│   • Nginx listens on 443 with CA cert  │   │   • Rsyslog TLS Ingestion (Port 6514)  │
+│   • Automated renewal systemd timer    │   │   • Node Exporter HTTPS (Port 9100)    │
+│   • Zero-Trust Client Cert Auth        │   │   • Grafana HTTPS UI (Port 3000)       │
+└──────────────────┬─────────────────────┘   └────────────────────────────────────────┘
+                   │
+    ┌──────────────┴──────────────┬─────────────────────────────┐
+    │ SQL SSL :5432               │ TLS :6379                   │ AMQP TLS :5671
+    ▼                             ▼                             ▼
+┌───────────────────────┐ ┌───────────────────────┐ ┌───────────────────────┐
+│ Database (PostgreSQL) │ │ In-Memory (Redis)     │ │ Broker (RabbitMQ)     │
+│   • ssl = on          │ │   • tls-port 6379     │ │   • listeners.ssl     │
+│   • CA peer verify    │ │   • CA peer verify    │ │   • CA peer verify    │
+└───────────────────────┘ └───────────────────────┘ └───────────────────────┘
 ```
+
+---
+
+## Fleet-Wide Zero-Trust Architecture (`enable_internal_tls: true`)
+
+When `enable_internal_tls: true` is enabled in `group_vars/all.yml` or passed via command line, the `internal_ca_client` role automatically enrolls **every node across the entire fleet** into the internal PKI:
+1. **OS-Level Trust Anchor**: Installs `/etc/ssl/certs/internal-ca.crt` and updates the Linux system trust store (`/usr/local/share/ca-certificates/cluster-internal-ca.crt` + `update-ca-certificates`). All native Linux tools (`curl`, Python, Go, Java, Rsyslog, Prometheus) automatically trust the internal CA.
+2. **Node Leaf Certificates**: Generates a 90-day ECDSA P-384 leaf certificate (`/etc/ssl/internal/server.crt` and `server.key`) signed by the internal CA with SANs matching the node's hostname, internal IP, and FQDN.
+3. **Automated Lifecycle Management**: Manages automated renewal via `renew-internal-cert.timer` with 14-day pre-expiry triggers and automatic service reloads.
+4. **End-to-End Encrypted Protocols**:
+   * **Central Logging**: Rsyslog forwards system, proxy, and app logs over encrypted TLS on port `6514` (GnuTLS) with CA verification.
+   * **Telemetry Scraping**: Node Exporter exposes metrics over HTTPS (`--web.config.file`) on port `9100`; Prometheus scrapes via `scheme: https` validating against `internal-ca.crt`.
+   * **Database Transit**: PostgreSQL enforces `ssl = on` requiring internal TLS for webserver queries and streaming replication.
+   * **Cache & Queue Transit**: Redis and RabbitMQ bind TLS listeners, securing sessions, caches, and message queues in-flight.
 
 ---
 

@@ -1,0 +1,10 @@
+[Unit]
+Description=Automated Cluster Internal TLS Certificate Renewal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/renew-internal-cert.sh
+StandardOutput=journal
+StandardError=journal

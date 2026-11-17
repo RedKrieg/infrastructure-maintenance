@@ -24,17 +24,40 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
               │   Zone A / Host 1  │ │   Zone B / Host 2  │ │   Zone C / Host 3  │
               │ Primary Cert Node  │ │  Standby Rank 1    │ │  Standby Rank 2    │
               │ HAProxy + acme.sh  │ │ HAProxy + Watchdog │ │ HAProxy + Watchdog │
+              │ Replicated Root CA │ │ Replicated Root CA │ │ Replicated Root CA │
               └──────────┬─────────┘ └──────────┬─────────┘ └──────────┬─────────┘
                          │                      │                      │
                          └──────────────────────┼──────────────────────┘
-                                                │ (Port 80 Plaintext or Port 443 Zero-Trust Internal TLS)
+                                                │ (Zero-Trust Internal TLS :443)
                  ┌──────────────────────────────┼──────────────────────────────┐
                  ▼                              ▼                              ▼
         ┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
         │      web-01      │          │      web-02      │          │      web-03      │
         │ web1.example.com │          │ web2.example.com │          │ web3.example.com │
         │ (Generic 404)    │          │ (Generic 404)    │          │ (Generic 404)    │
-        └──────────────────┘          └──────────────────┘          └──────────────────┘
+        └────────┬─────────┘          └────────┬─────────┘          └────────┬─────────┘
+                 │                             │                             │
+    ┌────────────┴─────────────────────────────┼─────────────────────────────┘
+    │
+    │ (Internal Private VPC Transit - TLS / Authenticated SCRAM)
+    ├─────────────────────────────┬─────────────────────────────┐
+    ▼                             ▼                             ▼
+┌───────────────────────┐ ┌───────────────────────┐ ┌───────────────────────┐
+│ PostgreSQL / MySQL    │ │ Redis In-Memory Cache │ │ RabbitMQ AMQP Broker  │
+│   • Single-Primary/Repl│ │   • Session clustering│ │   • Task queues       │
+│   • PgBouncer :6432   │ │   • LRU eviction :6379│ │   • Management :15672 │
+└───────────────────────┘ └───────────────────────┘ └───────────────────────┘
+    │                             │                             │
+    └─────────────────────────────┼─────────────────────────────┘
+                                  │ (Telemetry & Logs: Syslog TLS :6514, Metrics :9100)
+                                  ▼
+                    ┌───────────────────────────┐
+                    │  monitoring-01            │
+                    │   • Prometheus Server     │
+                    │   • Grafana Dashboards    │
+                    │   • Rsyslog TLS Collector │
+                    │   • Alertmanager Routing  │
+                    └───────────────────────────┘
 ```
 
 ---
@@ -118,3 +141,9 @@ For the comprehensive cross-provider anti-affinity matrix, see [anti-affinity-an
 ## Resource Sizing & Zero-Downtime Vertical Scaling
 
 Cluster nodes include automated pre-flight memory validation (`enforce_min_memory_check: true`), service-level memory limiters (Redis LRU, RabbitMQ memory alarms, PostgreSQL shared buffers), and step-by-step zero-downtime rolling vertical migration procedures. See [resource-sizing-and-scaling.md](resource-sizing-and-scaling.md).
+
+---
+
+## Operations, Administrator Cheatsheet & Junior Troubleshooting
+
+For day-to-day operations, connecting to nodes, service socket locations, drain commands, and step-by-step emergency runbooks (502/503 errors, certificate expirations, VIP drops, OOM/memory pressure, disk space, and database replica lag), see the [Administrator Operations & Junior Troubleshooting Guide](administrator-and-troubleshooting-guide.md).

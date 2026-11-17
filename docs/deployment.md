@@ -63,6 +63,7 @@ Ready-to-use cloud-specific inventory templates are available in the `examples/i
 > - **[Cache & Queue Architecture Guide](cache-and-queue-architecture.md)** (Redis caching/sessions & RabbitMQ message broker)
 > - **[Alert Response & Runbooks Guide](alert-response-and-runbooks.md)** (Incident triage, memory/disk limits & online volume expansion)
 > - **[Secret Rotation & Key Management](secret-rotation-and-key-management.md)** (Zero-downtime secret rotation, vault rekeying, DB/Redis & CA lifecycles)
+> - **[Administrator Operations & Troubleshooting Guide](administrator-and-troubleshooting-guide.md)** (Plain-English overview, service sockets, day-to-day cheatsheet & junior triage runbooks)
 
 ---
 

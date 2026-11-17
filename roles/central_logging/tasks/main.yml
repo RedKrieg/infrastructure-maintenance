@@ -9,9 +9,11 @@
     - inventory_hostname in (groups['monitoring'] | default([]))
   tags: [logging, central_logging, logging_server]
   block:
-    - name: Ensure rsyslog is installed
+    - name: Ensure rsyslog and TLS transport packages are installed
       ansible.builtin.apt:
-        name: rsyslog
+        name:
+          - rsyslog
+          - rsyslog-gnutls
         state: present
 
     - name: Ensure centralized log storage directory exists
@@ -25,7 +27,7 @@
     - name: Configure UFW firewall for log ingestion port
       community.general.ufw:
         rule: allow
-        port: "{{ logging_port | string }}"
+        port: "{{ (logging_tls_port if (logging_enable_tls | bool) else logging_port) | string }}"
         proto: "{{ logging_protocol }}"
         from_ip: "{{ item }}"
         comment: "Centralized Rsyslog ingestion"
@@ -62,9 +64,11 @@
     - groups['monitoring'] is defined and groups['monitoring'] | length > 0
   tags: [logging, central_logging, logging_client]
   block:
-    - name: Ensure rsyslog is installed on log shipper client
+    - name: Ensure rsyslog and TLS transport packages are installed on log shipper client
       ansible.builtin.apt:
-        name: rsyslog
+        name:
+          - rsyslog
+          - rsyslog-gnutls
         state: present
 
     - name: Deploy rsyslog client log forwarder configuration

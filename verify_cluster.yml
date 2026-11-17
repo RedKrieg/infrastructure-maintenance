@@ -37,8 +37,9 @@
 
     - name: Verify local Node Exporter metrics endpoint
       ansible.builtin.uri:
-        url: "http://127.0.0.1:9100/metrics"
+        url: "{{ 'https://127.0.0.1:9100/metrics' if (node_exporter_enable_tls | default(enable_internal_tls | default(false)) | bool) else 'http://127.0.0.1:9100/metrics' }}"
         method: GET
+        validate_certs: false
         status_code: 200
         timeout: 5
       register: node_exporter_resp

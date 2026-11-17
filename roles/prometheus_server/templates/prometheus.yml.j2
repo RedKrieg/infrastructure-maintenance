@@ -69,6 +69,14 @@ scrape_configs:
   # Scrape Node Exporter across all hosts
   - job_name: 'node_exporter'
     scrape_interval: {{ prometheus_scrape_interval | default('15s') }}
+{% if enable_internal_tls | default(false) | bool or node_exporter_enable_tls | default(false) | bool %}
+    scheme: https
+    tls_config:
+      ca_file: {{ prometheus_ca_file | default('/etc/ssl/certs/internal-ca.crt') }}
+      cert_file: {{ prometheus_cert_file | default('/etc/ssl/internal/server.crt') }}
+      key_file: {{ prometheus_key_file | default('/etc/ssl/internal/server.key') }}
+      insecure_skip_verify: false
+{% endif %}
     static_configs:
       - targets:
 {% for host in groups['all'] %}

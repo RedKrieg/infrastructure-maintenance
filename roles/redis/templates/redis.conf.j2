@@ -9,7 +9,16 @@ bind 0.0.0.0
 bind 127.0.0.1 {{ redis_bind_address }}
 {% endif %}
 protected-mode {{ redis_protected_mode }}
+{% if redis_enable_tls | default(enable_internal_tls | default(false)) | bool %}
+tls-port {{ redis_tls_port | default(6379) }}
+port 0
+tls-cert-file {{ redis_ssl_cert | default('/etc/ssl/internal/server.crt') }}
+tls-key-file {{ redis_ssl_key | default('/etc/ssl/internal/server.key') }}
+tls-ca-cert-file {{ redis_ca_cert | default('/etc/ssl/certs/internal-ca.crt') }}
+tls-auth-clients no
+{% else %}
 port {{ redis_port }}
+{% endif %}
 tcp-backlog 511
 timeout {{ redis_timeout }}
 tcp-keepalive {{ redis_tcp_keepalive }}

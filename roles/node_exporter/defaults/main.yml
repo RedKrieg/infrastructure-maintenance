@@ -5,6 +5,11 @@
 
 enable_node_exporter: true
 node_exporter_port: 9100
+node_exporter_enable_tls: "{{ enable_internal_tls | default(false) | bool }}"
+node_exporter_web_config_path: "/etc/prometheus/node-exporter-web-config.yml"
+node_exporter_ssl_cert: "/etc/ssl/internal/server.crt"
+node_exporter_ssl_key: "/etc/ssl/internal/server.key"
+node_exporter_ca_cert: "/etc/ssl/certs/internal-ca.crt"
 node_exporter_trusted_subnets:
   - "10.0.0.0/8"
   - "172.16.0.0/12"

@@ -1,8 +1,15 @@
-# Headless Ubuntu Initial Setup, Dynamic HAProxy & Webserver Suite
+# Enterprise Zero-Trust High-Availability Infrastructure & Operations Suite
 
-An enterprise-grade, role-based Ansible suite to provision, harden, and orchestrate high-availability web architectures on headless Ubuntu systems (20.04, 22.04, 24.04 LTS). Designed to be **100% backend and cloud agnostic**—running identically across **AWS EC2**, **Google Cloud Platform (GCP)**, **OpenStack**, **Oracle Cloud (OCI)**, and **bare-metal/on-premises** infrastructure.
+A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and Day-2 operations suite for headless Ubuntu systems (20.04, 22.04, 24.04 LTS). Built with Ansible to run identically across **AWS EC2**, **Google Cloud Platform (GCP)**, **Microsoft Azure**, **Oracle Cloud (OCI)**, **OpenStack**, and **bare-metal/on-premises** data centers with zero vendor lock-in.
 
-Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4 redundancy, centralized SSL certificate issuance with cluster-wide deduplication via `acme.sh`, rank-based fallback line of succession with 1-day staggered renewal windows, self-healing boot-time certificate adoption, and backend Nginx webservers with strict generic 404 fallbacks.
+### What This Platform Delivers:
+* **Edge Ingress & Threat Mitigation**: Multi-node HAProxy edge fleet with Keepalived VRRP floating IP, Coraza WAF (OWASP Core Rule Set), in-memory rate limiting (300 req/10s), automated ACME public SSL line of succession with 1-day staggered renewal windows, and strict generic 404 catch-alls.
+* **Flexible Backend Topologies**: Dedicated 1:1 multi-tenant webservers, high-availability pooled N:1 round-robin webservers with session affinity, or hybrid coexisting architectures.
+* **Stateful Data & Broker Tiers**: Production-ready PostgreSQL (Single-Primary write master + streaming read replica + PgBouncer connection pooling) or MySQL 8.0, Redis in-memory caching and session clustering, and RabbitMQ AMQP message broker with management UI.
+* **End-to-End Fleet Zero-Trust Encryption**: Automated Cluster Internal CA authority (ECDSA P-384) with rank-based succession failover, issuing 90-day leaf certificates with automated renewal to backends, Rsyslog TLS logging (Port 6514), Node Exporter HTTPS telemetry (Port 9100), and database transit.
+* **Dual Enterprise Identity & Access Governance**: Teleport Zero-Trust Gateway (short-lived SSH/HTTPS certs, browser consoles, and JIT elevation) alongside FreeIPA (Kerberos KDC, LDAP 389, and SSSD integration), backed by out-of-band Ed25519 break-glass admin accounts.
+* **Complete Observability & Telemetry**: Standalone Prometheus server, pre-configured Grafana dashboards, centralized Rsyslog aggregation with 60-day compressed retention, multi-tier Alertmanager routing (Slack, PagerDuty, Teams, Discord), and Google Chat Cards v2 webhook relays.
+* **Automated Day-2 Operations & Resilience**: Zero-downtime rolling maintenance with HAProxy runtime socket connection draining, multi-cloud disaster recovery backup & restoration via `rclone` (70+ cloud backends), non-destructive chaos engineering drills, and operational emergency runbooks.
 
 ---
 
@@ -22,6 +29,7 @@ Features dynamic 1:1 host-to-FQDN mapping, cross-zone/multi-fault-domain Layer 4
 │   ├── staging/                     # Staging tier (Let's Encrypt Staging CA, isolated subnets)
 │   └── production/                  # Production tier (Production Let's Encrypt CA, 60d retention)
 ├── docs/                            # Modular architecture and operational documentation
+│   ├── administrator-and-troubleshooting-guide.md # Plain-English operational guide, cheatsheet & junior triage
 │   ├── architecture.md              # Cloud-agnostic Layer 4 ingress architecture and provider mapping
 │   ├── backend-topologies.md        # Dedicated 1:1 vs. Pooled N:1 load-balanced webserver clusters
 │   ├── database-architecture.md     # Optional database tier: PostgreSQL, MySQL & Cloud-Native services
@@ -139,6 +147,7 @@ Comprehensive technical documentation is organized into modular guides in the [`
 
 | Document | Description | Key Topics Included |
 | :--- | :--- | :--- |
+| **[Admin & Junior Runbook](docs/administrator-and-troubleshooting-guide.md)** | Daily Operations, Junior On-Call & Incident Runbooks | • Plain-English end-to-end request lifecycle and service overview<br>• Access matrix (Teleport, FreeIPA, Break-Glass SSH)<br>• "Dirty Dozen" service matrix (units, configs, logs, sockets)<br>• Step-by-step triage runbooks for 502/503, VIP drop, SSL expiry, memory/disk alarms, DB lag<br>• Draining, rolling upgrades, backups, and operator golden rules |
 | **[Architecture](docs/architecture.md)** | Cloud-Agnostic High-Availability Architecture | • Generic Layer 4 Ingress Load Balancer (TCP Passthrough)<br>• Transparent client IP preservation with zero cloud lock-in<br>• Provider drop-in mapping table (AWS NLB, GCP Passthrough, Azure LB, OCI NLB, Octavia, Bare Metal)<br>• RFC 1918 universal subnet compatibility & zero-cloud-agent model<br>• Dynamic 1:1 host-to-FQDN reverse proxy routing concept |
 | **[Backend Topologies](docs/backend-topologies.md)** | Dedicated 1:1 vs Pooled N:1 vs Hybrid Clusters | • Scenario 1: Dedicated 1:1 webservers for isolated client tenants<br>• Scenario 2: High-availability N:1 pooled webservers with round-robin<br>• Scenario 3: Clustered HA core site coexisting with dedicated tenant backends<br>• State management, session stickiness, and failure domain trade-offs |
 | **[Resource Sizing & Scaling](docs/resource-sizing-and-scaling.md)** | Memory Bounds, Pre-flight Checks & Scaling | • Minimum RAM sizing matrix across all cluster roles<br>• Automated pre-flight memory validation (`enforce_min_memory_check: true`)<br>• Service memory limiters (Redis LRU, RabbitMQ watermark, Postgres buffers)<br>• Zero-downtime rolling vertical migration procedure via HAProxy socket draining |

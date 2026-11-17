@@ -59,7 +59,9 @@ The `prometheus_server` role provisions a dedicated Prometheus monitoring node o
    ```bash
    ARGS="--storage.tsdb.retention.time=60d"
    ```
-4. **Firewall Isolation**:
+4. **Zero-Trust Telemetry Scraping (`enable_internal_tls: true`)**:
+   When zero-trust internal TLS is enabled, Node Exporter instances on all nodes bind HTTPS using their node certificates (`/etc/ssl/internal/server.crt`), and Prometheus scrapes over `scheme: https` strictly verifying each node against the Cluster Internal CA (`/etc/ssl/certs/internal-ca.crt`).
+5. **Firewall Isolation**:
    Port `9090` is restricted in UFW to private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and `127.0.0.1`), blocking public internet access while permitting internal administrative inspection.
 
 ---

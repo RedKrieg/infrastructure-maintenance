@@ -1,10 +1,32 @@
 # ==============================================================================
 # Centralized Rsyslog Ingestion Configuration - Managed by Ansible
-# Listens on TCP port {{ logging_port }} and stores logs per remote host
+# Listens on port {{ logging_tls_port if (logging_enable_tls | bool) else logging_port }} and stores logs per remote host
 # ==============================================================================
 
+{% if logging_enable_tls | bool %}
+# ------------------------------------------------------------------------------
+# Zero-Trust TLS Ingestion via GnuTLS with Internal CA Verification
+# ------------------------------------------------------------------------------
+global(
+    DefaultNetstreamDriver="gtls"
+    DefaultNetstreamDriverCAFile="{{ logging_ca_file }}"
+    DefaultNetstreamDriverCertFile="{{ logging_cert_file }}"
+    DefaultNetstreamDriverKeyFile="{{ logging_key_file }}"
+)
+
+module(
+    load="imtcp"
+    StreamDriver.Name="gtls"
+    StreamDriver.Mode="1"
+    StreamDriver.Authmode="anon"
+)
+
+input(type="imtcp" port="{{ logging_tls_port }}" ruleset="remote_logs")
+{% else %}
+# Standard TCP Ingestion
 module(load="imtcp")
 input(type="imtcp" port="{{ logging_port }}" ruleset="remote_logs")
+{% endif %}
 
 # Dynamic template: /var/log/remote/<hostname>/<programname>.log
 template(name="RemoteHostFile" type="string" string="{{ logging_storage_dir }}/%HOSTNAME%/%PROGRAMNAME:::secpath-replace%.log")

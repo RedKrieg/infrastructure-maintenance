@@ -10,6 +10,13 @@ enable_central_logging: true
 logging_port: 5140
 logging_protocol: "tcp"
 
+# Zero-Trust Internal TLS Encryption for Centralized Logging
+logging_enable_tls: "{{ enable_internal_tls | default(false) | bool }}"
+logging_tls_port: 6514
+logging_ca_file: "/etc/ssl/certs/internal-ca.crt"
+logging_cert_file: "/etc/ssl/internal/server.crt"
+logging_key_file: "/etc/ssl/internal/server.key"
+
 # Centralized server address (defaults to the first monitoring node)
 logging_server_host: "{{ (hostvars[groups['monitoring'][0]]['internal_ip'] | default(hostvars[groups['monitoring'][0]]['ansible_host'])) if (groups['monitoring'] is defined and groups['monitoring'] | length > 0) else '127.0.0.1' }}"
 

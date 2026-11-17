@@ -1,0 +1,31 @@
+---
+# ==============================================================================
+# Default Variables for internal_ca_client Role
+# ==============================================================================
+
+# Enable or disable automated internal CA enrollment and certificate issuance
+enable_internal_ca_client: true
+
+# Directory where node internal TLS certificates and keys are stored
+internal_ssl_cert_dir: "/etc/ssl/internal"
+internal_ssl_cert: "{{ internal_ssl_cert_dir }}/server.crt"
+internal_ssl_key: "{{ internal_ssl_cert_dir }}/server.key"
+internal_ssl_csr: "{{ internal_ssl_cert_dir }}/server.csr"
+internal_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
+
+# Cryptographic key parameters (matching internal CA secp384r1 curve)
+internal_ssl_curve: "secp384r1"
+internal_ssl_digest: "sha384"
+
+# Renewal threshold (days before expiration to trigger automated re-issuance)
+internal_cert_renewal_threshold_days: 14
+
+# Port on ingress proxies serving the internal-ca-signer HTTP daemon
+internal_ca_signer_port: 8444
+
+# Shared token authenticating signing requests to the internal CA
+internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
+
+# Systemd timer schedule for renewal check
+internal_cert_timer_calendar: "*-*-* 03,15:00:00"
+internal_cert_timer_random_delay: "10m"

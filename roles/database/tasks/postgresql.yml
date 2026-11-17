@@ -39,6 +39,38 @@
     state: present
   notify: restart postgresql
 
+- name: Configure PostgreSQL Zero-Trust TLS encryption
+  when: postgresql_enable_ssl | default(enable_internal_tls | default(false)) | bool
+  block:
+    - name: Ensure PostgreSQL has read access to internal SSL private key
+      ansible.builtin.acl:
+        path: /etc/ssl/internal/server.key
+        entity: postgres
+        etype: user
+        permissions: r
+        state: present
+      failed_when: false
+
+    - name: Enable SSL in postgresql.conf
+      ansible.builtin.lineinfile:
+        path: "{{ pg_conf_dir }}/postgresql.conf"
+        regexp: "^#?ssl\\s*="
+        line: "ssl = on"
+        state: present
+      notify: restart postgresql
+
+    - name: Set SSL certificate paths in postgresql.conf
+      ansible.builtin.lineinfile:
+        path: "{{ pg_conf_dir }}/postgresql.conf"
+        regexp: "^#?{{ item.key }}\\s*="
+        line: "{{ item.key }} = '{{ item.val }}'"
+        state: present
+      loop:
+        - { key: "ssl_cert_file", val: "/etc/ssl/internal/server.crt" }
+        - { key: "ssl_key_file", val: "/etc/ssl/internal/server.key" }
+        - { key: "ssl_ca_file", val: "/etc/ssl/certs/internal-ca.crt" }
+      notify: restart postgresql
+
 - name: Authorize trusted subnets in pg_hba.conf
   ansible.builtin.lineinfile:
     path: "{{ pg_conf_dir }}/pg_hba.conf"

@@ -7,6 +7,11 @@ http_addr = 0.0.0.0
 http_port = {{ grafana_port | default(3000) }}
 domain = {{ grafana_domain | default('localhost') }}
 root_url = {{ grafana_root_url | default('%(protocol)s://%(domain)s:%(http_port)s/') }}
+{% if grafana_enable_tls | default(enable_internal_tls | default(false)) | bool %}
+protocol = https
+cert_file = {{ grafana_ssl_cert | default('/etc/ssl/internal/server.crt') }}
+cert_key = {{ grafana_ssl_key | default('/etc/ssl/internal/server.key') }}
+{% endif %}
 
 [security]
 admin_user = {{ grafana_admin_user | default('admin') }}
