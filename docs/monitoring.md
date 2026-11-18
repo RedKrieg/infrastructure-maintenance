@@ -10,7 +10,7 @@ HAProxy includes a built-in Prometheus metric export engine configured on port `
 
 - **Unified Access Control**: Protected by the **exact same ACL IP/CIDR/FQDN whitelist and HTTP basic authentication** as the HAProxy statistics interface.
 - **Automated Host Whitelisting**: Hosts defined in the `[monitoring]` inventory group are **automatically whitelisted** on all proxies without manual IP configuration.
-- **Credential Generation**: Scrape authentication credentials are created directly from the central `admin_users` list (in `vars/admin_users.yml`).
+- **Credential Generation**: Scrape authentication credentials are created directly from the central `admin_users` list (in `group_vars/all/admin_users.yml`).
 - **Configuration**:
   ```haproxy
   frontend fe_stats

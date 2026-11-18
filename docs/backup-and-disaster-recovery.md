@@ -5,7 +5,7 @@
 The cluster includes automated, multi-tier disaster recovery playbooks designed to snapshot, export, and restore mission-critical state across all cluster roles:
 - **`backup_cluster.yml`**: Scans target cluster hosts, creates compressed archives of TLS certificates, configs, and cryptographic state, and transfers them to configurable targets.
 - **`restore_cluster.yml`**: Restores archived state to freshly provisioned or existing target nodes and cleanly restarts related systemd services.
-- **`vars/backup_config.yml`**: Declarative configuration specifying backup destinations, compression formats, and remote synchronization parameters.
+- **`group_vars/all/backup_config.yml`**: Declarative configuration specifying backup destinations, compression formats, and remote synchronization parameters.
 
 ---
 
@@ -28,9 +28,9 @@ flowchart TD
 
 ---
 
-## Configuration (`vars/backup_config.yml`)
+## Configuration (`group_vars/all/backup_config.yml`)
 
-Configure backup behavior in `vars/backup_config.yml`:
+Configure backup behavior in `group_vars/all/backup_config.yml`:
 
 ```yaml
 # Destination selection: "local", "remote_ssh", "s3", or "rclone"

@@ -9,8 +9,8 @@ freeipa_realm: "{{ (domain_name | default('example.com')) | upper }}"
 freeipa_server_fqdn: "ipa.{{ freeipa_domain }}"
 
 # FreeIPA Server Passwords (managed by Ansible Vault)
-freeipa_admin_password: "{{ vault_freeipa_admin_password | default('FreeIPAAdminPassword2026!') }}"
-freeipa_ds_password: "{{ vault_freeipa_ds_password | default('FreeIPADirectoryManagerPassword2026!') }}"
+freeipa_admin_password: "{{ vault_freeipa_admin_password }}"
+freeipa_ds_password: "{{ vault_freeipa_ds_password }}"
 
 # DNS Configuration
 # When set to true, installs freeipa-server-dns and configures integrated BIND9 DNS
@@ -26,11 +26,7 @@ freeipa_setup_ntp: false
 
 # Firewall & Access Control
 # Subnets permitted to access Kerberos (88, 464) and LDAP (389, 636)
-freeipa_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
-  - "127.0.0.1"
+freeipa_trusted_subnets: "{{ (internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'])) + ['127.0.0.1'] }}"
 
 # Administrator CIDR subnets allowed to access the FreeIPA Web UI (HTTPS port 443 / HTTP 80)
 freeipa_admin_trusted_cidrs: "{{ admin_trusted_cidrs | default(['0.0.0.0/0']) }}"

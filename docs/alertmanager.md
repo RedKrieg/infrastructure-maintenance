@@ -5,7 +5,7 @@
 The cluster monitoring stack includes **Prometheus Alertmanager** running on port `9093` of the monitoring host (`roles/prometheus_server`). 
 
 Alertmanager receives alerts evaluated by Prometheus, deduplicates and groups them, silences or inhibits downstream alarms, and dispatches notifications:
-- **Default Delivery**: Direct email notifications to cluster administrators defined in `vars/admin_users.yml`.
+- **Default Delivery**: Direct email notifications to cluster administrators defined in `group_vars/all/admin_users.yml`.
 - **Supported Integrations**: Turnkey configuration examples for **Slack**, **PagerDuty**, **Discord**, and **Microsoft Teams**.
 
 ---
@@ -25,7 +25,7 @@ flowchart TD
 
 ## 1. Default Email Notifications to Admins
 
-Alertmanager automatically extracts recipient addresses from `vars/admin_users.yml` so all designated administrative users receive alerts:
+Alertmanager automatically extracts recipient addresses from `group_vars/all/admin_users.yml` so all designated administrative users receive alerts:
 
 ```yaml
 # In roles/prometheus_server/defaults/main.yml

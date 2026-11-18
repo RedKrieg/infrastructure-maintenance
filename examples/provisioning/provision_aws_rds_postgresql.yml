@@ -29,7 +29,7 @@
     aws_rds_max_allocated_storage_gb: 100
     aws_rds_db_name: "app_db"
     aws_rds_admin_user: "dbadmin"
-    aws_rds_admin_password: "{{ vault_db_password | default('SecretCloudDBPass2026!') }}"
+    aws_rds_admin_password: "{{ vault_db_password }}"
     aws_rds_multi_az: true
     aws_rds_backup_retention_days: 7
 

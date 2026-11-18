@@ -16,7 +16,7 @@
   become: true
   gather_facts: true
   vars_files:
-    - ../../vars/admin_users.yml
+    - ../../group_vars/all/admin_users.yml
 
   roles:
     - role: system_base
@@ -36,7 +36,7 @@
   become: true
   gather_facts: true
   vars_files:
-    - ../../vars/admin_users.yml
+    - ../../group_vars/all/admin_users.yml
 
   roles:
     - role: proxy
@@ -51,8 +51,6 @@
   hosts: all
   become: true
   gather_facts: true
-  vars_files:
-    - ../../vars/admin_users.yml
 
   roles:
     - role: internal_ca_client
@@ -82,7 +80,7 @@
   become: true
   gather_facts: true
   vars_files:
-    - ../../vars/admin_users.yml
+    - ../../group_vars/all/admin_users.yml
 
   roles:
     - role: prometheus_server
@@ -98,8 +96,6 @@
   hosts: freeipa_servers
   become: true
   gather_facts: true
-  vars_files:
-    - ../../vars/admin_users.yml
 
   roles:
     - role: freeipa_server
@@ -145,8 +141,6 @@
   hosts: proxies
   become: true
   gather_facts: true
-  vars_files:
-    - ../../vars/admin_users.yml
 
   roles:
     - role: proxy

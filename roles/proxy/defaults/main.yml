@@ -32,12 +32,7 @@ cert_primary_host: "{{ groups['proxies'][0] if (groups['proxies'] is defined and
 enable_cert_sync_between_proxies: true
 
 # Internal subnets allowed to connect to the standalone ACME port (8888) for HTTP-01 challenges.
-# Defaults to all standard RFC 1918 private subnets for compatibility across AWS VPCs (172.16-31.x.x / 10.x),
-# GCP VPCs (10.128.0.0/9), OpenStack tenant subnets (192.168.x.x / 10.x), and private data centers.
-internal_proxy_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
+internal_proxy_subnets: "{{ internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']) }}"
 
 # Standby renewal watchdog on replica proxies with staggered succession
 # If higher-priority proxies are dead, replicas take over based on rank, staggered by 1 day per replica
@@ -66,7 +61,7 @@ haproxy_stats_port: 8404
 haproxy_stats_uri: "/stats"
 haproxy_stats_refresh: "10s"
 haproxy_stats_user: "admin"
-haproxy_stats_password: "adminpassword"
+haproxy_stats_password: "{{ vault_haproxy_stats_password }}"
 
 # Allowed IP list for HAProxy stats endpoint (supports IPv4, IPv6, CIDRs, and FQDNs).
 # Defaults to admin_trusted_cidrs as single source of truth for all admin interfaces.
@@ -151,7 +146,7 @@ internal_ca_renewal_threshold_days: 30
 internal_ca_fallback_renewal_days: 15
 internal_ca_leaf_validity_days: 90
 internal_cert_renewal_threshold_days: 14
-internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
+internal_ca_token: "{{ vault_internal_ca_token }}"
 
 # Deterministic Rank-Based Schedule for Internal CA Renewal Timer
 # Base execution hours (twice daily):

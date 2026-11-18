@@ -109,14 +109,13 @@ A comprehensive, cloud-agnostic, and zero-trust infrastructure orchestration and
 │       ├── provision_openstack.yml  # Ansible playbook provisioning OpenStack networks & Nova VMs
 │       ├── deprovision_*.yml        # Teardown playbooks for clean resource removal
 │       └── create_*_instances.sh    # Direct CLI shell scripts for zero-dependency provisioning
-├── vars/
-│   └── admin_users.yml              # Central users configuration file (admins, credentials, public keys)
 ├── group_vars/
-│   ├── all/                         # Global variables across all hosts
-│   │   ├── vault.yml                # Ansible Vault encrypted secrets (stats, tokens, passwords)
-│   │   └── vault.example.yml        # Unencrypted template reference
-│   ├── proxies.yml                  # Global proxy & acme.sh settings
-│   └── webservers.yml               # Webserver trusted proxy subnets
+│   └── all/                         # Global variables across all hosts
+│       ├── admin_users.yml          # Central users configuration file (admins, SSH keys, emails)
+│       ├── backup_config.yml        # Cluster backup destination & Rclone/S3 configuration
+│       └── vault.example.yml        # Secrets template (copy to vault.yml & encrypt with ansible-vault)
+├── vars/
+│   └── rclone.conf.example          # Sample multi-cloud Rclone backup backend templates
 ├── roles/
 │   ├── system_base/                 # Core packages, maintenance, kernel & hardware tuning
 │   ├── security/                    # Host security, UFW rate limiting & SSH hardening (MaxAuthTries 10)
@@ -179,7 +178,7 @@ Comprehensive technical documentation is organized into modular guides in the [`
 | **[Teleport Access & Sudo Management](docs/teleport-access.md)** | Centralized Access & Dynamic Elevation | • Zero-trust access architecture: Auth/Proxy/Bastion service (`bastion=true`) and outbound reverse tunnels<br>• Automatic host user provisioning (`create_host_user_mode: keep`)<br>• RBAC role hierarchy: `lead-admin`, unprivileged `junior`, and temporary `elevated-sudo`<br>• Just-In-Time (JIT) access request watcher (`teleport-access-watcher`) routing `tsudo` alerts to Alertmanager/Slack/Google Chat/Teams with one-click Web UI approval links<br>• Workstation bundle installer and Bastion CLI aliases (`tlogin`, `tsudo`, `tstatus`, `tdrop`, `tssh`, `tapprove`)<br>• End-to-end junior administrator workflow walkthrough |
 | **[FreeIPA Identity & Access Management](docs/freeipa-identity.md)** | Centralized Linux Identity & Kerberos/SSSD | • Standalone FreeIPA server deployment (`freeipa_server` role) with Kerberos KDC, LDAP 389/636, Web UI<br>• Client enrollment (`freeipa_client` role) into local or existing enterprise FreeIPA / Red Hat IdM domains<br>• Authentication via One-Time Password (OTP) or administrator credentials<br>• SSSD integration for centralized SSH public key lookup (`sss_ssh_authorizedkeys`)<br>• Centralized sudo rules (`sudoers: files sss`) and PAM automatic home directory creation (`mkhomedir`)<br>• HAProxy reverse proxy integration with Admin ACL protection for Web UI |
 | **[Prometheus Monitoring](docs/monitoring.md)** | Metrics Scraping & Centralized Monitoring | • Native HAProxy Prometheus exporter (`/metrics` on port 8404)<br>• Unified ACL whitelist and HTTP basic authentication matching stats UI<br>• Automatic whitelisting of inventory `[monitoring]` group hosts<br>• Standalone Prometheus server role (`roles/prometheus_server` on port 9090)<br>• Dynamic proxy scrape target discovery and configuration<br>• Automated `promtool check config` validation, 60-day TSDB retention, and UFW isolation |
-| **[Alertmanager Notifications](docs/alertmanager.md)** | Alert Routing, Email & Chat Integrations | • Native Prometheus Alertmanager deployment (port 9093) with admin email notifications<br>• Dynamic admin recipient discovery from `vars/admin_users.yml`<br>• Ready-to-use configurations for Slack, PagerDuty, Discord, and Microsoft Teams<br>• Multi-tier severity routing with alert inhibition rules to prevent alarm floods |
+| **[Alertmanager Notifications](docs/alertmanager.md)** | Alert Routing, Email & Chat Integrations | • Native Prometheus Alertmanager deployment (port 9093) with admin email notifications<br>• Dynamic admin recipient discovery from `group_vars/all/admin_users.yml`<br>• Ready-to-use configurations for Slack, PagerDuty, Discord, and Microsoft Teams<br>• Multi-tier severity routing with alert inhibition rules to prevent alarm floods |
 | **[Alert Response & Runbooks](docs/alert-response-and-runbooks.md)** | Incident Triage & Emergency Runbooks | • Low memory triage (`free -h`, `ps`, OOM inspection), Redis/RabbitMQ/PostgreSQL memory limit adjustments<br>• Low disk triage, directory breakdown (journald, WAL, mnesia, ghost files via `lsof +L1`)<br>• Online cloud block volume expansion (AWS EBS, GCP PD, Azure Disk, Cinder, LVM) with zero downtime |
 | **[Secret Rotation & Key Management](docs/secret-rotation-and-key-management.md)** | Credential Lifecycles & Zero-Downtime Rotation | • Master Ansible Vault rekeying (`ansible-vault rekey`)<br>• Zero-downtime PostgreSQL & MySQL application password rotation<br>• Live Redis `requirepass` update via `CONFIG SET`<br>• RabbitMQ credentials & Erlang cluster cookie rotation<br>• Internal Root CA & Leaf X.509 certificate lifecycle & emergency revocation<br>• Teleport token rotation, FreeIPA admin credentials & break-glass admin SSH keys |
 | **[Google Chat Alert Webhooks](docs/google-chat-alerts.md)** | Cards v2 Translation & Delivery | • Incoming webhook integration for Google Workspace Spaces<br>• Zero-dependency Python 3 relay daemon ([google_chat_relay.py](examples/alertmanager/google_chat_relay.py))<br>• Translates Alertmanager schema to rich Google Chat Cards v2 with status badges |

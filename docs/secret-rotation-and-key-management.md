@@ -22,7 +22,7 @@ This guide defines the end-to-end operational procedures for rotating all creden
 | **Edge ACME TLS Certificates** | Master Proxy `/root/.acme.sh/` | 60 days (automated via ACME) | **Yes** (automated cron sync) | HAProxy frontend ingress |
 | **Teleport Node Join Token** | `group_vars/all/vault.yml` | 90 days (or dynamic TTLs) | **Yes** (existing nodes stay joined) | Teleport proxy & enrolled agents |
 | **FreeIPA Admin & DM Passwords** | FreeIPA LDAP directory | 90 days | **Yes** (via `ipa passwd` / `ldappasswd`)| FreeIPA KDC, Directory Server |
-| **Break-Glass Admin SSH Keys** | `vars/admin_users.yml` | 90 days or staff changes | **Yes** (staged key distribution) | All cluster nodes (port 22) |
+| **Break-Glass Admin SSH Keys** | `group_vars/all/admin_users.yml` | 90 days or staff changes | **Yes** (staged key distribution) | All cluster nodes (port 22) |
 
 ---
 
@@ -291,7 +291,7 @@ systemctl restart sssd
 
 ## 9. Break-Glass Local Administrator Key Rotation
 
-Local administrative accounts defined in `vars/admin_users.yml` provide out-of-band access when network identity providers are offline.
+Local administrative accounts defined in `group_vars/all/admin_users.yml` provide out-of-band access when network identity providers are offline.
 
 ### Procedure:
 1. Generate a new Ed25519 keypair on administrator workstation:
@@ -299,7 +299,7 @@ Local administrative accounts defined in `vars/admin_users.yml` provide out-of-b
    ssh-keygen -t ed25519 -a 100 -f ~/.ssh/id_cluster_admin_2026
    ```
 
-2. Add the new public key to `vars/admin_users.yml` while temporarily keeping the previous public key in `authorized_keys`.
+2. Add the new public key to `group_vars/all/admin_users.yml` while temporarily keeping the previous public key in `authorized_keys`.
 
 3. Deploy updated keys to all cluster hosts:
    ```bash
@@ -311,7 +311,7 @@ Local administrative accounts defined in `vars/admin_users.yml` provide out-of-b
    ssh -i ~/.ssh/id_cluster_admin_2026 ubuntu@10.0.1.10 "whoami"
    ```
 
-5. Remove the obsolete public key from `vars/admin_users.yml` and redeploy.
+5. Remove the obsolete public key from `group_vars/all/admin_users.yml` and redeploy.
 
 ---
 

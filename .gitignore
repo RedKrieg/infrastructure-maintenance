@@ -6,6 +6,7 @@
 .vault_pass.*
 *.vault_pass
 vault_password*
+group_vars/all/vault.yml
 
 # Private keys (prevent accidental credential commits)
 *.pem

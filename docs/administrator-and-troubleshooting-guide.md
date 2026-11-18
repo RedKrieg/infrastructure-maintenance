@@ -85,7 +85,7 @@ ssh admin@web-01.internal.lan
 ```
 
 ### Tier 3: Out-of-Band Break-Glass Access (Emergency Only)
-If Teleport, FreeIPA, and DNS are completely offline, connect directly via local administrator accounts provisioned by `vars/admin_users.yml`:
+If Teleport, FreeIPA, and DNS are completely offline, connect directly via local administrator accounts provisioned by `group_vars/all/admin_users.yml`:
 ```bash
 ssh -i ~/.ssh/id_cluster_admin_2026 ubuntu@10.0.1.10
 ```

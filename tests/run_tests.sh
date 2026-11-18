@@ -253,11 +253,11 @@ for md in md_files:
 
 print(f"  [✓] Verified {checked_links} relative links and Markdown syntax across {len(md_files)} Markdown files")
 
-vault_files = sorted(glob.glob("roles/**/*", recursive=True) + glob.glob("group_vars/**/*", recursive=True) + glob.glob("examples/**/*", recursive=True) + glob.glob("*.yml"))
+vault_files = sorted(glob.glob("roles/**/*", recursive=True) + glob.glob("group_vars/**/*", recursive=True) + glob.glob("vars/**/*", recursive=True) + glob.glob("examples/**/*", recursive=True) + glob.glob("*.yml"))
 vault_refs = set()
 vault_re = re.compile(r"(?<![.\w])vault_[a-zA-Z0-9_]+")
 for p in vault_files:
-    if os.path.isdir(p):
+    if os.path.isdir(p) or p in ("group_vars/all/vault.example.yml", "group_vars/all/vault.yml"):
         continue
     with open(p, encoding="utf-8", errors="ignore") as f:
         for line in f:
@@ -269,16 +269,22 @@ for p in vault_files:
 
 with open("group_vars/all/vault.example.yml", encoding="utf-8") as f:
     vault_example_keys = set((yaml.safe_load(f) or {}).keys())
-with open("group_vars/all/vault.yml", encoding="utf-8") as f:
-    vault_raw = f.read()
-vault_actual_keys = set((yaml.safe_load(vault_raw) or {}).keys()) if not vault_raw.startswith("$ANSIBLE_VAULT;") else None
+vault_actual_keys = None
+if os.path.exists("group_vars/all/vault.yml"):
+    with open("group_vars/all/vault.yml", encoding="utf-8") as f:
+        vault_raw = f.read()
+    if not vault_raw.startswith("$ANSIBLE_VAULT;"):
+        vault_actual_keys = set((yaml.safe_load(vault_raw) or {}).keys())
 
+used_vault_keys = {v for v, _ in vault_refs}
 for v, p in sorted(vault_refs):
     if v not in vault_example_keys:
         errors.append(f"Vault SSOT mismatch: {v} (used in {p}) missing from group_vars/all/vault.example.yml")
     if vault_actual_keys is not None and v not in vault_actual_keys:
         errors.append(f"Vault SSOT mismatch: {v} (used in {p}) missing from group_vars/all/vault.yml")
-print(f"  [✓] Verified {len({v for v, _ in vault_refs})} vault_* references match SSOT vault files")
+for v in sorted(vault_example_keys - used_vault_keys):
+    errors.append(f"Vault SSOT mismatch: {v} in group_vars/all/vault.example.yml is unused in code")
+print(f"  [✓] Verified {len(used_vault_keys)} vault_* references match SSOT vault files")
 
 with open(".github/workflows/ci.yml", encoding="utf-8") as f:
     ci_content = f.read()

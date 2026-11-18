@@ -21,7 +21,7 @@ internal_cert_renewal_threshold_days: 14
 internal_ca_signer_port: 8444
 
 # Shared token authenticating signing requests to the internal CA
-internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
+internal_ca_token: "{{ vault_internal_ca_token }}"
 
 # Systemd timer schedule for renewal check
 internal_cert_timer_calendar: "*-*-* 03,15:00:00"

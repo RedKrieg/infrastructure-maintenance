@@ -22,5 +22,5 @@ keepalived_script_fall: 2
 keepalived_script_rise: 2
 keepalived_script_weight: 2
 
-# VRRP Auth Password (managed by vault or default)
-keepalived_auth_pass: "{{ vault_keepalived_auth_pass | default('vrrpSecretPass123') }}"
+# VRRP Auth Password (managed by Ansible Vault)
+keepalived_auth_pass: "{{ vault_keepalived_auth_pass }}"

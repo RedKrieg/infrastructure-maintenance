@@ -27,8 +27,4 @@ logging_storage_dir: "/var/log/remote"
 logging_retention_days: 60
 
 # Trusted subnets permitted to send logs to the central collector
-logging_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
-  - "127.0.0.1"
+logging_trusted_subnets: "{{ (internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'])) + ['127.0.0.1'] }}"

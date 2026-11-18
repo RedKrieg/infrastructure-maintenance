@@ -25,7 +25,7 @@ prometheus_scrape_haproxy: true
 prometheus_haproxy_port: 8404
 prometheus_haproxy_metrics_path: "/metrics"
 prometheus_haproxy_user: "admin"
-prometheus_haproxy_password: "{{ vault_prometheus_password | default(vault_haproxy_stats_password | default('SecureAdminPassword123')) }}"
+prometheus_haproxy_password: "{{ vault_prometheus_password | default(vault_haproxy_stats_password) }}"
 
 # Target ingestion: Node Exporter across all nodes
 prometheus_scrape_node_exporter: true

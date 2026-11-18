@@ -3,6 +3,15 @@
 # Webserver Configuration, Generic 404 & Virtual Host Setup
 # ==============================================================================
 
+- name: Grant www-data user ssl-cert group membership for Nginx internal TLS
+  ansible.builtin.user:
+    name: www-data
+    groups: ssl-cert
+    append: true
+  when: webserver_enable_ssl | bool
+  notify: Reload nginx
+  tags: [webserver, ssl, tls]
+
 - name: Remove default Nginx welcome site
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default

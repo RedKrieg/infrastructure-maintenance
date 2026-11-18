@@ -35,6 +35,5 @@
   when:
     - not ipa_client_stat.stat.exists
     - freeipa_client_otp | length == 0
-    - freeipa_admin_password | length > 0
   no_log: true
   changed_when: true

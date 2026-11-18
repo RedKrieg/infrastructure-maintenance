@@ -27,7 +27,7 @@ freeipa_client_otp: "{{ vault_freeipa_client_otp | default('') }}"
 
 # Option 2: Administrative credentials for automatic host registration
 freeipa_admin_user: "admin"
-freeipa_admin_password: "{{ vault_freeipa_admin_password | default('') }}"
+freeipa_admin_password: "{{ vault_freeipa_admin_password }}"
 
 # Client Enrollment Flags
 freeipa_force_join: false

@@ -30,7 +30,7 @@
     azure_postgres_tier: "GeneralPurpose"
     azure_postgres_storage_gb: 32
     azure_postgres_admin_user: "dbadmin"
-    azure_postgres_admin_password: "{{ vault_db_password | default('SecretAzureDBPass2026!') }}"
+    azure_postgres_admin_password: "{{ vault_db_password }}"
     azure_postgres_db_name: "app_db"
     azure_postgres_ha_mode: "ZoneRedundant" # Cross-zone automated failover
 

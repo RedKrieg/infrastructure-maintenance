@@ -44,7 +44,7 @@ flowchart TD
 2. **Teleport as Edge Bastion & Audit Gateway**:
    Teleport acts as the boundary gateway. When an engineer connects via `tsh ssh`, Teleport authenticates the session, opens an encrypted reverse tunnel, and authenticates against the host's Linux PAM stack—which delegates user lookup to SSSD and FreeIPA.
 3. **Emergency Break-Glass Access**:
-   `roles/admin_users` unconditionally provisions local administrator accounts from `vars/admin_users.yml` on every cluster node with local Ed25519 SSH keys and sudo rights. If both Teleport and FreeIPA are offline or experiencing network isolation, administrators can still access nodes directly via console or out-of-band SSH.
+   `roles/admin_users` unconditionally provisions local administrator accounts from `group_vars/all/admin_users.yml` on every cluster node with local Ed25519 SSH keys and sudo rights. If both Teleport and FreeIPA are offline or experiencing network isolation, administrators can still access nodes directly via console or out-of-band SSH.
 4. **HTTP Basic Auth for Administrative Web UIs**:
    Administrative interfaces across HAProxy stats (`8404`), RabbitMQ Management UI (`15672`), and Grafana (`3000`) support native HTTP Basic Authentication protected by IP whitelists.
 

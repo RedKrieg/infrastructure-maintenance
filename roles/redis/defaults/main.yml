@@ -13,7 +13,7 @@ redis_bind_address: "0.0.0.0"
 redis_protected_mode: "yes"
 
 # Security & Authentication
-redis_password: "{{ vault_redis_password | default('RedisSecretPass2026!') }}"
+redis_password: "{{ vault_redis_password }}"
 
 # Memory Management & Eviction Policy
 # Suitable for session management, response caching, and transient state
@@ -34,8 +34,5 @@ redis_loglevel: "notice"
 redis_timeout: 0
 redis_tcp_keepalive: 300
 
-# Trusted private subnets authorized to connect to Redis (RFC 1918 defaults)
-redis_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
+# Trusted private subnets authorized to connect to Redis
+redis_trusted_subnets: "{{ internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']) }}"

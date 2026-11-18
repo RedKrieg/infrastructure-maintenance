@@ -109,7 +109,7 @@
         url: "http://127.0.0.1:{{ haproxy_stats_port | default(8404) }}/metrics"
         method: GET
         user: "{{ haproxy_stats_user | default('admin') }}"
-        password: "{{ haproxy_stats_password | default(vault_haproxy_stats_password | default('SecureAdminPassword123')) }}"
+        password: "{{ haproxy_stats_password | default(vault_haproxy_stats_password) }}"
         force_basic_auth: true
         status_code: 200
         timeout: 5
@@ -362,7 +362,7 @@
         url: "http://127.0.0.1:{{ rabbitmq_mgmt_port | default(15672) }}/api/health/checks/alarms"
         method: GET
         user: "{{ rabbitmq_admin_user | default('admin') }}"
-        password: "{{ rabbitmq_admin_password | default(vault_rabbitmq_admin_password | default('RabbitMQAdminSecret2026!')) }}"
+        password: "{{ rabbitmq_admin_password | default(vault_rabbitmq_admin_password) }}"
         force_basic_auth: true
         status_code: 200
         timeout: 5

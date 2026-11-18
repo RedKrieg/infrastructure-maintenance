@@ -6,25 +6,10 @@
 # Web document root for this server's external FQDN
 webserver_root_dir: "/var/www/{{ external_fqdn | default('html') }}"
 
-# Internal Backend SSL / TLS (Zero-Trust)
+# Internal Backend SSL / TLS (Zero-Trust certificates managed by internal_ca_client)
 webserver_enable_ssl: "{{ enable_internal_tls | default(false) | bool }}"
-webserver_ssl_cert_dir: "/etc/ssl/internal"
-webserver_ssl_cert: "{{ webserver_ssl_cert_dir }}/server.crt"
-webserver_ssl_key: "{{ webserver_ssl_cert_dir }}/server.key"
-webserver_ssl_csr: "{{ webserver_ssl_cert_dir }}/server.csr"
-webserver_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
-webserver_ssl_curve: "secp384r1"
-webserver_ssl_digest: "sha384"
+webserver_ssl_cert: "/etc/ssl/internal/server.crt"
+webserver_ssl_key: "/etc/ssl/internal/server.key"
 
-# Automated Certificate Renewal Configuration (Zero-Ansible-Interaction)
-internal_cert_renewal_threshold_days: 14
-internal_ca_signer_port: 8444
-internal_ca_token: "{{ vault_internal_ca_token | default('ClusterInternalCAToken2026!') }}"
-
-# Trusted HAProxy subnets and fallback IPs for real_ip extraction.
-# Defaults to all standard RFC 1918 private IP ranges to work seamlessly across
-# AWS VPCs (172.31.0.0/16, 10.x), GCP VPCs (10.128.0.0/9), OpenStack, and private clouds.
-haproxy_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
+# Trusted HAProxy subnets for real_ip extraction (inherits from internal_trusted_subnets)
+haproxy_trusted_subnets: "{{ internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']) }}"

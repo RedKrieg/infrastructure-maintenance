@@ -11,9 +11,6 @@
   become: true
   gather_facts: true
 
-  vars_files:
-    - vars/admin_users.yml
-
   roles:
     - role: system_base
       tags: [system_base, system, packages, tuning]
@@ -32,9 +29,6 @@
   become: true
   gather_facts: true
 
-  vars_files:
-    - vars/admin_users.yml
-
   roles:
     - role: proxy
       vars:
@@ -48,9 +42,6 @@
   hosts: all
   become: true
   gather_facts: true
-
-  vars_files:
-    - vars/admin_users.yml
 
   roles:
     - role: internal_ca_client
@@ -68,9 +59,6 @@
   become: true
   gather_facts: true
 
-  vars_files:
-    - vars/admin_users.yml
-
   roles:
     - role: database
       when:
@@ -86,9 +74,6 @@
   become: true
   gather_facts: true
 
-  vars_files:
-    - vars/admin_users.yml
-
   roles:
     - role: redis
       when:
@@ -103,9 +88,6 @@
   hosts: rabbitmq_servers
   become: true
   gather_facts: true
-
-  vars_files:
-    - vars/admin_users.yml
 
   roles:
     - role: rabbitmq
@@ -134,9 +116,6 @@
   become: true
   gather_facts: true
 
-  vars_files:
-    - vars/admin_users.yml
-
   roles:
     - role: prometheus_server
       tags: [monitoring, prometheus, firewall]
@@ -151,8 +130,6 @@
   hosts: teleport_servers
   become: true
   gather_facts: true
-  vars_files:
-    - vars/admin_users.yml
 
   roles:
     - role: teleport_server
@@ -163,8 +140,6 @@
   hosts: freeipa_servers
   become: true
   gather_facts: true
-  vars_files:
-    - vars/admin_users.yml
 
   roles:
     - role: freeipa_server
@@ -227,9 +202,6 @@
   hosts: proxies
   become: true
   gather_facts: true
-
-  vars_files:
-    - vars/admin_users.yml
 
   roles:
     - role: proxy

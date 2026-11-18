@@ -108,7 +108,7 @@ The cluster provides modular choices for identity and access management configur
 - **Teleport** (`identity_provider: "teleport"`): Zero-Trust modern SSH, short-lived certificates, and browser-based access console. See [teleport-access.md](teleport-access.md).
 - **FreeIPA** (`identity_provider: "freeipa"`): Enterprise Linux identity management featuring Kerberos KDC, LDAP 389 Directory Server, SSSD integration, centralized sudo rules, and centralized SSH key lookup. See [freeipa-identity.md](freeipa-identity.md).
 - **Dual Deployment** (`identity_provider: "both"`): Coexistence of FreeIPA for Linux POSIX accounts/SSSD and Teleport for edge boundary SSH gateway with PAM delegation.
-- **Break-Glass Basic Auth**: Native HTTP Basic Auth for administrative web interfaces (HAProxy stats UI, RabbitMQ management UI, Grafana) and local UNIX accounts provisioned on every node via `vars/admin_users.yml` for out-of-band console access.
+- **Break-Glass Basic Auth**: Native HTTP Basic Auth for administrative web interfaces (HAProxy stats UI, RabbitMQ management UI, Grafana) and local UNIX accounts provisioned on every node via `group_vars/all/admin_users.yml` for out-of-band console access.
 
 ---
 

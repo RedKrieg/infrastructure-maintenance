@@ -18,14 +18,10 @@ teleport_public_addr: "teleport.{{ domain_name | default('cluster.local') }}:443
 teleport_ssh_public_addr: "teleport.{{ domain_name | default('cluster.local') }}:3023"
 
 # Secret static node join token (shared with teleport_node role, managed by Ansible Vault)
-teleport_auth_token: "{{ vault_teleport_auth_token | default('teleport-super-secure-join-token-secret-change-me') }}"
+teleport_auth_token: "{{ vault_teleport_auth_token }}"
 
 # Trusted CIDR subnets allowed to access the internal Teleport Auth API (port 3025)
-teleport_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
-  - "127.0.0.1"
+teleport_trusted_subnets: "{{ (internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'])) + ['127.0.0.1'] }}"
 
 # Administrator CIDR subnets allowed to access Teleport Web UI (3080) and SSH Proxy (3023)
 teleport_admin_trusted_cidrs: "{{ admin_trusted_cidrs | default(['0.0.0.0/0']) }}"

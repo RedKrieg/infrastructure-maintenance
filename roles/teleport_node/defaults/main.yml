@@ -15,7 +15,7 @@ teleport_server_host: "{{ (hostvars[groups['teleport_servers'][0]]['internal_ip'
 teleport_proxy_server: "{{ teleport_server_host }}:3080"
 
 # Node Join Token (managed by Ansible Vault, must match teleport_auth_token on server)
-teleport_auth_token: "{{ vault_teleport_auth_token | default('teleport-super-secure-join-token-secret-change-me') }}"
+teleport_auth_token: "{{ vault_teleport_auth_token }}"
 
 # Metadata labels applied to this node in Teleport Web UI / CLI
 teleport_node_labels:

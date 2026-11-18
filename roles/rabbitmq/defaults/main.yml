@@ -16,16 +16,16 @@ rabbitmq_prometheus_port: 15692
 rabbitmq_mgmt_fqdn: "mq.{{ domain_name | default('example.com') }}"
 
 # Erlang Cluster Secret Cookie (Required for multi-node clustering and cli tools)
-rabbitmq_erlang_cookie: "{{ vault_rabbitmq_erlang_cookie | default('ClusterErlangCookie2026!') }}"
+rabbitmq_erlang_cookie: "{{ vault_rabbitmq_erlang_cookie }}"
 
 # Primary Application Credentials & Vhost
 rabbitmq_vhost: "/app"
 rabbitmq_user: "app_user"
-rabbitmq_password: "{{ vault_rabbitmq_password | default('RabbitMQSecret2026!') }}"
+rabbitmq_password: "{{ vault_rabbitmq_password }}"
 
 # RabbitMQ Management Web UI Admin Account
 rabbitmq_admin_user: "admin"
-rabbitmq_admin_password: "{{ vault_rabbitmq_admin_password | default('RabbitMQAdminSecret2026!') }}"
+rabbitmq_admin_password: "{{ vault_rabbitmq_admin_password }}"
 
 # Plugins to activate (Management Web UI & Prometheus Telemetry Metrics)
 rabbitmq_plugins:
@@ -41,13 +41,7 @@ rabbitmq_loopback_users: []
 
 # Network Access Control
 # Subnets authorized for AMQP worker traffic (port 5672)
-rabbitmq_trusted_subnets:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
+rabbitmq_trusted_subnets: "{{ internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']) }}"
 
 # Subnets authorized to access the Management Web UI (port 15672)
-rabbitmq_admin_cidrs:
-  - "10.0.0.0/8"
-  - "172.16.0.0/12"
-  - "192.168.0.0/16"
+rabbitmq_admin_cidrs: "{{ admin_trusted_cidrs | default(internal_trusted_subnets | default(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'])) }}"

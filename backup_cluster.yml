@@ -13,8 +13,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  vars_files:
-    - vars/backup_config.yml
   tasks:
     - name: Set backup execution timestamp
       ansible.builtin.set_fact:
@@ -40,8 +38,6 @@
   hosts: proxies
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -89,8 +85,6 @@
   hosts: webservers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -137,8 +131,6 @@
   hosts: teleport_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -184,8 +176,6 @@
   hosts: monitoring
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -232,8 +222,6 @@
   hosts: databases
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -278,8 +266,6 @@
   hosts: redis_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -341,8 +327,6 @@
   hosts: rabbitmq_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -398,8 +382,6 @@
   hosts: freeipa_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:
@@ -453,8 +435,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  vars_files:
-    - vars/backup_config.yml
   vars:
     backup_ts: "{{ hostvars['localhost']['backup_ts'] }}"
   tasks:

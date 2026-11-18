@@ -13,8 +13,6 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  vars_files:
-    - vars/backup_config.yml
   tasks:
     - name: Fetch target snapshot from rclone remote if requested
       ansible.builtin.command:
@@ -58,8 +56,6 @@
   hosts: freeipa_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -90,8 +86,6 @@
   hosts: teleport_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -126,8 +120,6 @@
   hosts: databases
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -189,8 +181,6 @@
   hosts: redis_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -233,8 +223,6 @@
   hosts: rabbitmq_servers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -283,8 +271,6 @@
   hosts: monitoring
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -316,8 +302,6 @@
   hosts: webservers
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
@@ -346,8 +330,6 @@
   hosts: proxies
   gather_facts: false
   become: true
-  vars_files:
-    - vars/backup_config.yml
   vars:
     active_restore_dir: "{{ hostvars['localhost']['active_restore_dir'] }}"
   tasks:
