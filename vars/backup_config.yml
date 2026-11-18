@@ -2,8 +2,7 @@
 # ==============================================================================
 # Cluster Backup & Disaster Recovery Active Configuration
 # ==============================================================================
-# To configure offsite storage (SFTP, Rsync, or AWS S3 / MinIO), see
-# vars/backup_config.example.yml for full parameter specifications.
+# Supported destinations: "local", "remote_ssh", "s3", or "rclone".
 # ==============================================================================
 
 # Temporary staging directory on target nodes during archiving
@@ -41,10 +40,3 @@ backup_rclone_flags: "--fast-list --transfers 4 --checkers 8"
 backup_rclone_bandwidth_limit: "" # e.g. "10M" or "50M"
 backup_rclone_auto_install: true
 backup_rclone_enable_retention_cleanup: true
-
-# Component selectors
-backup_include_tls_and_acme: true
-backup_include_proxy_config: true
-backup_include_teleport_state: true
-backup_include_webserver_data: true
-backup_include_monitoring_state: true

@@ -39,6 +39,17 @@
     state: present
   notify: restart postgresql
 
+- name: Configure PostgreSQL max_connections and shared_buffers
+  ansible.builtin.lineinfile:
+    path: "{{ pg_conf_dir }}/postgresql.conf"
+    regexp: "^#?{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.val }}"
+    state: present
+  loop:
+    - { key: "max_connections", val: "{{ postgresql_max_connections }}" }
+    - { key: "shared_buffers", val: "{{ postgresql_shared_buffers }}" }
+  notify: restart postgresql
+
 - name: Configure PostgreSQL Zero-Trust TLS encryption
   when: postgresql_enable_ssl | default(enable_internal_tls | default(false)) | bool
   block:

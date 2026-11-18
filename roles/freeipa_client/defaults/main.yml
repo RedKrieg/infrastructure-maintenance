@@ -3,9 +3,6 @@
 # Default Variables for freeipa_client Role
 # ==============================================================================
 
-# Enable or disable FreeIPA client enrollment
-enable_freeipa_client: true
-
 # Packages required for FreeIPA client and SSSD integration
 freeipa_client_packages:
   - freeipa-client

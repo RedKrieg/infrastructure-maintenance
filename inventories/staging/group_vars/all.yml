@@ -3,7 +3,6 @@
 # Staging Global Group Variables
 # ==============================================================================
 
-environment_tier: "staging"
 domain_name: "staging.example.com"
 
 # Prevent burning Let's Encrypt production rate limits (50 certs/week/domain)

@@ -3,9 +3,6 @@
 # Default Variables for internal_ca_client Role
 # ==============================================================================
 
-# Enable or disable automated internal CA enrollment and certificate issuance
-enable_internal_ca_client: true
-
 # Directory where node internal TLS certificates and keys are stored
 internal_ssl_cert_dir: "/etc/ssl/internal"
 internal_ssl_cert: "{{ internal_ssl_cert_dir }}/server.crt"

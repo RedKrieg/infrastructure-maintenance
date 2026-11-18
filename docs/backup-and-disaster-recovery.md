@@ -30,7 +30,7 @@ flowchart TD
 
 ## Configuration (`vars/backup_config.yml`)
 
-Configure backup behavior by referencing `vars/backup_config.example.yml`:
+Configure backup behavior in `vars/backup_config.yml`:
 
 ```yaml
 # Destination selection: "local", "remote_ssh", "s3", or "rclone"

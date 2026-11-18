@@ -3,7 +3,6 @@
 # Production Global Group Variables
 # ==============================================================================
 
-environment_tier: "production"
 domain_name: "example.com"
 
 # Production Let's Encrypt CA

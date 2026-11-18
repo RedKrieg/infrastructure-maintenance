@@ -4,7 +4,6 @@
 # ==============================================================================
 
 # Prometheus package & service details
-prometheus_package_name: "prometheus"
 prometheus_service_name: "prometheus"
 prometheus_config_dir: "/etc/prometheus"
 prometheus_config_file: "/etc/prometheus/prometheus.yml"

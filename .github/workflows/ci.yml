@@ -34,12 +34,3 @@ jobs:
         run: |
           chmod +x tests/run_tests.sh
           ./tests/run_tests.sh
-
-      - name: Run ShellCheck
-        run: |
-          echo "Running ShellCheck on automation scripts..."
-          find examples/provisioning -name "*.sh" -exec shellcheck {} + || true
-
-      - name: Run Ansible Lint
-        run: |
-          ansible-lint playbook.yml || true

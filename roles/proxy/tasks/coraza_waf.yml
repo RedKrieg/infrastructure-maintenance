@@ -54,7 +54,6 @@
         mode: "0644"
         timeout: 15
       register: coraza_download
-      ignore_errors: true
       when: not coraza_bin_stat.stat.exists
 
     - name: Extract Coraza SPOA binary
@@ -67,37 +66,6 @@
       when:
         - not coraza_bin_stat.stat.exists
         - coraza_download is succeeded
-      ignore_errors: true
-
-    - name: Deploy standalone fallback SPOA daemon if binary unextracted
-      ansible.builtin.copy:
-        dest: /usr/local/bin/coraza-spoa
-        owner: root
-        group: root
-        mode: "0755"
-        content: |
-          #!/usr/bin/env python3
-          # Fallback lightweight SPOA responder daemon for offline environments
-          import socket, sys, time
-          HOST, PORT = "{{ coraza_spoa_bind }}", {{ coraza_spoa_port }}
-          s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-          s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-          try:
-              s.bind((HOST, PORT))
-              s.listen(128)
-              while True:
-                  conn, addr = s.accept()
-                  try:
-                      conn.recv(4096)
-                      # Basic SPOE ACK handshake
-                      conn.sendall(b"\x00\x00\x00\x00")
-                  except Exception:
-                      pass
-                  finally:
-                      conn.close()
-          except Exception as e:
-              time.sleep(1)
-      when: not coraza_bin_stat.stat.exists and (coraza_download is not defined or coraza_download is failed)
 
     - name: Deploy Coraza SPOA systemd service unit
       ansible.builtin.template:

@@ -14,7 +14,6 @@ db_engine: "postgresql"
 # Network Binding & Listening Ports
 # Defaults: 5432 for PostgreSQL, 3306 for MySQL
 db_port: "{{ 5432 if db_engine == 'postgresql' else 3306 }}"
-db_bind_address: "0.0.0.0"
 
 # Trusted private subnets authorized to connect to the database (RFC 1918 defaults)
 db_trusted_subnets:
@@ -45,7 +44,7 @@ postgresql_listen_addresses: "*"
 postgresql_max_connections: 100
 postgresql_shared_buffers: "256MB"
 postgresql_auth_method: "scram-sha-256"
-postgresql_ssl: true
+postgresql_enable_ssl: "{{ enable_internal_tls | default(false) | bool }}"
 
 # Database Clustering & Replication Role ('standalone', 'primary', or 'replica')
 db_role: "standalone"

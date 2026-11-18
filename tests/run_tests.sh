@@ -108,8 +108,10 @@ echo "================================================================="
 echo " 6. Jinja2, Python, JSON, YAML & Markdown Link Validation"
 echo "================================================================="
 python3 - <<'EOF'
-import glob, json, os, py_compile, re, sys
+import ast, glob, json, os, re, sys
 import jinja2, yaml
+
+sys.dont_write_bytecode = True
 
 errors = []
 env = jinja2.Environment()
@@ -125,11 +127,12 @@ print(f"  [✓] Parsed {len(j2_files)} Jinja2 templates")
 
 py_files = sorted(glob.glob("**/*.py", recursive=True))
 for p in py_files:
-    try:
-        py_compile.compile(p, doraise=True)
-    except Exception as e:
-        errors.append(f"Python compile error in {p}: {e}")
-print(f"  [✓] Compiled {len(py_files)} Python scripts")
+    with open(p, encoding="utf-8") as f:
+        try:
+            ast.parse(f.read(), filename=p)
+        except Exception as e:
+            errors.append(f"Python syntax error in {p}: {e}")
+print(f"  [✓] Validated {len(py_files)} Python scripts")
 
 json_files = sorted(glob.glob("**/*.json", recursive=True))
 for p in json_files:
