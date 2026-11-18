@@ -66,27 +66,17 @@ internal_ca_leaf_validity_days: 90
 internal_cert_renewal_threshold_days: 14
 ```
 
-### 2. In `roles/webserver/defaults/main.yml` (or `group_vars/webservers.yml`):
+### 2. In `roles/webserver/defaults/main.yml`:
 ```yaml
 # Enable HTTPS on backend Nginx instances (inherits from global enable_internal_tls)
 webserver_enable_ssl: "{{ enable_internal_tls | default(false) | bool }}"
-webserver_ssl_cert_dir: "/etc/ssl/internal"
 webserver_ssl_cert: "/etc/ssl/internal/server.crt"
 webserver_ssl_key: "/etc/ssl/internal/server.key"
-webserver_ssl_ca_cert: "/etc/ssl/certs/internal-ca.crt"
-
-# Automated Certificate Renewal Configuration (ECDSA P-384)
-webserver_ssl_curve: "secp384r1"
-webserver_ssl_digest: "sha384"
-internal_cert_renewal_threshold_days: 14
-internal_ca_signer_port: 8444
 ```
+*(Certificate issuance, `internal_ca_signer_port`, ECDSA P-384 curve settings, and 14-day auto-renewal timers are managed fleet-wide by `roles/internal_ca_client`.)*
 
 ### 3. In `group_vars/all/vault.yml`:
-```yaml
-# Shared authorization token for internal CA signing requests
-vault_internal_ca_token: "YourSecretInternalCAToken2026!"
-```
+Define `vault_internal_ca_token` in your encrypted vault file. See the [Ansible Vault Secrets Management Guide](security-vault.md#credential-matrix-single-source-of-truth) for the complete credential specification.
 
 ---
 

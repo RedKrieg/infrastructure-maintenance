@@ -78,11 +78,7 @@ flowchart LR
 ### Deployment Steps
 
 1. **Configure Vault Passwords**:
-   In `group_vars/all/vault.yml`:
-   ```yaml
-   vault_freeipa_admin_password: "YourStrongAdminPassword2026!"
-   vault_freeipa_ds_password: "YourDirectoryManagerPassword2026!"
-   ```
+   Set `vault_freeipa_admin_password` and `vault_freeipa_ds_password` in `group_vars/all/vault.yml` (see the [Ansible Vault Secrets Management Guide](security-vault.md#credential-matrix-single-source-of-truth)).
 
 2. **Define Server in Inventory**:
    In your inventory file (e.g., `examples/freeipa/inventory.standup.ini`):
@@ -220,6 +216,8 @@ sssctl user-checks <username>
 | `freeipa_domain` | `domain_name` | DNS domain name (e.g., `example.com`) |
 | `freeipa_realm` | Uppercase `freeipa_domain` | Kerberos realm (e.g., `EXAMPLE.COM`) |
 | `freeipa_server_fqdn` | `ipa.{{ freeipa_domain }}` | FQDN of the FreeIPA server |
+| `freeipa_admin_password` | `vault_freeipa_admin_password` | FreeIPA `admin` Kerberos principal password ([security-vault.md](security-vault.md)) |
+| `freeipa_ds_password` | `vault_freeipa_ds_password` | 389 Directory Manager password ([security-vault.md](security-vault.md)) |
 | `freeipa_setup_dns` | `false` | When `true`, configures integrated BIND9 DNS |
 | `freeipa_setup_ntp` | `false` | When `false`, preserves systemd-timesyncd |
 | `freeipa_trusted_subnets`| RFC 1918 subnets | CIDRs allowed to authenticate via Kerberos/LDAP |

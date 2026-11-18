@@ -20,32 +20,43 @@ group_vars/
 > [!IMPORTANT]
 > There are **no default passwords** built into roles or playbooks. Copy `group_vars/all/vault.example.yml` to `group_vars/all/vault.yml`, set strong credentials, and encrypt it before deploying; otherwise Ansible fails fast on undefined secrets.
 
-### Managed Vault Secrets:
-* **Edge & HA**:
-  * `vault_haproxy_stats_password`: Password protecting HAProxy `/stats` and `/metrics`.
-  * `vault_keepalived_auth_pass`: VRRP authentication passphrase for Keepalived (8 chars max).
-  * `vault_internal_ca_token`: Authorization token authenticating node CSR signing requests to `internal-ca-signer`.
-* **Identity & Access**:
-  * `vault_teleport_auth_token`: Static node join token shared between `teleport_server` and `teleport_node`.
-  * `vault_teleport_github_client_id`: GitHub OAuth application Client ID for Teleport SSO.
-  * `vault_teleport_github_client_secret`: GitHub OAuth application Client Secret for Teleport SSO.
-  * `vault_freeipa_admin_password`: FreeIPA `admin` Kerberos principal password.
-  * `vault_freeipa_ds_password`: FreeIPA 389 Directory Server Directory Manager password.
-  * `vault_freeipa_client_otp`: FreeIPA One-Time Password (OTP) for automated host enrollment.
-* **Observability & Alerting**:
-  * `vault_prometheus_password`: Basic auth password used by Prometheus when scraping protected endpoints.
-  * `vault_grafana_admin_password`: Grafana UI administrator login password.
-  * `vault_alertmanager_smtp_password`: SMTP relay password for Alertmanager email dispatch (when configured).
-* **Data, Cache & Broker Tiers**:
-  * `vault_db_password`: Application user password for PostgreSQL or MySQL databases.
-  * `vault_db_replication_password`: PostgreSQL streaming replication role passphrase.
-  * `vault_redis_password`: Redis `requirepass` authentication secret.
-  * `vault_rabbitmq_password`: RabbitMQ application vhost user password.
-  * `vault_rabbitmq_admin_password`: RabbitMQ Management Web UI & API administrator password.
-  * `vault_rabbitmq_erlang_cookie`: Shared secret cookie for RabbitMQ Erlang cluster nodes.
-* **Backup & Disaster Recovery**:
-  * `vault_backup_s3_access_key`: S3 / MinIO access key ID (when `backup_destination_type` is `s3`).
-  * `vault_backup_s3_secret_key`: S3 / MinIO secret access key (when `backup_destination_type` is `s3`).
+### Credential Matrix (Single Source of Truth)
+
+All 20 `vault_*` secrets below are declared in [`group_vars/all/vault.example.yml`](../group_vars/all/vault.example.yml) and validated bidirectionally against the codebase by [`tests/run_tests.sh`](../tests/run_tests.sh).
+
+#### Required Credentials (Fail-Fast When Role/Playbook Is Active)
+
+| Vault Variable | Populates | Consumer Roles / Playbooks | Requirement & Format Constraints |
+| :--- | :--- | :--- | :--- |
+| `vault_haproxy_stats_password` | `haproxy_stats_password` | `roles/proxy`, `verify_cluster.yml` (fallback for `prometheus_haproxy_password`) | **Required**; HTTP Basic Auth for `/stats` & `/metrics`. |
+| `vault_internal_ca_token` | `internal_ca_token` | `roles/proxy`, `roles/internal_ca_client` | **Required**; shared bearer token for `internal-ca-signer`. |
+| `vault_keepalived_auth_pass` | `keepalived_auth_pass` | `roles/keepalived` | **Required** when Keepalived runs; **max 8 characters** (`PASS` auth). |
+| `vault_grafana_admin_password` | `grafana_admin_password` | `roles/grafana` | **Required**; Grafana UI administrator login password. |
+| `vault_teleport_auth_token` | `teleport_auth_token` | `roles/teleport_server`, `roles/teleport_node` | **Required**; static join token shared between Auth server and nodes. |
+| `vault_freeipa_admin_password` | `freeipa_admin_password` | `roles/freeipa_server`, `roles/freeipa_client` (when OTP is empty) | **Required** for FreeIPA server and non-OTP enrollment; **min 8 characters**. |
+| `vault_freeipa_ds_password` | `freeipa_ds_password` | `roles/freeipa_server` | **Required** for FreeIPA Directory Manager; **min 8 characters**. |
+| `vault_db_password` | `db_password` | `roles/database`, AWS RDS / GCP Cloud SQL / Azure PostgreSQL provisioning | **Required**; application database user password (`db_user`). |
+| `vault_db_replication_password` | `db_replication_password` | `roles/database` | **Required**; PostgreSQL streaming replication role password. |
+| `vault_redis_password` | `redis_password` | `roles/redis` | **Required**; Redis `requirepass` authentication secret. |
+| `vault_rabbitmq_password` | `rabbitmq_password` | `roles/rabbitmq`, `provision_aws_amazon_mq.yml` | **Required**; RabbitMQ application vhost user password. |
+| `vault_rabbitmq_admin_password` | `rabbitmq_admin_password` | `roles/rabbitmq`, `verify_cluster.yml` | **Required**; RabbitMQ Management UI & API admin password. |
+| `vault_rabbitmq_erlang_cookie` | `rabbitmq_erlang_cookie` | `roles/rabbitmq` | **Required**; alphanumeric cluster cookie in `/var/lib/rabbitmq/.erlang.cookie`. |
+
+#### Optional / Conditional Credentials
+
+| Vault Variable | Populates | Consumer Roles / Playbooks | Default & Activation Condition |
+| :--- | :--- | :--- | :--- |
+| `vault_prometheus_password` | `prometheus_haproxy_password` | `roles/prometheus_server` | Optional; falls back to `vault_haproxy_stats_password` if unset. |
+| `vault_alertmanager_smtp_password` | `alertmanager_smtp_auth_password` | `roles/prometheus_server` | Defaults to `""`; required only when authenticated SMTP relay is configured. |
+| `vault_teleport_github_client_id` | `teleport_github_client_id` | `roles/teleport_server` | Defaults to `""`; required only when `enable_teleport_github_sso: true`. |
+| `vault_teleport_github_client_secret` | `teleport_github_client_secret` | `roles/teleport_server` | Defaults to `""`; required only when `enable_teleport_github_sso: true`. |
+| `vault_freeipa_client_otp` | `freeipa_client_otp` | `roles/freeipa_client` | Defaults to `""`; optional one-time password instead of `vault_freeipa_admin_password`. |
+| `vault_backup_s3_access_key` | `backup_s3_access_key` | `backup_cluster.yml` | Defaults to `""`; required only when `backup_destination_type: "s3"`. |
+| `vault_backup_s3_secret_key` | `backup_s3_secret_key` | `backup_cluster.yml` | Defaults to `""`; required only when `backup_destination_type: "s3"`. |
+
+#### Local Break-Glass OS Accounts (`group_vars/all/admin_users.yml`)
+- Local UNIX accounts defined in `admin_users` authenticate via **Ed25519/RSA SSH public keys** (`authorized_keys`), with `PasswordAuthentication no` enforced on `sshd`.
+- When `password` is omitted from an `admin_users` entry, `roles/admin_users` generates a unique random 32-character SHA-512 OS password per host on initial user creation (`update_password: on_create`), so no shared default UNIX password exists.
 
 ---
 

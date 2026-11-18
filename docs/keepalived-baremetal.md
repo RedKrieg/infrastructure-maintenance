@@ -39,7 +39,7 @@ Variables can be customized in `group_vars/proxies.yml` or `inventory.ini`:
 | `keepalived_virtual_router_id` | `51` | VRRP Virtual Router ID (`1` - `255`). Must match across peers. |
 | `keepalived_priority_master` | `101` | VRRP priority for the primary proxy node. |
 | `keepalived_priority_backup` | `100` | VRRP priority for secondary proxy nodes. |
-| `keepalived_auth_pass` | `"VrrpSecretPass2026"` | Authentication secret for VRRP packet exchange. |
+| `keepalived_auth_pass` | `vault_keepalived_auth_pass` | Authentication secret for VRRP packet exchange (max 8 chars; see [security-vault.md](security-vault.md)). |
 | `keepalived_advert_int` | `1` | VRRP advertisement interval in seconds. |
 | `keepalived_nopreempt` | `true` | Prevents flapping back to primary if primary recovers. |
 
