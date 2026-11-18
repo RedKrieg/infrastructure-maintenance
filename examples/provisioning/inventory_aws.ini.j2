@@ -7,42 +7,42 @@
 
 [proxies]
 {% for inst in aws_instances if inst.group == 'proxies' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [webservers]
 {% for inst in aws_instances if inst.group == 'webservers' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} external_fqdn={{ inst.external_fqdn }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} external_fqdn={{ inst.external_fqdn }} az={{ inst.az }}
 {% endfor %}
 
 [monitoring]
 {% for inst in aws_instances if inst.group == 'monitoring' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [teleport_servers]
 {% for inst in aws_instances if inst.group == 'teleport_servers' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [freeipa_servers]
 {% for inst in aws_instances if inst.group == 'freeipa_servers' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [databases]
 {% for inst in aws_instances if inst.group == 'databases' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [redis_servers]
 {% for inst in aws_instances if inst.group == 'redis_servers' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [rabbitmq_servers]
 {% for inst in aws_instances if inst.group == 'rabbitmq_servers' %}
-{{ inst.name }} ansible_host={{ inst.private_ip }} az={{ inst.az }}
+{{ inst.name }} ansible_host={{ inst.private_ip }} internal_ip={{ inst.private_ip }} az={{ inst.az }}
 {% endfor %}
 
 [headless_nodes:children]

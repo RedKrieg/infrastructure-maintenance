@@ -75,26 +75,7 @@
       tags: [webserver, nginx, ssl, tls]
 
 # ------------------------------------------------------------------------------
-# Play 4: Finalize HAProxy Load Balancers & Keepalived VRRP
-# ------------------------------------------------------------------------------
-- name: Finalize HAProxy Ingress Routing & High Availability
-  hosts: proxies
-  become: true
-  gather_facts: true
-  vars_files:
-    - ../../vars/admin_users.yml
-
-  roles:
-    - role: proxy
-      vars:
-        proxy_stage: "routing"
-      tags: [proxy, haproxy, routing]
-
-    - role: keepalived
-      tags: [keepalived, ha, vrrp]
-
-# ------------------------------------------------------------------------------
-# Play 5: Prometheus & Grafana Monitoring Server
+# Play 4: Prometheus & Grafana Monitoring Server
 # ------------------------------------------------------------------------------
 - name: Provision Observability Tier
   hosts: monitoring
@@ -111,7 +92,7 @@
       tags: [grafana, monitoring]
 
 # ------------------------------------------------------------------------------
-# Play 6: Dedicated FreeIPA Server (Kerberos KDC, LDAP 389 Directory & Web UI)
+# Play 5: Dedicated FreeIPA Server (Kerberos KDC, LDAP 389 Directory & Web UI)
 # ------------------------------------------------------------------------------
 - name: Provision Dedicated FreeIPA Centralized Identity Server
   hosts: freeipa_servers
@@ -125,7 +106,7 @@
       tags: [freeipa, freeipa_server, identity, auth]
 
 # ------------------------------------------------------------------------------
-# Play 7: FreeIPA Client Enrollment across Cluster Nodes
+# Play 6: FreeIPA Client Enrollment across Cluster Nodes
 # ------------------------------------------------------------------------------
 - name: Enroll Cluster Nodes into FreeIPA Domain
   hosts: headless_nodes
@@ -137,7 +118,7 @@
       tags: [freeipa, freeipa_client, identity, sssd]
 
 # ------------------------------------------------------------------------------
-# Play 8: Centralized Logging (Server & Shipper)
+# Play 7: Centralized Logging (Server & Shipper)
 # ------------------------------------------------------------------------------
 - name: Provision Centralized Log Ingestion Server
   hosts: monitoring
@@ -149,10 +130,29 @@
       tags: [logging, logging_server]
 
 - name: Provision Centralized Log Shipper Clients
-  hosts: headless_nodes
+  hosts: "headless_nodes:!monitoring"
   become: true
   gather_facts: true
 
   roles:
     - role: central_logging
       tags: [logging, logging_client]
+
+# ------------------------------------------------------------------------------
+# Play 8: Finalize HAProxy Load Balancers & Keepalived VRRP
+# ------------------------------------------------------------------------------
+- name: Finalize HAProxy Ingress Routing & High Availability
+  hosts: proxies
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/admin_users.yml
+
+  roles:
+    - role: proxy
+      vars:
+        proxy_stage: "routing"
+      tags: [proxy, haproxy, routing]
+
+    - role: keepalived
+      tags: [keepalived, ha, vrrp]

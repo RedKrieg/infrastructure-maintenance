@@ -7,42 +7,42 @@
 
 [proxies]
 {% for inst in os_instances if inst.group == 'proxies' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [webservers]
 {% for inst in os_instances if inst.group == 'webservers' %}
-{{ inst.name }} ansible_host={{ inst.ip }} external_fqdn={{ inst.external_fqdn }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }} external_fqdn={{ inst.external_fqdn }}
 {% endfor %}
 
 [monitoring]
 {% for inst in os_instances if inst.group == 'monitoring' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [teleport_servers]
 {% for inst in os_instances if inst.group == 'teleport_servers' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [freeipa_servers]
 {% for inst in os_instances if inst.group == 'freeipa_servers' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [databases]
 {% for inst in os_instances if inst.group == 'databases' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [redis_servers]
 {% for inst in os_instances if inst.group == 'redis_servers' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [rabbitmq_servers]
 {% for inst in os_instances if inst.group == 'rabbitmq_servers' %}
-{{ inst.name }} ansible_host={{ inst.ip }}
+{{ inst.name }} ansible_host={{ inst.ip }} internal_ip={{ inst.ip }}
 {% endfor %}
 
 [headless_nodes:children]
