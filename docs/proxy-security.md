@@ -43,24 +43,41 @@ Injected response headers:
 
 ---
 
-## 3. Layer 7 Volumetric Rate Limiting
+## 3. Layer 4/7 Volumetric, Connection & Slowloris Rate Limiting
 
-In-memory stick-table tracking limits brute-force attacks and volumetric abuse per client IP address. Excessive requests receive an immediate `429 Too Many Requests`:
+Multi-metric in-memory stick-table tracking across both `fe_http` (port `80`) and `fe_https` (port `443`), paired with tight HTTP header/keep-alive timeouts and a dedicated TCP stick-table on Teleport SSH proxy port `3023`, protects against volumetric floods, Slowloris slow-header attacks, brute-force scanning, and connection exhaustion:
 
 ```yaml
+# Slowloris & HTTP timeouts (HAProxy defaults)
+haproxy_timeout_http_request: "10s"
+haproxy_timeout_http_keep_alive: "10s"
+
+# Web Ingress Stick-Table Limits (Ports 80 & 443 shared)
 haproxy_enable_rate_limit: true
 haproxy_rate_limit_table_size: "100k"   # Max distinct IPs tracked in RAM
 haproxy_rate_limit_expire: "30s"        # Inactive table entry expiration
 haproxy_rate_limit_period: "10s"        # Rate measurement sliding window
-haproxy_rate_limit_req_rate: 300        # Max requests allowed in sliding window (300 req / 10s)
+haproxy_rate_limit_req_rate: 300        # Max HTTP requests per IP in window
+haproxy_rate_limit_err_rate: 50         # Max HTTP 4xx error responses per IP in window
+haproxy_rate_limit_conn_rate: 100       # Max new TCP/TLS connections per IP in window
+haproxy_rate_limit_conn_cur: 100        # Max concurrent TCP connections per IP
 haproxy_rate_limit_status: 429          # HTTP 429 Too Many Requests
+
+# Teleport SSH Proxy (Port 3023 TCP) & Host SSH (Port 22 UFW)
+haproxy_ssh_proxy_conn_rate: 30         # Max new Teleport SSH connections per IP / 10s (3/sec)
+haproxy_ssh_proxy_conn_cur: 50          # Max concurrent Teleport SSH sessions per IP
+ssh_rate_limit_per_second: 3            # External host SSH new conn limit (internal RFC1918 exempt)
+ssh_rate_limit_burst: 15
 ```
 
-HAProxy stick-table implementation:
+HAProxy multi-metric stick-table implementation:
 ```haproxy
-stick-table type ip size 100k expire 30s store http_req_rate(10s)
-http-request track-sc0 src
+stick-table type ip size 100k expire 30s store http_req_rate(10s),http_err_rate(10s),conn_rate(10s),conn_cur
+tcp-request connection track-sc0 src
+tcp-request connection reject if { sc_conn_rate(0) gt 100 }
+tcp-request connection reject if { sc_conn_cur(0) gt 100 }
 http-request deny deny_status 429 if { sc_http_req_rate(0) gt 300 }
+http-request deny deny_status 429 if { sc_http_err_rate(0) gt 50 }
 ```
 
 ---

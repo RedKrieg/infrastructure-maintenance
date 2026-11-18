@@ -16,6 +16,8 @@ haproxy_maxconn: 4096
 haproxy_timeout_connect: "5000ms"
 haproxy_timeout_client: "50000ms"
 haproxy_timeout_server: "50000ms"
+haproxy_timeout_http_request: "10s"
+haproxy_timeout_http_keep_alive: "10s"
 
 # SSL & Certificates Configuration (SSL is decoded/terminated on the proxies)
 haproxy_certs_dir: "/etc/haproxy/certs"
@@ -115,6 +117,11 @@ haproxy_rate_limit_expire: "30s"
 haproxy_rate_limit_period: "10s"
 haproxy_rate_limit_req_rate: 300   # Max requests allowed in the period window (increased from 150)
 haproxy_rate_limit_status: 429     # HTTP 429 Too Many Requests
+haproxy_rate_limit_conn_cur: 100   # Max concurrent connections per client IP
+haproxy_rate_limit_conn_rate: 100  # Max new TCP/TLS connections per client IP in period (10s)
+haproxy_rate_limit_err_rate: 50    # Max HTTP 4xx error responses per client IP in period (10s)
+haproxy_ssh_proxy_conn_rate: 30    # Max new Teleport SSH connections per IP in 10s (3/sec)
+haproxy_ssh_proxy_conn_cur: 50     # Max concurrent Teleport SSH sessions per IP (office NAT friendly)
 
 # Backend Webserver HTTP Health Checking & Load Balancing
 haproxy_backend_http_check: true

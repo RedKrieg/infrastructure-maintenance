@@ -21,11 +21,13 @@
   loop: "{{ ((teleport_admin_trusted_cidrs | default(['0.0.0.0/0'])) + teleport_trusted_subnets) | unique }}"
   tags: [teleport, teleport_server, firewall, ufw]
 
-- name: Allow Teleport reverse tunnel port (3024) through UFW
+- name: Allow Teleport reverse tunnel port (3024) through UFW from trusted subnets
   community.general.ufw:
     rule: allow
     port: "{{ teleport_proxy_tunnel_port | string }}"
     proto: tcp
+    from_ip: "{{ item }}"
+  loop: "{{ teleport_trusted_subnets }}"
   tags: [teleport, teleport_server, firewall, ufw]
 
 - name: Allow Teleport Auth service port (3025) through UFW from trusted subnets

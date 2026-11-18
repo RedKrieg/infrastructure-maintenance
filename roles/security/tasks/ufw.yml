@@ -12,11 +12,31 @@
         name: ufw
         state: present
 
-    - name: Configure rate limiting on SSH (port 22/tcp)
+    - name: Remove legacy 6/30s UFW LIMIT rule on SSH if present
       community.general.ufw:
         rule: limit
         port: "22"
         proto: tcp
+        delete: true
+
+    - name: Allow SSH (port 22/tcp) through UFW
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Configure external SSH rate limiting (3/sec, internal RFC1918 exempt) in /etc/ufw/before.rules
+      ansible.builtin.blockinfile:
+        path: /etc/ufw/before.rules
+        marker: "# {mark} ANSIBLE MANAGED EXTERNAL SSH RATE LIMIT"
+        insertbefore: "^COMMIT"
+        block: |
+          -A ufw-before-input -p tcp --dport 22 -s 10.0.0.0/8 -j ACCEPT
+          -A ufw-before-input -p tcp --dport 22 -s 172.16.0.0/12 -j ACCEPT
+          -A ufw-before-input -p tcp --dport 22 -s 192.168.0.0/16 -j ACCEPT
+          -A ufw-before-input -p tcp --dport 22 -s 127.0.0.0/8 -j ACCEPT
+          -A ufw-before-input -p tcp --dport 22 -m conntrack --ctstate NEW -m hashlimit --hashlimit-name ssh_ext_limit --hashlimit-mode srcip --hashlimit-above {{ ssh_rate_limit_per_second | default(3) }}/sec --hashlimit-burst {{ ssh_rate_limit_burst | default(15) }} -j DROP
+      notify: Reload ufw
 
     - name: Set UFW default incoming policy to deny
       community.general.ufw:

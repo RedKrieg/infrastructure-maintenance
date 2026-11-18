@@ -30,6 +30,8 @@ defaults
     timeout connect {{ haproxy_timeout_connect }}
     timeout client  {{ haproxy_timeout_client }}
     timeout server  {{ haproxy_timeout_server }}
+    timeout http-request {{ haproxy_timeout_http_request | default('10s') }}
+    timeout http-keep-alive {{ haproxy_timeout_http_keep_alive | default('10s') }}
     errorfile 400 /etc/haproxy/errors/400.http
     errorfile 403 /etc/haproxy/errors/403.http
     errorfile 404 /etc/haproxy/errors/404.http
@@ -87,6 +89,14 @@ frontend fe_http
 {% endif %}
     mode http
     option forwardfor
+{% if haproxy_enable_rate_limit | bool %}
+
+    # Volumetric & Connection Rate Limiting (Shared Stick Table with fe_https)
+    tcp-request connection track-sc0 src table fe_https
+    tcp-request connection reject if { sc_conn_rate(0,fe_https) gt {{ haproxy_rate_limit_conn_rate | default(100) }} }
+    tcp-request connection reject if { sc_conn_cur(0,fe_https) gt {{ haproxy_rate_limit_conn_cur | default(100) }} }
+    http-request deny deny_status {{ haproxy_rate_limit_status }} if { sc_http_req_rate(0,fe_https) gt {{ haproxy_rate_limit_req_rate }} }
+{% endif %}
 
     # Let's Encrypt HTTP-01 challenge routing (proxied to Primary Certificate Issuer)
     acl is_acme_challenge path_beg /.well-known/acme-challenge/
@@ -101,9 +111,9 @@ frontend fe_http
 # SSL is decoded and terminated here across all certificates in {{ haproxy_certs_dir }}
 frontend fe_https
 {% if haproxy_enable_dual_stack | default(true) | bool %}
-    bind :::{{ haproxy_bind_https_port }} v4v6 ssl crt {{ haproxy_certs_dir }}/{% if haproxy_enable_http2 | bool %} alpn h2,http/1.1{% endif %}
+    bind :::{{ haproxy_bind_https_port }} v4v6 ssl crt {{ haproxy_certs_dir }}/{{ ' alpn h2,http/1.1' if (haproxy_enable_http2 | bool) else '' }}
 {% else %}
-    bind *:{{ haproxy_bind_https_port }} ssl crt {{ haproxy_certs_dir }}/{% if haproxy_enable_http2 | bool %} alpn h2,http/1.1{% endif %}
+    bind *:{{ haproxy_bind_https_port }} ssl crt {{ haproxy_certs_dir }}/{{ ' alpn h2,http/1.1' if (haproxy_enable_http2 | bool) else '' }}
 {% endif %}
     mode http
     option forwardfor
@@ -121,10 +131,13 @@ frontend fe_https
 {% endif %}
 {% if haproxy_enable_rate_limit | bool %}
 
-    # Volumetric Layer 7 Rate Limiting (Stick Table)
-    stick-table type ip size {{ haproxy_rate_limit_table_size }} expire {{ haproxy_rate_limit_expire }} store http_req_rate({{ haproxy_rate_limit_period }})
-    http-request track-sc0 src
+    # Multi-Metric Volumetric, Error & Connection Rate Limiting (Stick Table)
+    stick-table type ip size {{ haproxy_rate_limit_table_size }} expire {{ haproxy_rate_limit_expire }} store http_req_rate({{ haproxy_rate_limit_period }}),http_err_rate({{ haproxy_rate_limit_period }}),conn_rate({{ haproxy_rate_limit_period }}),conn_cur
+    tcp-request connection track-sc0 src
+    tcp-request connection reject if { sc_conn_rate(0) gt {{ haproxy_rate_limit_conn_rate | default(100) }} }
+    tcp-request connection reject if { sc_conn_cur(0) gt {{ haproxy_rate_limit_conn_cur | default(100) }} }
     http-request deny deny_status {{ haproxy_rate_limit_status }} if { sc_http_req_rate(0) gt {{ haproxy_rate_limit_req_rate }} }
+    http-request deny deny_status {{ haproxy_rate_limit_status }} if { sc_http_err_rate(0) gt {{ haproxy_rate_limit_err_rate | default(50) }} }
 {% endif %}
 {% if haproxy_enable_coraza_waf | default(true) | bool %}
 
@@ -236,9 +249,9 @@ backend be_acme
 {% set p_clean = p | regex_replace('[^a-zA-Z0-9]', '_') %}
 {% set is_backup = not loop.first %}
 {% if p == inventory_hostname %}
-    server acme_{{ p_clean }} 127.0.0.1:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
+    server acme_{{ p_clean }} 127.0.0.1:{{ acme_standalone_port }} check inter 1s fall 2 rise 2{{ ' backup' if is_backup else '' }}
 {% else %}
-    server acme_{{ p_clean }} {{ hostvars[p]['internal_ip'] | default(hostvars[p]['ansible_host'] | default(p)) }}:{{ acme_standalone_port }} check inter 1s fall 2 rise 2 {% if is_backup %}backup{% endif %}
+    server acme_{{ p_clean }} {{ hostvars[p]['internal_ip'] | default(hostvars[p]['ansible_host'] | default(p)) }}:{{ acme_standalone_port }} check inter 1s fall 2 rise 2{{ ' backup' if is_backup else '' }}
 {% endif %}
 {% endfor %}
 {% endif %}
@@ -381,6 +394,10 @@ frontend fe_teleport_ssh
     mode tcp
     option tcplog
     timeout client 1h
+    stick-table type ip size 10k expire 60s store conn_rate(10s),conn_cur
+    tcp-request connection track-sc0 src
+    tcp-request connection reject if { sc_conn_rate(0) gt {{ haproxy_ssh_proxy_conn_rate | default(30) }} }
+    tcp-request connection reject if { sc_conn_cur(0) gt {{ haproxy_ssh_proxy_conn_cur | default(50) }} }
 {% if has_stats_whitelist %}
     acl is_allowed_admin_tcp src -f /etc/haproxy/stats_whitelist.lst
     tcp-request connection reject unless is_allowed_admin_tcp
