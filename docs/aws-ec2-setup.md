@@ -118,7 +118,7 @@ Install `boto3` (AWS Python SDK) and the Ansible collection:
 
 ```bash
 pip install boto3 botocore
-ansible-galaxy collection install amazon.aws
+ansible-galaxy collection install amazon.aws community.aws
 ```
 
 ---

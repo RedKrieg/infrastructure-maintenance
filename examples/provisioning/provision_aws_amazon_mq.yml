@@ -24,7 +24,7 @@
     mq_host_instance_type: "mq.t3.micro"
     mq_engine_version: "3.13"
     mq_user: "app_user"
-    mq_password: "{{ vault_aws_mq_password | default('SecretCloudMQPass2026!') }}"
+    mq_password: "{{ vault_rabbitmq_password | default('SecretCloudMQPass2026!') }}"
 
   tasks:
     # --------------------------------------------------------------------------

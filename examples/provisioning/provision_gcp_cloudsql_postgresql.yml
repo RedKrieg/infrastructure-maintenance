@@ -28,7 +28,7 @@
     gcp_cloudsql_disk_size_gb: 20
     gcp_cloudsql_db_name: "app_db"
     gcp_cloudsql_user: "app_user"
-    gcp_cloudsql_password: "{{ vault_gcp_cloudsql_password | default('SecretGcpDbPass2026!') }}"
+    gcp_cloudsql_password: "{{ vault_db_password | default('SecretGcpDbPass2026!') }}"
     gcp_cloudsql_availability: "REGIONAL" # High Availability with automatic failover
 
   tasks:

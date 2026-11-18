@@ -140,6 +140,24 @@ for p in json_files:
             errors.append(f"JSON parse error in {p}: {e}")
 print(f"  [✓] Validated {len(json_files)} JSON files")
 
+fqcn_re = re.compile(r"^([a-z0-9_]+\.[a-z0-9_]+)\.[a-z0-9_]+$")
+used_collections = {}
+
+def scan_task_collections(node, path):
+    if isinstance(node, dict):
+        is_task_block = any(k in node for k in ("name", "block", "rescue", "always", "when", "loop", "with_items", "notify", "register"))
+        if is_task_block:
+            for k in node:
+                if isinstance(k, str):
+                    m = fqcn_re.match(k)
+                    if m and m.group(1) != "ansible.builtin":
+                        used_collections.setdefault(m.group(1), set()).add(path)
+        for v in node.values():
+            scan_task_collections(v, path)
+    elif isinstance(node, list):
+        for item in node:
+            scan_task_collections(item, path)
+
 yml_files = sorted(set(
     glob.glob("**/*.yml", recursive=True)
     + glob.glob("**/*.yaml", recursive=True)
@@ -148,7 +166,9 @@ yml_files = sorted(set(
 for p in yml_files:
     with open(p, encoding="utf-8") as f:
         try:
-            list(yaml.safe_load_all(f))
+            docs = list(yaml.safe_load_all(f))
+            if not p.startswith((".github/", "group_vars/", "host_vars/", "vars/")):
+                scan_task_collections(docs, p)
         except Exception as e:
             errors.append(f"YAML parse error in {p}: {e}")
 print(f"  [✓] Validated {len(yml_files)} YAML files")
@@ -230,7 +250,7 @@ for md in md_files:
 
 print(f"  [✓] Verified {checked_links} relative links and Markdown syntax across {len(md_files)} Markdown files")
 
-vault_files = sorted(glob.glob("roles/**/*", recursive=True) + glob.glob("group_vars/**/*", recursive=True) + glob.glob("*.yml"))
+vault_files = sorted(glob.glob("roles/**/*", recursive=True) + glob.glob("group_vars/**/*", recursive=True) + glob.glob("examples/**/*", recursive=True) + glob.glob("*.yml"))
 vault_refs = set()
 vault_re = re.compile(r"(?<![.\w])vault_[a-zA-Z0-9_]+")
 for p in vault_files:
@@ -256,6 +276,19 @@ for v, p in sorted(vault_refs):
     if vault_actual_keys is not None and v not in vault_actual_keys:
         errors.append(f"Vault SSOT mismatch: {v} (used in {p}) missing from group_vars/all/vault.yml")
 print(f"  [✓] Verified {len({v for v, _ in vault_refs})} vault_* references match SSOT vault files")
+
+with open(".github/workflows/ci.yml", encoding="utf-8") as f:
+    ci_content = f.read()
+ci_collections = set()
+for line in ci_content.splitlines():
+    if "ansible-galaxy collection install" in line:
+        parts = line.split("ansible-galaxy collection install", 1)[1].split()
+        ci_collections.update(parts)
+
+for col, paths in sorted(used_collections.items()):
+    if col not in ci_collections:
+        errors.append(f"CI collection mismatch: {col} (used in {', '.join(sorted(paths)[:3])}) missing from .github/workflows/ci.yml")
+print(f"  [✓] Verified {len(used_collections)} Ansible collections match CI workflow")
 
 expected_groups = [
     "[proxies]", "[webservers]", "[monitoring]", "[teleport_servers]",
