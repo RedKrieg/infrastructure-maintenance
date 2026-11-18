@@ -67,9 +67,9 @@ os_web_server_group_policy: "anti-affinity"
 
 1. **Multi-Availability Zone Subnet Distribution**:
    Subnets span distinct physical AWS data center facilities (`us-east-1a`, `us-east-1b`, `us-east-1c`), guaranteeing independent power, cooling, and physical security.
-   - `proxy-01` & `web-01` $\rightarrow$ `us-east-1a` (`cluster-subnet-1a`)
-   - `proxy-02` & `web-02` $\rightarrow$ `us-east-1b` (`cluster-subnet-1b`)
-   - `proxy-03` & `web-03` $\rightarrow$ `us-east-1c` (`cluster-subnet-1c`)
+   - `proxy-01` & `web-01` → `us-east-1a` (`cluster-subnet-1a`)
+   - `proxy-02` & `web-02` → `us-east-1b` (`cluster-subnet-1b`)
+   - `proxy-03` & `web-03` → `us-east-1c` (`cluster-subnet-1c`)
 2. **EC2 Spread Placement Groups**:
    For deployments requiring rack-level isolation within or across AZs, instances can be assigned to an EC2 Placement Group with strategy `spread` (`amazon.aws.ec2_placement_group`), guaranteeing that instances run on distinct physical hardware racks with separate power and network switches.
 3. **AWS RDS Multi-AZ & Amazon MQ**:
@@ -81,9 +81,9 @@ os_web_server_group_policy: "anti-affinity"
 
 1. **Multi-Zone VM Distribution**:
    Instances are provisioned across independent Compute Engine zones within the region (`us-central1-a`, `us-central1-b`, `us-central1-c`):
-   - `proxy-01` & `web-01` $\rightarrow$ `us-central1-a`
-   - `proxy-02` & `web-02` $\rightarrow$ `us-central1-b`
-   - `proxy-03` & `web-03` $\rightarrow$ `us-central1-c`
+   - `proxy-01` & `web-01` → `us-central1-a`
+   - `proxy-02` & `web-02` → `us-central1-b`
+   - `proxy-03` & `web-03` → `us-central1-c`
 2. **Regional Cloud SQL & Memorystore Standard HA**:
    Managed services configure automatic cross-zone replication with sub-minute automated failover.
 
@@ -106,9 +106,9 @@ os_web_server_group_policy: "anti-affinity"
    OCI data centers are partitioned into multiple **Fault Domains** (`FAULT-DOMAIN-1`, `FAULT-DOMAIN-2`, `FAULT-DOMAIN-3`).
    Each Fault Domain has redundant hardware, top-of-rack switches, and power distribution units (PDUs).
    Instances in [`examples/provisioning/vars_oci.yml`](../examples/provisioning/vars_oci.yml) are systematically assigned:
-   - `proxy-01`, `web-01` $\rightarrow$ `FAULT-DOMAIN-1`
-   - `proxy-02`, `web-02` $\rightarrow$ `FAULT-DOMAIN-2`
-   - `proxy-03`, `web-03` $\rightarrow$ `FAULT-DOMAIN-3`
+   - `proxy-01`, `web-01` → `FAULT-DOMAIN-1`
+   - `proxy-02`, `web-02` → `FAULT-DOMAIN-2`
+   - `proxy-03`, `web-03` → `FAULT-DOMAIN-3`
 
 ---
 

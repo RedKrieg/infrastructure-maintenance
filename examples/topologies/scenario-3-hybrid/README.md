@@ -7,33 +7,40 @@ In enterprise environments, organizations frequently require both architectures 
 2. **Dedicated, isolated virtual hosts** for specific customers, internal portals, or legacy stateful applications (`tenant-a.example.com`, `tenant-b.example.com`).
 
 ```
-                              Internet
-                                 │
-                       ┌─────────▼─────────┐
-                       │ Floating VIP      │ (Keepalived VRRP)
-                       │ 192.168.10.100    │
-                       └─────────┬─────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 ▼                               ▼
-          ┌──────────────┐                ┌──────────────┐
-          │   proxy-01   │                │   proxy-02   │
-          │   (Master)   │                │   (Backup)   │
-          └──────┬───────┘                └──────┬───────┘
-                 │                               │
-                 ├───────────────────────────────┤
-                 │ L7 Host Routing               │
-                 ▼                               ▼
-       ┌──────────────────┐            ┌──────────────────┐
-       │ Host: app.*      │            │ Host: tenant-*   │
-       ▼                  ▼            ▼                  ▼
-┌──────────────────────────────┐ ┌──────────────┐ ┌──────────────┐
-│  HA Pool: be_app_example_com │ │  web-tenant-a│ │  web-tenant-b│
-│  (Round-Robin Load Balanced) │ │  (1:1 Tenant)│ │  (1:1 Tenant)│
-│  ┌────────────┐ ┌──────────┐ │ │  tenant-a.   │ │  tenant-b.   │
-│  │web-pool-01 │ │web-pool-02││ │  example.com │ │  example.com │
-│  └────────────┘ └──────────┘ │ └──────────────┘ └──────────────┘
-└──────────────────────────────┘
+                                 Internet
+                                    │
+                          ┌─────────▼─────────┐
+                          │   Floating VIP    │ (Keepalived VRRP)
+                          │  192.168.10.100   │
+                          └─────────┬─────────┘
+                                    │
+                      ┌─────────────┴─────────────┐
+                      ▼                           ▼
+              ┌───────────────┐           ┌───────────────┐
+              │   proxy-01    │           │   proxy-02    │
+              │   (Master)    │           │   (Backup)    │
+              └───────┬───────┘           └───────┬───────┘
+                      │                           │
+                      └─────────────┬─────────────┘
+                                    ▼
+                        ┌───────────────────────┐
+                        │    L7 Host Routing    │
+                        └───────────┬───────────┘
+                                    │
+                 ┌──────────────────┴──────────────────┐
+                 ▼                                     ▼
+        ┌─────────────────┐                  ┌───────────────────┐
+        │   Host: app.*   │                  │  Host: tenant-*   │
+        └────────┬────────┘                  └─────────┬─────────┘
+                 │                            ┌────────┴────────┐
+                 ▼                            ▼                 ▼
+┌─────────────────────────────────┐  ┌───────────────┐ ┌───────────────┐
+│ HA Pool: be_app_example_com     │  │ web-tenant-a  │ │ web-tenant-b  │
+│ (Round-Robin Load Balanced)     │  │ (1:1 Tenant)  │ │ (1:1 Tenant)  │
+│ ┌─────────────┐ ┌─────────────┐ │  │   tenant-a.   │ │   tenant-b.   │
+│ │ web-pool-01 │ │ web-pool-02 │ │  │  example.com  │ │  example.com  │
+│ └─────────────┘ └─────────────┘ │  └───────────────┘ └───────────────┘
+└─────────────────────────────────┘
 ```
 
 ## How It Works in HAProxy

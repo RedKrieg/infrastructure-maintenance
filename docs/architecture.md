@@ -8,56 +8,55 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
 - **Zero Cloud Vendor Lock-In**: The same code runs on AWS, GCP, OpenStack, Azure, OCI, or bare metal with zero proprietary agent or cloud CLI dependencies.
 
 ```
-                            Public Internet / Visitors
-                                        │
-                                        ▼
-                   ┌───────────────────────────────────────────┐
-                   │    Layer 4 Ingress Load Balancer (TCP)    │
-                   │  (AWS NLB / GCP Passthrough / Octavia /   │
-                   │      Keepalived VRRP / BGP Anycast)       │
-                   └─────────────────────┬─────────────────────┘
-                                         │ (Port 80 / 443)
-                         ┌────────────────┼────────────────┐
-                         ▼                ▼                ▼
-              ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
-              │      proxy-01      │ │      proxy-02      │ │      proxy-03      │
-              │   Zone A / Host 1  │ │   Zone B / Host 2  │ │   Zone C / Host 3  │
-              │ Primary Cert Node  │ │  Standby Rank 1    │ │  Standby Rank 2    │
-              │ HAProxy + acme.sh  │ │ HAProxy + Watchdog │ │ HAProxy + Watchdog │
-              │ Replicated Root CA │ │ Replicated Root CA │ │ Replicated Root CA │
-              └──────────┬─────────┘ └──────────┬─────────┘ └──────────┬─────────┘
-                         │                      │                      │
-                         └──────────────────────┼──────────────────────┘
-                                                │ (Zero-Trust Internal TLS :443)
-                 ┌──────────────────────────────┼──────────────────────────────┐
-                 ▼                              ▼                              ▼
-        ┌──────────────────┐          ┌──────────────────┐          ┌──────────────────┐
-        │      web-01      │          │      web-02      │          │      web-03      │
-        │ web1.example.com │          │ web2.example.com │          │ web3.example.com │
-        │ (Generic 404)    │          │ (Generic 404)    │          │ (Generic 404)    │
-        └────────┬─────────┘          └────────┬─────────┘          └────────┬─────────┘
-                 │                             │                             │
-    ┌────────────┴─────────────────────────────┼─────────────────────────────┘
-    │
-    │ (Internal Private VPC Transit - TLS / Authenticated SCRAM)
-    ├─────────────────────────────┬─────────────────────────────┐
-    ▼                             ▼                             ▼
-┌───────────────────────┐ ┌───────────────────────┐ ┌───────────────────────┐
-│ PostgreSQL / MySQL    │ │ Redis In-Memory Cache │ │ RabbitMQ AMQP Broker  │
-│   • Single-Primary/Repl│ │   • Session clustering│ │   • Task queues       │
-│   • PgBouncer :6432   │ │   • LRU eviction :6379│ │   • Management :15672 │
-└───────────────────────┘ └───────────────────────┘ └───────────────────────┘
-    │                             │                             │
-    └─────────────────────────────┼─────────────────────────────┘
-                                  │ (Telemetry & Logs: Syslog TLS :6514, Metrics :9100)
-                                  ▼
-                    ┌───────────────────────────┐
-                    │  monitoring-01            │
-                    │   • Prometheus Server     │
-                    │   • Grafana Dashboards    │
-                    │   • Rsyslog TLS Collector │
-                    │   • Alertmanager Routing  │
-                    └───────────────────────────┘
+                          Public Internet / Visitors
+                                      │
+                                      ▼
+                 ┌───────────────────────────────────────────┐
+                 │    Layer 4 Ingress Load Balancer (TCP)    │
+                 │  (AWS NLB / GCP Passthrough / Octavia /   │
+                 │      Keepalived VRRP / BGP Anycast)       │
+                 └─────────────────────┬─────────────────────┘
+                                       │ (Port 80 / 443)
+            ┌──────────────────────────┼──────────────────────────┐
+            ▼                          ▼                          ▼
+┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+│       proxy-01        │  │       proxy-02        │  │       proxy-03        │
+│    Zone A / Host 1    │  │    Zone B / Host 2    │  │    Zone C / Host 3    │
+│   Primary Cert Node   │  │    Standby Rank 1     │  │    Standby Rank 2     │
+│   HAProxy + acme.sh   │  │  HAProxy + Watchdog   │  │  HAProxy + Watchdog   │
+│  Replicated Root CA   │  │  Replicated Root CA   │  │  Replicated Root CA   │
+└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
+            │                          │                          │
+            └──────────────────────────┼──────────────────────────┘
+                                       │ (Zero-Trust Internal TLS :443)
+            ┌──────────────────────────┼──────────────────────────┐
+            ▼                          ▼                          ▼
+┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+│        web-01         │  │        web-02         │  │        web-03         │
+│   web1.example.com    │  │   web2.example.com    │  │   web3.example.com    │
+│     (Generic 404)     │  │     (Generic 404)     │  │     (Generic 404)     │
+└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
+            │                          │                          │
+            └──────────────────────────┼──────────────────────────┘
+                                       │ (Private VPC Transit - TLS / SCRAM)
+            ┌──────────────────────────┼──────────────────────────┐
+            ▼                          ▼                          ▼
+┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+│ PostgreSQL / MySQL    │  │ Redis In-Memory Cache │  │ RabbitMQ AMQP Broker  │
+│  • Primary / Replica  │  │  • Session clustering │  │  • Task queues        │
+│  • PgBouncer :6432    │  │  • LRU eviction :6379 │  │  • Management :15672  │
+└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
+            │                          │                          │
+            └──────────────────────────┼──────────────────────────┘
+                                       │ (Syslog TLS :6514, Metrics :9100)
+                                       ▼
+                         ┌───────────────────────────┐
+                         │  monitoring-01            │
+                         │   • Prometheus Server     │
+                         │   • Grafana Dashboards    │
+                         │   • Rsyslog TLS Collector │
+                         │   • Alertmanager Routing  │
+                         └───────────────────────────┘
 ```
 
 ---

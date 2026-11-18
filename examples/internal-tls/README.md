@@ -49,7 +49,7 @@ Ansible plays are engineered to be strictly non-destructive on subsequent runs:
 
 ### 3. Rank-Based Client Failover
 Backend webservers execute `/usr/local/bin/renew-internal-cert.sh` daily via systemd timer:
-- Inspects `/etc/ssl/internal/server.crt`. If remaining validity is $\le 14$ days, renewal initiates.
+- Inspects `/etc/ssl/internal/server.crt`. If remaining validity is ≤ 14 days, renewal initiates.
 - Submits CSR containing full SANs to `http://<proxy-ip>:8444/sign`.
 - If `proxy-01` fails to respond or reports degraded health, the client automatically falls back to `proxy-02`, then `proxy-03`.
 - On successful signature, the certificate is updated, latest CA is fetched, and Nginx reloads gracefully.

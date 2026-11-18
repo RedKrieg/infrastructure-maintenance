@@ -16,26 +16,25 @@ This suite solves this using a **Rank-Based Line of Succession + Self-Healing Cl
 - **Result**: Whether Let's Encrypt hits `proxy-01`, `proxy-02`, or `proxy-03`, challenges route directly to the active certificate requester in succession order.
 
 ```
-                           Let's Encrypt ACME Server
-                                      │
-                                      ▼
-                        Layer 4 Ingress Load Balancer
-                                      │
-                 ┌────────────────────┼────────────────────┐
-                 ▼                    ▼                    ▼
-          ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-          │   proxy-01   │     │   proxy-02   │     │   proxy-03   │
-          │  (Primary)   │     │  (Standby)   │     │  (Standby)   │
-          └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
-                 │                    │                    │
-                 │                    │ (Routes challenge) │ (Routes challenge)
-                 │                    └─────────┬──────────┘
-                 │                              │
-                 ▼                              ▼
-      ┌────────────────────────────────────────────────────────────┐
-      │         proxy-01 (or active standby in succession)         │
-      │         Local acme.sh standalone challenge server          │
-      └────────────────────────────────────────────────────────────┘
+                Let's Encrypt ACME Server
+                            │
+                            ▼
+              Layer 4 Ingress Load Balancer
+                            │
+        ┌───────────────────┼───────────────────┐
+        ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│   proxy-01    │   │   proxy-02    │   │   proxy-03    │
+│   (Primary)   │   │   (Standby)   │   │   (Standby)   │
+└───────┬───────┘   └───────┬───────┘   └───────┬───────┘
+        │                   │ (Routes           │ (Routes
+        │                   │  challenge)       │  challenge)
+        │                   └─────────┬─────────┘
+        ▼                             ▼
+┌───────────────────────────────────────────────────────┐
+│      proxy-01 (or active standby in succession)       │
+│      Local acme.sh standalone challenge server        │
+└───────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -57,7 +56,7 @@ What keeps `proxy-02` and `proxy-03` from trying to renew simultaneously if `pro
 ### 1-Day Staggered Thresholds
 Standby watchdogs calculate their renewal expiration threshold staggered by **1 day per rank**:
 
-$$\text{Threshold} = \text{acme\_fallback\_renewal\_days} - (\text{rank} - 1)$$
+$$\text{Threshold Days} = \text{Fallback Renewal Days} - (\text{Rank} - 1)$$
 
 - `proxy-02` (Rank 1): triggers at **15 days** remaining.
 - `proxy-03` (Rank 2): triggers at **14 days** remaining.

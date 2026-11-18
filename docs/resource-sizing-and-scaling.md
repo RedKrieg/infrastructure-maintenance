@@ -105,7 +105,7 @@ sequenceDiagram
     participant Cloud as Cloud Provider API
 
     Admin->>Proxy: socat /run/haproxy/admin.sock "set server be_app/web-01 state drain"
-    Note over Proxy: Existing TCP sessions finish;<br/>new traffic routes to web-02 & web-03
+    Note over Proxy: Existing TCP sessions finish while new traffic routes to web-02 & web-03
     Admin->>Proxy: socat /run/haproxy/admin.sock "set server be_app/web-01 state maint"
     Admin->>Cloud: Stop VM web-01
     Admin->>Cloud: Resize VM (e.g. t3.medium -> t3.xlarge / e2-standard-4)

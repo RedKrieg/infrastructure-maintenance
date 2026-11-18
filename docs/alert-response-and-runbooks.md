@@ -120,7 +120,8 @@ When `RabbitMQMemoryAlarmActive` trips, RabbitMQ intentionally stops reading fro
   ```
 * **Remediation**:
   - If PHP-FPM processes are consuming excessive memory, reduce `pm.max_children` in your pool configuration to match physical RAM:
-    $$\text{pm.max\_children} \approx \frac{\text{Total Available RAM}}{\text{Average Memory per Process (typically 60-80MB)}}$$
+
+    $$\text{Max Children} \approx \frac{\text{Total Available RAM}}{\text{Average Memory per Process (typically 60–80 MB)}}$$
 
 ---
 
@@ -175,7 +176,7 @@ Examine the following 11 common culprits in order of frequency:
 │ 1. Journald Logs     (/var/log/journal/)       -> vacuum logs          │
 │ 2. Web Access Logs   (/var/log/nginx/, /haproxy) -> force logrotate    │
 │ 3. Remote Syslog     (/var/log/remote/<host>/) -> prune retention      │
-│ 4. Database WAL      (/var/lib/postgresql/pg_wal/) -> drop dead slots │
+│ 4. Database WAL      (/var/lib/postgresql/pg_wal/) -> drop dead slots  │
 │ 5. RabbitMQ Mnesia   (/var/lib/rabbitmq/mnesia/) -> purge dead queues  │
 │ 6. Redis AOF         (/var/lib/redis/appendonly) -> bgrewriteaof       │
 │ 7. Package Cache     (/var/cache/apt/archives/) -> apt-get clean       │

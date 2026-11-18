@@ -18,38 +18,36 @@ To satisfy strict Zero-Trust and compliance mandates (e.g., **NIST SP 800-207**,
 ## Traffic Flow & Cryptographic Verification
 
 ```
-                                  [Public Internet Client]
-                                             │
-                                             │ HTTPS :443 (Public Let's Encrypt / Wildcard Cert)
-                                             ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Ingress Proxies (proxy-01, proxy-02, proxy-03)                                         │
-│   • Terminates Public TLS                                                              │
-│   • Evaluates Rate Limiting, WAF (Coraza), and Admin ACL                               │
-│   • Hosts Replicated Internal Root CA (/etc/ssl/internal/ca/)                          │
-│   • Runs Internal CA Signer Service (:8444, restricted to VPC subnets)                 │
-│   • Re-encrypts outbound traffic to upstream backends (Port 443)                       │
-│   • Validates backend identity: `ssl verify required ca-file ...`                      │
-└───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                            │
-                     ┌──────────────────────┴──────────────────────┐
-                     │ HTTPS :443 (Internal CA-Signed)             │
-                     ▼                                             ▼
-┌────────────────────────────────────────┐   ┌────────────────────────────────────────┐
-│ Backend Webservers (webservers)        │   │ Observability & Identity Tiers         │
-│   • Nginx listens on 443 with CA cert  │   │   • Rsyslog TLS Ingestion (Port 6514)  │
-│   • Automated renewal systemd timer    │   │   • Node Exporter HTTPS (Port 9100)    │
-│   • Zero-Trust Client Cert Auth        │   │   • Grafana HTTPS UI (Port 3000)       │
-└──────────────────┬─────────────────────┘   └────────────────────────────────────────┘
-                   │
-    ┌──────────────┴──────────────┬─────────────────────────────┐
-    │ SQL SSL :5432               │ TLS :6379                   │ AMQP TLS :5671
-    ▼                             ▼                             ▼
-┌───────────────────────┐ ┌───────────────────────┐ ┌───────────────────────┐
-│ Database (PostgreSQL) │ │ In-Memory (Redis)     │ │ Broker (RabbitMQ)     │
-│   • ssl = on          │ │   • tls-port 6379     │ │   • listeners.ssl     │
-│   • CA peer verify    │ │   • CA peer verify    │ │   • CA peer verify    │
-└───────────────────────┘ └───────────────────────┘ └───────────────────────┘
+                           [Public Internet Client]
+                                       │ HTTPS :443 (Public Let's Encrypt Cert)
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Ingress Proxies (proxy-01, proxy-02, proxy-03)                              │
+│   • Terminates Public TLS                                                   │
+│   • Evaluates Rate Limiting, WAF (Coraza), and Admin ACL                    │
+│   • Hosts Replicated Internal Root CA (/etc/ssl/internal/ca/)               │
+│   • Runs Internal CA Signer Service (:8444, restricted to VPC subnets)      │
+│   • Re-encrypts outbound traffic to upstream backends (Port 443)            │
+│   • Validates backend identity: `ssl verify required ca-file ...`           │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │ HTTPS :443 (Internal CA-Signed)
+                  ┌────────────────────┴────────────────────┐
+                  ▼                                         ▼
+┌───────────────────────────────────┐     ┌───────────────────────────────────┐
+│ Backend Webservers (webservers)   │     │ Observability & Identity Tiers    │
+│   • Nginx on 443 with CA cert     │     │   • Rsyslog TLS Ingestion (:6514) │
+│   • Automated renewal timer       │     │   • Node Exporter HTTPS (:9100)   │
+│   • Zero-Trust Client Cert Auth   │     │   • Grafana HTTPS UI (:3000)      │
+└─────────────────┬─────────────────┘     └───────────────────────────────────┘
+                  │
+            ┌─────┴────────────────────┬──────────────────────────┐
+            │ SQL SSL :5432            │ TLS :6379                │ AMQP TLS :5671
+            ▼                          ▼                          ▼
+┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
+│ Database (PostgreSQL) │  │ In-Memory (Redis)     │  │ Broker (RabbitMQ)     │
+│   • ssl = on          │  │   • tls-port 6379     │  │   • listeners.ssl     │
+│   • CA peer verify    │  │   • CA peer verify    │  │   • CA peer verify    │
+└───────────────────────┘  └───────────────────────┘  └───────────────────────┘
 ```
 
 ---
@@ -119,7 +117,7 @@ vault_internal_ca_token: "YourSecretInternalCAToken2026!"
 
 ### 1. Leaf Certificate Auto-Renewal & Proxy Failover (`renew-internal-cert.sh`)
 Backend webservers and fleet nodes execute `/usr/local/bin/renew-internal-cert.sh` via the `renew-internal-cert.timer` systemd timer:
-1. **Threshold Assessment**: Evaluates `/etc/ssl/internal/server.crt`. If remaining validity is $\le 14$ days (or cert is missing), renewal initiates.
+1. **Threshold Assessment**: Evaluates `/etc/ssl/internal/server.crt`. If remaining validity is ≤ 14 days (or cert is missing), renewal initiates.
 2. **CSR Generation**: Generates an ECDSA P-384 private key (`secp384r1`, if missing) and CSR containing complete Subject Alternative Names signed with SHA-384:
    ```
    DNS:web1.example.com, DNS:web-01, IP:10.0.1.11
@@ -141,7 +139,7 @@ To guarantee that proxies never renew the root CA simultaneously or create diver
 1. **Primary Authority Designation (`proxy-01`)**:
    - `cert_primary_host` (`proxy-01`) is the designated Primary CA Authority.
    - Executes `/usr/local/bin/renew-internal-ca.sh` twice daily via `renew-internal-ca.timer`.
-   - Evaluates `/etc/ssl/internal/ca/cluster-ca.crt`. When remaining validity is $\le 30$ days (`internal_ca_renewal_threshold_days`), `proxy-01` self-re-signs the Root CA with a fresh 730-day window (`VALIDITY_DAYS=730`) while preserving key integrity.
+   - Evaluates `/etc/ssl/internal/ca/cluster-ca.crt`. When remaining validity is ≤ 30 days (`internal_ca_renewal_threshold_days`), `proxy-01` self-re-signs the Root CA with a fresh 730-day window (`VALIDITY_DAYS=730`) while preserving key integrity.
    - Updates `/etc/haproxy/certs/internal-ca.crt`, restarts local `internal-ca-signer`, reloads local HAProxy, and executes `/usr/local/bin/sync-haproxy-certs.sh` to mirror the renewed CA across all peer proxies.
 
 2. **Standby Watchdog Mode on Replicas (`proxy-02`, `proxy-03`, ...)**:

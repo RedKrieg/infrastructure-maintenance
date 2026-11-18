@@ -104,7 +104,6 @@ admin_trusted_cidrs:
 
 # Or override specifically in group_vars/proxies.yml:
 haproxy_stats_allowed_ips: "{{ admin_trusted_cidrs }}"
-```
 
 # Optional settings:
 haproxy_stats_deny_action: "403"          # '403' (HTTP 403 Forbidden) or 'silent-drop' (TCP drop)

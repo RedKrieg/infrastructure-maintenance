@@ -26,13 +26,13 @@ Organizations with rigorous enterprise governance can run **both Teleport and Fr
 
 ```mermaid
 flowchart TD
-    User["Administrator / Engineer"] -->|Option A: Zero-Trust Gateway| TP["Teleport Proxy (Port 3080/3023)"]
-    User -->|Option B: Enterprise Kerberos / LDAP| IPA["FreeIPA KDC & LDAP (Port 88/389)"]
-    User -->|Option C: Out-of-Band Break-Glass| LocalSSH["Direct SSH (Port 22, Ed25519 Key)"]
+    User["Administrator / Engineer"] -->|"Option A: Zero-Trust Gateway"| TP["Teleport Proxy (Port 3080/3023)"]
+    User -->|"Option B: Enterprise Kerberos / LDAP"| IPA["FreeIPA KDC & LDAP (Port 88/389)"]
+    User -->|"Option C: Out-of-Band Break-Glass"| LocalSSH["Direct SSH (Port 22, Ed25519 Key)"]
 
-    TP -->|PAM Delegation| SSSD["Linux SSSD / PAM Engine"]
-    IPA -->|SSSD Client Enrollment| SSSD
-    LocalSSH -->|Local Shadow / Sudoers| LocalAuth["Local UNIX Accounts (admin_users)"]
+    TP -->|"PAM Delegation"| SSSD["Linux SSSD / PAM Engine"]
+    IPA -->|"SSSD Client Enrollment"| SSSD
+    LocalSSH -->|"Local Shadow / Sudoers"| LocalAuth["Local UNIX Accounts (admin_users)"]
 
     SSSD --> TargetNode["Target Cluster Node"]
     LocalAuth --> TargetNode

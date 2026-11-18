@@ -11,28 +11,22 @@ The `rolling_maintenance.yml` playbook automates zero-downtime maintenance by co
 ## Maintenance Workflow
 
 ```
-   [1. Ingress HAProxy Fleet]                 [2. Target Webserver Node]
-               │                                           │
-  1. `set server ... state drain`                          │
-     Stop new sessions, allow active ones to finish        │
-               │                                           │
-  2. Wait drain interval (10s)                             │
-               │                                           │
-  3. `set server ... state maint`                          │
-     Remove node from active pool                          │
-               │                                           │
-               │ ────────── 4. Apply Updates ────────────> │
-               │            apt-get upgrade (force-confold)│
-               │            Reboot if kernel changed       │
-               │            Wait for SSH & Nginx to rise   │
-               │ <───────── 5. Health Check OK ─────────── │
-               │                                           │
-  6. `set server ... state ready`                          │
-     Reintroduce node into active pool                     │
-               │                                           │
-  7. Confirm HTTP 200 via health checks                    │
-               │                                           │
-  8. Repeat sequence for next node (serial: 1)             │
+                    [1. Ingress HAProxy Fleet]                 [2. Target Webserver Node]
+                                 │                                         │
+ 1. `set server ... state drain` │                                         │
+    Stop new, finish active      │                                         │
+ 2. Wait drain interval (10s)    │                                         │
+ 3. `set server ... state maint` │                                         │
+    Remove node from active pool │                                         │
+                                 │ ───────── 4. Apply Updates ───────────> │
+                                 │   apt-get upgrade (force-confold)       │
+                                 │   Reboot if kernel changed              │
+                                 │   Wait for SSH & Nginx to respond       │
+                                 │ <───────── 5. Health Check OK ───────── │
+ 6. `set server ... state ready` │                                         │
+    Reintroduce node into pool   │                                         │
+ 7. Confirm HTTP 200 healthy     │                                         │
+ 8. Repeat for next (serial: 1)  │                                         │
 ```
 
 ---

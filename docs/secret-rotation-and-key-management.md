@@ -205,10 +205,10 @@ The Erlang cookie (`/var/lib/rabbitmq/.erlang.cookie`) allows RabbitMQ nodes in 
 
 ```mermaid
 flowchart LR
-    RootCA["Primary Proxy Root CA<br>(/etc/ssl/internal/ca/cluster-ca.key & crt)"] -->|Replicates via SSH| PeerProxy["Replica Proxies & Signer API (:8444)"]
-    PeerProxy -->|Issues 90-Day Leaf| Fleet["Fleet Nodes<br>(/etc/ssl/internal/server.crt & key)"]
-    RootCA -->|Populates Trust Store| Trust["/etc/haproxy/certs/internal-ca.crt &<br>/etc/ssl/certs/internal-ca.crt"]
-    Trust -->|Validates Peer Certs| Fleet
+    RootCA["Primary Proxy Root CA (/etc/ssl/internal/ca/cluster-ca.key & crt)"] -->|"Replicates via SSH"| PeerProxy["Replica Proxies & Signer API (:8444)"]
+    PeerProxy -->|"Issues 90-Day Leaf"| Fleet["Fleet Nodes (/etc/ssl/internal/server.crt & key)"]
+    RootCA -->|"Populates Trust Store"| Trust["/etc/haproxy/certs/internal-ca.crt & /etc/ssl/certs/internal-ca.crt"]
+    Trust -->|"Validates Peer Certs"| Fleet
 ```
 
 ### Staged Leaf Certificate Rotation (Scheduled or Pre-Expiry)

@@ -154,11 +154,15 @@ for p in yml_files:
 print(f"  [✓] Validated {len(yml_files)} YAML files")
 
 link_re = re.compile(r"\[[^\]]+\]\(([^)#]*)(?:#[^)]*)?\)")
+math_re = re.compile(r"\$\$[^\$]+\$\$|(?<!\\)\$[^\$\n]+\$")
+inline_code_re = re.compile(r"`[^`]+`")
+mermaid_edge_re = re.compile(r"\|([^|\n]+)\|")
 md_files = sorted(glob.glob("**/*.md", recursive=True))
 checked_links = 0
 for md in md_files:
     with open(md, encoding="utf-8") as f:
         content = f.read()
+    lines = content.splitlines()
     for m in link_re.finditer(content):
         target = m.group(1).strip()
         if not target or target.startswith(("http://", "https://", "mailto:", "conversation://", "file://")):
@@ -167,7 +171,50 @@ for md in md_files:
         resolved = os.path.normpath(os.path.join(os.path.dirname(md), target))
         if not os.path.exists(resolved):
             errors.append(f"Broken relative link in {md}: {target} -> {resolved}")
-print(f"  [✓] Verified {checked_links} relative links across {len(md_files)} Markdown files")
+
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+    in_mermaid = False
+    for lineno, raw_line in enumerate(lines, 1):
+        stripped = raw_line.strip()
+        m_open = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", raw_line)
+        if not in_fence and m_open:
+            in_fence = True
+            fence_char = m_open.group(1)[0]
+            fence_len = len(m_open.group(1))
+            in_mermaid = m_open.group(2).strip().lower().startswith("mermaid")
+            continue
+        if in_fence:
+            m_close = re.match(rf"^\s{{0,3}}{re.escape(fence_char)}{{{fence_len},}}\s*$", raw_line)
+            if m_close:
+                in_fence = False
+                in_mermaid = False
+                continue
+            if in_mermaid:
+                if "<br" in stripped.lower():
+                    errors.append(f"Mermaid HTML <br> tag in {md}:{lineno}: {stripped}")
+                if re.search(r"-->|--\|", raw_line):
+                    for em in mermaid_edge_re.finditer(raw_line):
+                        label = em.group(1).strip()
+                        if ("(" in label or ")" in label) and not (label.startswith('"') and label.endswith('"')):
+                            errors.append(f"Unquoted parentheses in Mermaid edge label {md}:{lineno}: |{label}|")
+                if re.search(r"--\s+[^>-]+\s+-->", raw_line):
+                    errors.append(f"Unquoted Mermaid -- text --> edge syntax in {md}:{lineno}: {stripped}")
+                if stripped.startswith("subgraph ") and not re.match(r'^subgraph\s+(?:[A-Za-z0-9_-]+(?:\s*\["[^"]+"\])?|"[^"]+")\s*$', stripped):
+                    errors.append(f"Invalid Mermaid subgraph syntax in {md}:{lineno}: {stripped}")
+            continue
+
+        no_inline = inline_code_re.sub("", raw_line)
+        for mm in math_re.finditer(no_inline):
+            expr = mm.group(0)
+            if r"\_" in expr or r"\%" in expr:
+                errors.append(f"Escaped underscore/percent inside math block {md}:{lineno}: {expr}")
+
+    if in_fence:
+        errors.append(f"Unclosed fenced code block in {md}")
+
+print(f"  [✓] Verified {checked_links} relative links and Markdown syntax across {len(md_files)} Markdown files")
 
 vault_files = sorted(glob.glob("roles/**/*", recursive=True) + glob.glob("group_vars/**/*", recursive=True) + glob.glob("*.yml"))
 vault_refs = set()

@@ -9,40 +9,42 @@ This step-by-step guide is designed for new users deploying this high-availabili
 On OCI, the architecture distributes frontend HAProxy nodes across distinct **Fault Domains** (`FAULT-DOMAIN-1`, `FAULT-DOMAIN-2`, `FAULT-DOMAIN-3`) within an Availability Domain behind an OCI Network Load Balancer (NLB):
 
 ```
-                          Internet / Visitors
-                                   │
-                                   ▼
-             ┌───────────────────────────────────────────┐
-             │         OCI Network Load Balancer         │
-             │       (TCP Ports 80 and 443 NLB)          │
-             └─────────────────────┬─────────────────────┘
-                                   │
-                  ┌────────────────┼────────────────┐
-                  ▼                ▼                ▼
-         ┌────────────────┐┌────────────────┐┌────────────────┐
-         │    proxy-01    ││    proxy-02    ││    proxy-03    │
-         │ FAULT-DOMAIN-1 ││ FAULT-DOMAIN-2 ││ FAULT-DOMAIN-3 │
-         │   10.0.1.10    ││   10.0.1.20    ││   10.0.1.30    │
-         └────────┬───────┘└────────┬───────┘└────────┬───────┘
-                  │                 │                 │
-                  └─────────────────┼─────────────────┘
-                                    │ (VCN Subnet 10.0.1.0/24)
-                  ┌─────────────────┼─────────────────┐
-                  ▼                 ▼                 ▼
-         ┌────────────────┐┌────────────────┐┌────────────────┐
-         │     web-01     ││     web-02     ││     web-03     │
-         │ FAULT-DOMAIN-1 ││ FAULT-DOMAIN-2 ││ FAULT-DOMAIN-3 │
-         │   10.0.1.11    ││   10.0.1.21    ││   10.0.1.31    │
-         │web1.example.com││web2.example.com││web3.example.com│
-         └────────────────┘└────────────────┘└────────────────┘
-                  │
-         ┌────────┴────────┐
-         ▼                 ▼
-  ┌──────────────┐  ┌──────────────┐
-  │monitoring-01 │  │ teleport-01  │
-  │  10.0.1.50   │  │  10.0.1.60   │
-  │(Prometheus)  │  │(Auth & Proxy)│
-  └──────────────┘  └──────────────┘
+                        Internet / Visitors
+                                 │
+                                 ▼
+           ┌───────────────────────────────────────────┐
+           │         OCI Network Load Balancer         │
+           │       (TCP Ports 80 and 443 NLB)          │
+           └─────────────────────┬─────────────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┐
+          ▼                      ▼                      ▼
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│     proxy-01      │  │     proxy-02      │  │     proxy-03      │
+│  FAULT-DOMAIN-1   │  │  FAULT-DOMAIN-2   │  │  FAULT-DOMAIN-3   │
+│     10.0.1.10     │  │     10.0.1.20     │  │     10.0.1.30     │
+└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │ (VCN Subnet 10.0.1.0/24)
+          ┌──────────────────────┼──────────────────────┐
+          ▼                      ▼                      ▼
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│      web-01       │  │      web-02       │  │      web-03       │
+│  FAULT-DOMAIN-1   │  │  FAULT-DOMAIN-2   │  │  FAULT-DOMAIN-3   │
+│     10.0.1.11     │  │     10.0.1.21     │  │     10.0.1.31     │
+│ web1.example.com  │  │ web2.example.com  │  │ web3.example.com  │
+└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    ▼                         ▼
+          ┌───────────────────┐     ┌───────────────────┐
+          │   monitoring-01   │     │    teleport-01    │
+          │     10.0.1.50     │     │     10.0.1.60     │
+          │   (Prometheus)    │     │  (Auth & Proxy)   │
+          └───────────────────┘     └───────────────────┘
 ```
 
 ---
@@ -83,8 +85,8 @@ Execute `oci setup config` to generate your API keys and configuration file (`~/
 oci setup config
 ```
 Prompts will ask for:
-- **User OCID**: Find under *Profile $\rightarrow$ User Settings* in OCI Console.
-- **Tenancy OCID**: Find under *Administration $\rightarrow$ Tenancy Details*.
+- **User OCID**: Find under *Profile → User Settings* in OCI Console.
+- **Tenancy OCID**: Find under *Administration → Tenancy Details*.
 - **Region**: e.g., `us-ashburn-1` or `us-phoenix-1`.
 - **Generate API Signing Key Pair**: Enter `Y`.
 
@@ -93,7 +95,7 @@ Prompts will ask for:
    ```bash
    cat ~/.oci/oci_api_key_public.pem
    ```
-2. In the OCI Console, navigate to **Identity $\rightarrow$ Users $\rightarrow$ User Details $\rightarrow$ API Keys $\rightarrow$ Add API Key**.
+2. In the OCI Console, navigate to **Identity → Users → User Details → API Keys → Add API Key**.
 3. Paste the contents of `oci_api_key_public.pem` and click **Add**.
 
 ### Step 3.3: Verify Authentication

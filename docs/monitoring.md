@@ -73,8 +73,8 @@ Prometheus actively evaluates alerting rules defined in `/etc/prometheus/alert.r
 | Alert Name | Condition | Severity | Description |
 | :--- | :--- | :--- | :--- |
 | **`HAProxyBackendServerDown`** | `haproxy_server_status != 1` for 1m | `critical` | Triggers immediately when a backend Nginx webserver goes offline or fails health checks. |
-| **`HAProxyHigh5xxErrorRate`** | HTTP 5xx responses $> 5\%$ for 5m | `warning` | Warns if backend servers return elevated application error rates. |
-| **`HAProxyRateLimitSaturationSpike`** | Denied requests $> 50$ in 5m | `warning` | Detects volumetric spikes or DDoS attacks triggering the 300 req/10s rate limiter. |
+| **`HAProxyHigh5xxErrorRate`** | HTTP 5xx responses > 5% for 5m | `warning` | Warns if backend servers return elevated application error rates. |
+| **`HAProxyRateLimitSaturationSpike`** | Denied requests > 50 in 5m | `warning` | Detects volumetric spikes or DDoS attacks triggering the 300 req/10s rate limiter. |
 | **`ClusterNodeUnreachable`** | `up == 0` for 2m | `critical` | Fires when Prometheus is unable to scrape any cluster node for more than 2 minutes. |
 
 ---

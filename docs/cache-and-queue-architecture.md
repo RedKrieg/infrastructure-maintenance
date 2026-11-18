@@ -112,11 +112,11 @@ HAProxy acts as the secure TLS gateway for the RabbitMQ Management Web UI:
 
 ```mermaid
 flowchart LR
-    Client["Admin Browser"] -->|HTTPS 443<br>mq.example.com| HAProxy["HAProxy Ingress<br>(fe_https)"]
-    HAProxy -->|Check Whitelist<br>stats_whitelist.lst| ACL{"Authorized<br>Admin IP?"}
-    ACL -->|No| Reject["403 Forbidden"]
-    ACL -->|Yes| MQBackend["be_mq_01_rmq<br>Port 15672"]
-    MQBackend --> RMQ["RabbitMQ Server<br>(mq-01)"]
+    Client["Admin Browser"] -->|"HTTPS 443 (mq.example.com)"| HAProxy["HAProxy Ingress (fe_https)"]
+    HAProxy -->|"Check Whitelist (stats_whitelist.lst)"| ACL{"Authorized Admin IP?"}
+    ACL -->|"No"| Reject["403 Forbidden"]
+    ACL -->|"Yes"| MQBackend["be_mq_01_rmq (Port 15672)"]
+    MQBackend --> RMQ["RabbitMQ Server (mq-01)"]
 ```
 
 HAProxy dynamically maps the hostname specified in `rabbitmq_mgmt_fqdn` (e.g. `mq.example.com`), verifies client IP against `/etc/haproxy/stats_whitelist.lst`, and forwards requests to the internal management port:

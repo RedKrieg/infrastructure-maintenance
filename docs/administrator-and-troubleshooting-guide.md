@@ -8,30 +8,30 @@ Welcome to the cluster operations guide. This runbook is specifically written fo
 
 ```mermaid
 flowchart TD
-    User["Public Internet Client"] -->|HTTPS :443| LB["Cloud NLB or Keepalived VIP (10.0.1.5)"]
-    LB -->|TCP Passthrough| Proxy["HAProxy Edge Ingress Fleet (proxies)"]
-    
-    subgraph Edge Layer [Edge Ingress & Protection]
+    User["Public Internet Client"] -->|"HTTPS :443"| LB["Cloud NLB or Keepalived VIP (10.0.1.5)"]
+    LB -->|"TCP Passthrough"| Proxy["HAProxy Edge Ingress Fleet (proxies)"]
+
+    subgraph EdgeLayer["Edge Ingress & Protection"]
         Proxy --> WAF["Coraza WAF (OWASP Core Rule Set)"]
         WAF --> RateLimit["In-Memory Rate Limiter (300 req/10s)"]
         RateLimit --> SSLTerm["ACME Public TLS Termination"]
     end
 
-    SSLTerm -->|Zero-Trust Internal TLS :443 (Internal CA)| Web["Nginx Webservers (webservers)"]
+    SSLTerm -->|"Zero-Trust Internal TLS :443 (Internal CA)"| Web["Nginx Webservers (webservers)"]
 
-    subgraph Backend Services [Data & Broker Tiers]
-        Web -->|SQL :5432| DB["PostgreSQL / MySQL (databases)"]
-        Web -->|Session/Cache :6379| Redis["Redis In-Memory Cache (redis_servers)"]
-        Web -->|AMQP :5672| RMQ["RabbitMQ Message Broker (rabbitmq_servers)"]
+    subgraph BackendServices["Data & Broker Tiers"]
+        Web -->|"SQL :5432"| DB["PostgreSQL / MySQL (databases)"]
+        Web -->|"Session/Cache :6379"| Redis["Redis In-Memory Cache (redis_servers)"]
+        Web -->|"AMQP :5672"| RMQ["RabbitMQ Message Broker (rabbitmq_servers)"]
     end
 
-    subgraph Telemetry & Governance [Observability & Identity]
-        AllNodes["All Fleet Nodes"] -->|Syslog TLS :6514| Syslog["Central Rsyslog Collector (monitoring)"]
-        AllNodes -->|Metrics :9100| Prom["Prometheus Server (monitoring)"]
+    subgraph TelemetryGovernance["Observability & Identity"]
+        AllNodes["All Fleet Nodes"] -->|"Syslog TLS :6514"| Syslog["Central Rsyslog Collector (monitoring)"]
+        AllNodes -->|"Metrics :9100"| Prom["Prometheus Server (monitoring)"]
         Prom --> Grafana["Grafana Dashboards :3000"]
-        Admin["Administrator"] -->|Zero-Trust Tunnel :3080| TP["Teleport Access Gateway"]
-        Admin -->|Kerberos / LDAP :88/389| IPA["FreeIPA Identity Server"]
-        Admin -->|Emergency Break-Glass SSH :22| LocalSSH["Local UNIX Admin Accounts"]
+        Admin["Administrator"] -->|"Zero-Trust Tunnel :3080"| TP["Teleport Access Gateway"]
+        Admin -->|"Kerberos / LDAP :88/389"| IPA["FreeIPA Identity Server"]
+        Admin -->|"Emergency Break-Glass SSH :22"| LocalSSH["Local UNIX Admin Accounts"]
     end
 ```
 
@@ -166,13 +166,13 @@ flowchart TD
     A["HTTP 502/503 Reported"] --> B["Log into Ingress Proxy"]
     B --> C["Check HAProxy Socket: show servers state"]
     C --> D{"Are backends DOWN?"}
-    D -- Yes --> E["SSH into Backend Webserver"]
+    D -->|"Yes"| E["SSH into Backend Webserver"]
     E --> F["Check Nginx: systemctl status nginx"]
     F --> G["Test Local Port: curl -k https://127.0.0.1:443/"]
     G --> H{"Does local curl work?"}
-    H -- No --> I["Check Nginx error log: tail -50 /var/log/nginx/error.log"]
-    H -- Yes --> J["Check UFW Firewall on Webserver: ufw status"]
-    D -- No --> K["Check Coraza WAF: tail -50 /var/log/haproxy.log | grep -i coraza"]
+    H -->|"No"| I["Check Nginx error log: tail -50 /var/log/nginx/error.log"]
+    H -->|"Yes"| J["Check UFW Firewall on Webserver: ufw status"]
+    D -->|"No"| K["Check Coraza WAF: tail -50 /var/log/haproxy.log | grep -i coraza"]
 ```
 
 #### Step-by-Step Fix:
