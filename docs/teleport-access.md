@@ -22,22 +22,12 @@ The suite includes complete **[Teleport](https://goteleport.com/)** integration 
 - Establishes an outbound reverse tunnel back to the Teleport Proxy—nodes require **zero inbound open SSH ports** to the public internet.
 - **Automatic Host User Provisioning (`create_host_user_mode: keep`)**: Target OS user accounts (such as `junior` or `admin`) are automatically created on the fly when the user connects.
 
-```
-         Operator / Junior Workstation
-      (Workstation Bundle installed locally)
-                         │
-                         ▼ HTTPS :443 / SSH :3023
-       Teleport Auth, Proxy & Bastion (`teleport-01`)
-    [Role: teleport-server, bastion=true, Bundle Staged]
-                         │
-        ┌────────────────┼────────────────┐
-        │ Reverse Tunnel │ Reverse Tunnel │ Reverse Tunnel
-        │ (Port 3024)    │ (Port 3024)    │ (Port 3024)
-        ▼                ▼                ▼
-  ┌────────────┐   ┌────────────┐   ┌────────────┐
-  │  proxy-01  │   │   web-01   │   │   db-01    │
-  │ (SSH Node) │   │ (SSH Node) │   │ (SSH Node) │
-  └────────────┘   └────────────┘   └────────────┘
+```mermaid
+flowchart TD
+    Op["Operator / Junior Workstation (Workstation Bundle installed locally)"] -->|"HTTPS :443 / SSH :3023"| TP["Teleport Auth, Proxy & Bastion (teleport-01, bastion=true, Bundle Staged)"]
+    TP -->|"Reverse Tunnel (Port 3024)"| P1["proxy-01 (SSH Node)"]
+    TP -->|"Reverse Tunnel (Port 3024)"| W1["web-01 (SSH Node)"]
+    TP -->|"Reverse Tunnel (Port 3024)"| D1["db-01 (SSH Node)"]
 ```
 
 ---

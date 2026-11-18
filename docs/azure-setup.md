@@ -8,43 +8,32 @@ This step-by-step guide is designed for new users deploying this high-availabili
 
 On Microsoft Azure, the architecture distributes frontend HAProxy nodes across distinct **Availability Zones** (`1`, `2`, `3`) behind an Azure Standard Load Balancer with Layer 4 TCP load balancing rules:
 
-```
-                        Internet / Visitors
-                                 │
-                                 ▼
-           ┌───────────────────────────────────────────┐
-           │       Azure Standard Load Balancer        │
-           │       (TCP Ports 80 and 443 Rules)        │
-           └─────────────────────┬─────────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     proxy-01      │  │     proxy-02      │  │     proxy-03      │
-│  Availability 1   │  │  Availability 2   │  │  Availability 3   │
-│    10.240.1.10    │  │    10.240.1.20    │  │    10.240.1.30    │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │ (VNet Subnet 10.240.1.0/24)
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│      web-01       │  │      web-02       │  │      web-03       │
-│  Availability 1   │  │  Availability 2   │  │  Availability 3   │
-│    10.240.1.11    │  │    10.240.1.21    │  │    10.240.1.31    │
-│ web1.example.com  │  │ web2.example.com  │  │ web3.example.com  │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-          ┌───────────────────┐     ┌───────────────────┐
-          │   monitoring-01   │     │    teleport-01    │
-          │   10.240.1.50     │     │   10.240.1.60     │
-          │   (Prometheus)    │     │  (Auth & Proxy)   │
-          └───────────────────┘     └───────────────────┘
+```mermaid
+flowchart TD
+    Visitors["Internet / Visitors"] -->|"TCP Port 80 / 443"| LB["Azure Standard Load Balancer (TCP 80 and 443 Rules)"]
+
+    subgraph Proxies["HAProxy Ingress Tier"]
+        P1["proxy-01 (Availability Zone 1, 10.240.1.10)"]
+        P2["proxy-02 (Availability Zone 2, 10.240.1.20)"]
+        P3["proxy-03 (Availability Zone 3, 10.240.1.30)"]
+    end
+
+    LB --> Proxies
+    Proxies -->|"VNet Subnet 10.240.1.0/24"| Webservers
+
+    subgraph Webservers["Backend Webserver Tier"]
+        W1["web-01 (Availability Zone 1, 10.240.1.11, web1.example.com)"]
+        W2["web-02 (Availability Zone 2, 10.240.1.21, web2.example.com)"]
+        W3["web-03 (Availability Zone 3, 10.240.1.31, web3.example.com)"]
+    end
+
+    subgraph Support["Observability & Access Tier"]
+        Mon["monitoring-01 (10.240.1.50, Prometheus)"]
+        TP["teleport-01 (10.240.1.60, Auth & Proxy)"]
+    end
+
+    Proxies --> Support
+    Webservers --> Support
 ```
 
 ---

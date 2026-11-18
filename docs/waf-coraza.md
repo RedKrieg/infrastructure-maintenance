@@ -6,22 +6,12 @@ This suite features native integration with **[Coraza WAF](https://coraza.io/)**
 
 ## 1. Architecture Overview
 
-```
-                      Inbound Client Traffic (HTTPS Port 443)
-                                      │
-                                      ▼
-                        HAProxy Frontend (fe_https)
-                                      │
-                         [SPOE TCP Request Filter]
-                                      │
-                        ┌─────────────┴─────────────┐
-                        ▼                           ▼
-                 Clean Request               Malicious Payload
-                        │                   (SQLi, XSS, RCE, LFI)
-                        │                           │
-                        ▼                           ▼
-               Forward to Webserver         Immediate HTTP 403
-               (be_web1, be_web2...)       "403 Forbidden" (Blocked)
+```mermaid
+flowchart TD
+    Client["Inbound Client Traffic (HTTPS Port 443)"] --> FE["HAProxy Frontend (fe_https)"]
+    FE --> SPOE{"SPOE Coraza WAF Filter (TCP Request Filter)"}
+    SPOE -->|"Clean Request"| Allow["Forward to Backend Webserver (be_web1, be_web2...)"]
+    SPOE -->|"Malicious Payload (SQLi, XSS, RCE, LFI)"| Block["Immediate HTTP 403 Forbidden (Blocked)"]
 ```
 
 ### Key Technical Characteristics:

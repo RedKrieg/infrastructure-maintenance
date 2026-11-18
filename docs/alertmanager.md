@@ -12,28 +12,13 @@ Alertmanager receives alerts evaluated by Prometheus, deduplicates and groups th
 
 ## Architecture
 
-```
-  ┌──────────────────────────────────────────────────────────────┐
-  │ Cluster Alerts (HAProxy down, 5xx spikes, disk full, etc.)   │
-  └──────────────────────────────┬───────────────────────────────┘
-                                 │
-                                 ▼
-                     ┌───────────────────────┐
-                     │   Prometheus Server   │
-                     │      (Port 9090)      │
-                     └───────────┬───────────┘
-                                 │ Evaluated alert rules
-                                 ▼
-                     ┌───────────────────────┐
-                     │      Alertmanager     │
-                     │      (Port 9093)      │
-                     └───────────┬───────────┘
-                                 │
-         ┌───────────────────────┼───────────────────────┐
-         │                       │                       │
-         ▼                       ▼                       ▼
-  [Email to Admins]       [Slack / Discord]     [PagerDuty / Teams]
-  admin@example.com       #cluster-alerts        On-Call Escalation
+```mermaid
+flowchart TD
+    Alerts["Cluster & Teleport JIT Sudo Alerts (HAProxy down, 5xx spikes, disk full, tsudo)"] --> Prom["Prometheus Server (:9090)"]
+    Prom -->|"Evaluated alert rules & Push API"| AM["Alertmanager (:9093)"]
+    AM --> Email["Email to Admins (admin@example.com)"]
+    AM --> Chat["Slack / Discord / Google Chat (#cluster-alerts)"]
+    AM --> OnCall["PagerDuty / Microsoft Teams (On-Call Escalation)"]
 ```
 
 ---

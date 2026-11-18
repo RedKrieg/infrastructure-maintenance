@@ -10,29 +10,11 @@ This guide details how to integrate Alertmanager with Google Chat using the zero
 
 ## Architecture
 
-```
-  ┌───────────────────────┐
-  │   Prometheus Server   │
-  │      (Port 9090)      │
-  └───────────┬───────────┘
-              │ Evaluates alert rules
-              ▼
-  ┌───────────────────────┐
-  │      Alertmanager     │
-  │      (Port 9093)      │
-  └───────────┬───────────┘
-              │ Webhook POST (native schema)
-              ▼
-  ┌───────────────────────┐
-  │   Google Chat Relay   │
-  │  (Port 5001 / Local)  │
-  └───────────┬───────────┘
-              │ Translates to Google Chat Cards v2
-              ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │ Google Chat Incoming Webhook (Google Workspace Space)       │
-  │ https://chat.googleapis.com/v1/spaces/.../messages          │
-  └─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Prom["Prometheus Server (Port 9090)"] -->|"Evaluates alert rules"| AM["Alertmanager (Port 9093)"]
+    AM -->|"Webhook POST (native schema)"| Relay["Google Chat Relay (127.0.0.1:5001)"]
+    Relay -->|"Translates to Google Chat Cards v2"| GChat["Google Chat Incoming Webhook (Google Workspace Space)"]
 ```
 
 ---

@@ -7,56 +7,41 @@ Because Layer 4 operates at the transport layer without terminating TLS or alter
 - **SSL termination, certificates, and virtual routing stay 100% inside your control** within the HAProxy cluster.
 - **Zero Cloud Vendor Lock-In**: The same code runs on AWS, GCP, OpenStack, Azure, OCI, or bare metal with zero proprietary agent or cloud CLI dependencies.
 
-```
-                          Public Internet / Visitors
-                                      │
-                                      ▼
-                 ┌───────────────────────────────────────────┐
-                 │    Layer 4 Ingress Load Balancer (TCP)    │
-                 │  (AWS NLB / GCP Passthrough / Octavia /   │
-                 │      Keepalived VRRP / BGP Anycast)       │
-                 └─────────────────────┬─────────────────────┘
-                                       │ (Port 80 / 443)
-            ┌──────────────────────────┼──────────────────────────┐
-            ▼                          ▼                          ▼
-┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
-│       proxy-01        │  │       proxy-02        │  │       proxy-03        │
-│    Zone A / Host 1    │  │    Zone B / Host 2    │  │    Zone C / Host 3    │
-│   Primary Cert Node   │  │    Standby Rank 1     │  │    Standby Rank 2     │
-│   HAProxy + acme.sh   │  │  HAProxy + Watchdog   │  │  HAProxy + Watchdog   │
-│  Replicated Root CA   │  │  Replicated Root CA   │  │  Replicated Root CA   │
-└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
-            │                          │                          │
-            └──────────────────────────┼──────────────────────────┘
-                                       │ (Zero-Trust Internal TLS :443)
-            ┌──────────────────────────┼──────────────────────────┐
-            ▼                          ▼                          ▼
-┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
-│        web-01         │  │        web-02         │  │        web-03         │
-│   web1.example.com    │  │   web2.example.com    │  │   web3.example.com    │
-│     (Generic 404)     │  │     (Generic 404)     │  │     (Generic 404)     │
-└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
-            │                          │                          │
-            └──────────────────────────┼──────────────────────────┘
-                                       │ (Private VPC Transit - TLS / SCRAM)
-            ┌──────────────────────────┼──────────────────────────┐
-            ▼                          ▼                          ▼
-┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
-│ PostgreSQL / MySQL    │  │ Redis In-Memory Cache │  │ RabbitMQ AMQP Broker  │
-│  • Primary / Replica  │  │  • Session clustering │  │  • Task queues        │
-│  • PgBouncer :6432    │  │  • LRU eviction :6379 │  │  • Management :15672  │
-└───────────┬───────────┘  └───────────┬───────────┘  └───────────┬───────────┘
-            │                          │                          │
-            └──────────────────────────┼──────────────────────────┘
-                                       │ (Syslog TLS :6514, Metrics :9100)
-                                       ▼
-                         ┌───────────────────────────┐
-                         │  monitoring-01            │
-                         │   • Prometheus Server     │
-                         │   • Grafana Dashboards    │
-                         │   • Rsyslog TLS Collector │
-                         │   • Alertmanager Routing  │
-                         └───────────────────────────┘
+```mermaid
+flowchart TD
+    Visitors["Public Internet / Visitors"] -->|"TCP Port 80 / 443"| L4LB["Layer 4 Ingress Load Balancer (AWS NLB, GCP NLB, Octavia, Keepalived VRRP)"]
+
+    L4LB -->|"TCP Passthrough"| Proxy1["proxy-01 (Zone A / Primary Cert + Root CA)"]
+    L4LB -->|"TCP Passthrough"| Proxy2["proxy-02 (Zone B / Standby Rank 1 + Watchdog)"]
+    L4LB -->|"TCP Passthrough"| Proxy3["proxy-03 (Zone C / Standby Rank 2 + Watchdog)"]
+
+    subgraph ProxyTier["HAProxy Edge Ingress & Root CA Tier"]
+        Proxy1
+        Proxy2
+        Proxy3
+    end
+
+    ProxyTier -->|"Zero-Trust Internal TLS :443"| Web1["web-01 (web1.example.com)"]
+    ProxyTier -->|"Zero-Trust Internal TLS :443"| Web2["web-02 (web2.example.com)"]
+    ProxyTier -->|"Zero-Trust Internal TLS :443"| Web3["web-03 (web3.example.com)"]
+
+    subgraph WebTier["Nginx Backend Webserver Tier"]
+        Web1
+        Web2
+        Web3
+    end
+
+    WebTier -->|"Private VPC Transit (TLS / SCRAM)"| DB["PostgreSQL / MySQL (Primary/Replica, PgBouncer :6432)"]
+    WebTier -->|"Private VPC Transit (TLS / SCRAM)"| Redis["Redis In-Memory Cache (Sessions, LRU :6379)"]
+    WebTier -->|"Private VPC Transit (TLS / SCRAM)"| RMQ["RabbitMQ AMQP Broker (Queues, Mgmt :15672)"]
+
+    subgraph DataTier["Stateful Data & Broker Tier"]
+        DB
+        Redis
+        RMQ
+    end
+
+    DataTier -->|"Syslog TLS :6514 & Metrics :9100"| Monitoring["monitoring-01 (Prometheus, Grafana, Rsyslog, Alertmanager)"]
 ```
 
 ---

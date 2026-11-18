@@ -10,24 +10,14 @@ To achieve zero single points of failure at the network ingress layer, this proj
 
 ## Architecture
 
-```
-                       Public Internet / Ingress Traffic
-                                      │
-                                      ▼
-                        Virtual IP (VIP): 10.0.1.5
-                                      │
-                 ┌────────────────────┴────────────────────┐
-                 │ VRRP Priority: 101                      │ VRRP Priority: 100
-                 ▼                                         ▼
-      ┌─────────────────────┐                   ┌─────────────────────┐
-      │ proxy-01 (MASTER)   │ <== Heartbeat ==> │ proxy-02 (BACKUP)   │
-      │ Keepalived Daemon   │   (VRRP Proto 112)│ Keepalived Daemon   │
-      │ HAProxy Service     │                   │ HAProxy Service     │
-      └─────────────────────┘                   └─────────────────────┘
-                 │                                         │
-                 └────────────────────┬────────────────────┘
-                                      ▼
-                          Backend Webserver Fleet
+```mermaid
+flowchart TD
+    Internet["Public Internet / Ingress Traffic"] --> VIP["Virtual IP (VIP): 10.0.1.5"]
+    VIP -->|"VRRP Priority: 101"| P1["proxy-01 (MASTER): Keepalived Daemon + HAProxy Service"]
+    VIP -->|"VRRP Priority: 100"| P2["proxy-02 (BACKUP): Keepalived Daemon + HAProxy Service"]
+    P1 <-->|"VRRP Proto 112 Heartbeat"| P2
+    P1 --> WebFleet["Backend Webserver Fleet"]
+    P2 --> WebFleet
 ```
 
 - **Health Check Tracking**: Keepalived runs an automated health-check probe `/usr/local/bin/check_haproxy.sh` every 2 seconds.

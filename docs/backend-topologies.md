@@ -33,35 +33,16 @@ This guide details the architectural differences, user experience variations, st
 
 In Scenario 1, each webserver in the `[webservers]` inventory group is dedicated to a distinct client or application tenant with its own unique `external_fqdn`.
 
-```
-                         Internet
-                            │
-                  ┌─────────▼─────────┐
-                  │   Floating VIP    │ (Keepalived VRRP)
-                  │  192.168.10.100   │
-                  └─────────┬─────────┘
-                            │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-        ┌───────────────┐       ┌───────────────┐
-        │   proxy-01    │       │   proxy-02    │
-        │   (Master)    │       │   (Backup)    │
-        └───────┬───────┘       └───────┬───────┘
-                │                       │
-                └───────────┬───────────┘
-                            ▼
-             ┌─────────────────────────────┐
-             │  Host Header Routing (1:1)  │
-             └──────────────┬──────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│   web-alpha   │   │   web-beta    │   │   web-gamma   │
-│  (Client A)   │   │  (Client B)   │   │  (Client C)   │
-│    alpha.     │   │     beta.     │   │    gamma.     │
-│  example.com  │   │  example.com  │   │  example.com  │
-└───────────────┘   └───────────────┘   └───────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"] --> VIP["Floating VIP (Keepalived VRRP, 192.168.10.100)"]
+    VIP --> P1["proxy-01 (Master)"]
+    VIP --> P2["proxy-02 (Backup)"]
+    P1 --> Route["Host Header Routing (1:1)"]
+    P2 --> Route
+    Route -->|"alpha.example.com"| WA["web-alpha (Client A)"]
+    Route -->|"beta.example.com"| WB["web-beta (Client B)"]
+    Route -->|"gamma.example.com"| WC["web-gamma (Client C)"]
 ```
 
 ### Inventory Configuration
@@ -116,38 +97,21 @@ backend be_beta_example_com
 
 In Scenario 2, multiple webservers in the `[webservers]` inventory group share the same `external_fqdn` (e.g., `app.example.com`) or explicit `backend_pool`. HAProxy groups them into a unified backend pool and balances requests across all healthy members.
 
-```
-                         Internet
-                            │
-                  ┌─────────▼─────────┐
-                  │   Floating VIP    │ (Keepalived VRRP)
-                  │  192.168.10.100   │
-                  └─────────┬─────────┘
-                            │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-        ┌───────────────┐       ┌───────────────┐
-        │   proxy-01    │       │   proxy-02    │
-        │   (Master)    │       │   (Backup)    │
-        └───────┬───────┘       └───────┬───────┘
-                │                       │
-                └───────────┬───────────┘
-                            ▼
-             ┌─────────────────────────────┐
-             │ Host Header Routing (N:1)   │
-             │   Host: app.example.com     │
-             └──────────────┬──────────────┘
-                            │
-                            ▼
-┌───────────────────────────────────────────────────────┐
-│        HAProxy Backend Pool: be_app_example_com       │
-│        Algorithm: Round-Robin (or LeastConn)          │
-│                                                       │
-│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ │
-│ │    web-01     │ │    web-02     │ │    web-03     │ │
-│ │ 192.168.10.21 │ │ 192.168.10.22 │ │ 192.168.10.23 │ │
-│ └───────────────┘ └───────────────┘ └───────────────┘ │
-└───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"] --> VIP["Floating VIP (Keepalived VRRP, 192.168.10.100)"]
+    VIP --> P1["proxy-01 (Master)"]
+    VIP --> P2["proxy-02 (Backup)"]
+    P1 -->|"Host: app.example.com"| Pool["HAProxy Backend Pool: be_app_example_com (Round-Robin / LeastConn)"]
+    P2 -->|"Host: app.example.com"| Pool
+
+    subgraph PoolMembers["Pooled Webserver Nodes"]
+        W1["web-01 (192.168.10.21)"]
+        W2["web-02 (192.168.10.22)"]
+        W3["web-03 (192.168.10.23)"]
+    end
+
+    Pool --> PoolMembers
 ```
 
 ### Inventory Configuration
@@ -233,41 +197,23 @@ Because requests from a single client can land on any webserver in the pool, app
 
 In many production deployments, core business services require high-availability pooling, while individual tenants or administrative tools require isolated 1:1 instances.
 
-```
-                                 Internet
-                                    │
-                          ┌─────────▼─────────┐
-                          │   Floating VIP    │ (Keepalived VRRP)
-                          │  192.168.10.100   │
-                          └─────────┬─────────┘
-                                    │
-                      ┌─────────────┴─────────────┐
-                      ▼                           ▼
-              ┌───────────────┐           ┌───────────────┐
-              │   proxy-01    │           │   proxy-02    │
-              │   (Master)    │           │   (Backup)    │
-              └───────┬───────┘           └───────┬───────┘
-                      │                           │
-                      └─────────────┬─────────────┘
-                                    ▼
-                        ┌───────────────────────┐
-                        │    L7 Host Routing    │
-                        └───────────┬───────────┘
-                                    │
-                 ┌──────────────────┴──────────────────┐
-                 ▼                                     ▼
-        ┌─────────────────┐                  ┌───────────────────┐
-        │   Host: app.*   │                  │  Host: tenant-*   │
-        └────────┬────────┘                  └─────────┬─────────┘
-                 │                            ┌────────┴────────┐
-                 ▼                            ▼                 ▼
-┌─────────────────────────────────┐  ┌───────────────┐ ┌───────────────┐
-│ HA Pool: be_app_example_com     │  │ web-tenant-a  │ │ web-tenant-b  │
-│ (Round-Robin Load Balanced)     │  │ (1:1 Tenant)  │ │ (1:1 Tenant)  │
-│ ┌─────────────┐ ┌─────────────┐ │  │   tenant-a.   │ │   tenant-b.   │
-│ │ web-pool-01 │ │ web-pool-02 │ │  │  example.com  │ │  example.com  │
-│ └─────────────┘ └─────────────┘ │  └───────────────┘ └───────────────┘
-└─────────────────────────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"] --> VIP["Floating VIP (Keepalived VRRP, 192.168.10.100)"]
+    VIP --> P1["proxy-01 (Master)"]
+    VIP --> P2["proxy-02 (Backup)"]
+    P1 --> L7["L7 Host Header Routing"]
+    P2 --> L7
+
+    L7 -->|"Host: app.*"| HAPool["HA Pool: be_app_example_com (Round-Robin)"]
+    subgraph PooledCluster["Clustered Site Pool"]
+        WP1["web-pool-01"]
+        WP2["web-pool-02"]
+    end
+    HAPool --> PooledCluster
+
+    L7 -->|"Host: tenant-a.*"| TA["web-tenant-a (1:1 Tenant)"]
+    L7 -->|"Host: tenant-b.*"| TB["web-tenant-b (1:1 Tenant)"]
 ```
 
 ### Inventory Configuration

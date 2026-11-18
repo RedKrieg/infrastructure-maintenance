@@ -8,43 +8,32 @@ This step-by-step guide is designed for new users deploying this high-availabili
 
 On OCI, the architecture distributes frontend HAProxy nodes across distinct **Fault Domains** (`FAULT-DOMAIN-1`, `FAULT-DOMAIN-2`, `FAULT-DOMAIN-3`) within an Availability Domain behind an OCI Network Load Balancer (NLB):
 
-```
-                        Internet / Visitors
-                                 │
-                                 ▼
-           ┌───────────────────────────────────────────┐
-           │         OCI Network Load Balancer         │
-           │       (TCP Ports 80 and 443 NLB)          │
-           └─────────────────────┬─────────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     proxy-01      │  │     proxy-02      │  │     proxy-03      │
-│  FAULT-DOMAIN-1   │  │  FAULT-DOMAIN-2   │  │  FAULT-DOMAIN-3   │
-│     10.0.1.10     │  │     10.0.1.20     │  │     10.0.1.30     │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │ (VCN Subnet 10.0.1.0/24)
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│      web-01       │  │      web-02       │  │      web-03       │
-│  FAULT-DOMAIN-1   │  │  FAULT-DOMAIN-2   │  │  FAULT-DOMAIN-3   │
-│     10.0.1.11     │  │     10.0.1.21     │  │     10.0.1.31     │
-│ web1.example.com  │  │ web2.example.com  │  │ web3.example.com  │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-          ┌───────────────────┐     ┌───────────────────┐
-          │   monitoring-01   │     │    teleport-01    │
-          │     10.0.1.50     │     │     10.0.1.60     │
-          │   (Prometheus)    │     │  (Auth & Proxy)   │
-          └───────────────────┘     └───────────────────┘
+```mermaid
+flowchart TD
+    Visitors["Internet / Visitors"] -->|"TCP Port 80 / 443"| NLB["OCI Network Load Balancer (Ports 80 and 443)"]
+
+    subgraph Proxies["HAProxy Ingress Tier"]
+        P1["proxy-01 (FAULT-DOMAIN-1, 10.0.1.10)"]
+        P2["proxy-02 (FAULT-DOMAIN-2, 10.0.1.20)"]
+        P3["proxy-03 (FAULT-DOMAIN-3, 10.0.1.30)"]
+    end
+
+    NLB --> Proxies
+    Proxies -->|"VCN Subnet 10.0.1.0/24"| Webservers
+
+    subgraph Webservers["Backend Webserver Tier"]
+        W1["web-01 (FAULT-DOMAIN-1, 10.0.1.11, web1.example.com)"]
+        W2["web-02 (FAULT-DOMAIN-2, 10.0.1.21, web2.example.com)"]
+        W3["web-03 (FAULT-DOMAIN-3, 10.0.1.31, web3.example.com)"]
+    end
+
+    subgraph Support["Observability & Access Tier"]
+        Mon["monitoring-01 (10.0.1.50, Prometheus)"]
+        TP["teleport-01 (10.0.1.60, Auth & Proxy)"]
+    end
+
+    Proxies --> Support
+    Webservers --> Support
 ```
 
 ---

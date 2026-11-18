@@ -13,15 +13,12 @@ The cluster includes automated, multi-tier disaster recovery playbooks designed 
 
 The backup automation natively supports four primary storage backends via `backup_destination_type`:
 
-```
-                                  Ansible Controller (Orchestrator)
-                                                  │
-                 ┌───────────────────┬────────────┴───────┬───────────────────┐
-                 │                   │                    │                   │
-                 ▼                   ▼                    ▼                   ▼
-          [1. Local Disk]     [2. Remote SSH]      [3. Cloud S3]       [4. Rclone Multi-Cloud]
-         /var/backups/...    backup.internal.lan   s3://cluster-...    70+ Cloud Backends
-                                                                       (R2, B2, GCS, Azure, Crypt)
+```mermaid
+flowchart TD
+    Ctrl["Ansible Controller (Orchestrator)"] --> Local["1. Local Disk (/var/backups/...)"]
+    Ctrl --> SSH["2. Remote SSH (backup.internal.lan)"]
+    Ctrl --> S3["3. Cloud S3 (s3://cluster-...)"]
+    Ctrl --> Rclone["4. Rclone Multi-Cloud (70+ Backends: R2, B2, GCS, Azure, Crypt)"]
 ```
 
 1. **`local`**: Archives are pulled back to the Ansible controller at `backup_local_dir/<timestamp>/`.

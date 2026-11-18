@@ -176,6 +176,7 @@ for md in md_files:
     fence_char = ""
     fence_len = 0
     in_mermaid = False
+    mermaid_kind = ""
     for lineno, raw_line in enumerate(lines, 1):
         stripped = raw_line.strip()
         m_open = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", raw_line)
@@ -184,25 +185,38 @@ for md in md_files:
             fence_char = m_open.group(1)[0]
             fence_len = len(m_open.group(1))
             in_mermaid = m_open.group(2).strip().lower().startswith("mermaid")
+            mermaid_kind = ""
             continue
         if in_fence:
             m_close = re.match(rf"^\s{{0,3}}{re.escape(fence_char)}{{{fence_len},}}\s*$", raw_line)
             if m_close:
                 in_fence = False
                 in_mermaid = False
+                mermaid_kind = ""
                 continue
             if in_mermaid:
+                if not mermaid_kind and stripped:
+                    mermaid_kind = stripped.split()[0]
                 if "<br" in stripped.lower():
                     errors.append(f"Mermaid HTML <br> tag in {md}:{lineno}: {stripped}")
-                if re.search(r"-->|--\|", raw_line):
+                if mermaid_kind in ("flowchart", "graph"):
                     for em in mermaid_edge_re.finditer(raw_line):
                         label = em.group(1).strip()
-                        if ("(" in label or ")" in label) and not (label.startswith('"') and label.endswith('"')):
-                            errors.append(f"Unquoted parentheses in Mermaid edge label {md}:{lineno}: |{label}|")
+                        if not (label.startswith('"') and label.endswith('"')):
+                            errors.append(f"Unquoted Mermaid edge label {md}:{lineno}: |{label}|")
+                    if not stripped.startswith("subgraph "):
+                        no_edges = re.sub(r"\|[^|\n]+\|", "", raw_line)
+                        for nm in re.finditer(r'([A-Za-z0-9_-]+)(\[|\{)([^\]\}\n]+)(\]|\})', no_edges):
+                            inner = nm.group(3).strip()
+                            if any(c in inner for c in " ():/") and not (inner.startswith('"') and inner.endswith('"')):
+                                errors.append(f"Unquoted Mermaid node label in {md}:{lineno}: {nm.group(0)}")
                 if re.search(r"--\s+[^>-]+\s+-->", raw_line):
                     errors.append(f"Unquoted Mermaid -- text --> edge syntax in {md}:{lineno}: {stripped}")
                 if stripped.startswith("subgraph ") and not re.match(r'^subgraph\s+(?:[A-Za-z0-9_-]+(?:\s*\["[^"]+"\])?|"[^"]+")\s*$', stripped):
                     errors.append(f"Invalid Mermaid subgraph syntax in {md}:{lineno}: {stripped}")
+            else:
+                if any(ch in raw_line for ch in "┌┐┘▼▲") or "+---" in raw_line or re.search(r"└(?!── )", raw_line):
+                    errors.append(f"Legacy ASCII flowchart in {md}:{lineno} (standardize on Mermaid or Markdown tables)")
             continue
 
         no_inline = inline_code_re.sub("", raw_line)

@@ -15,26 +15,15 @@ This suite solves this using a **Rank-Based Line of Succession + Self-Healing Cl
   - Replicas (`proxy-02`, `proxy-03`) are configured with `backup`.
 - **Result**: Whether Let's Encrypt hits `proxy-01`, `proxy-02`, or `proxy-03`, challenges route directly to the active certificate requester in succession order.
 
-```
-                Let's Encrypt ACME Server
-                            │
-                            ▼
-              Layer 4 Ingress Load Balancer
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│   proxy-01    │   │   proxy-02    │   │   proxy-03    │
-│   (Primary)   │   │   (Standby)   │   │   (Standby)   │
-└───────┬───────┘   └───────┬───────┘   └───────┬───────┘
-        │                   │ (Routes           │ (Routes
-        │                   │  challenge)       │  challenge)
-        │                   └─────────┬─────────┘
-        ▼                             ▼
-┌───────────────────────────────────────────────────────┐
-│      proxy-01 (or active standby in succession)       │
-│      Local acme.sh standalone challenge server        │
-└───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    LE["Let's Encrypt ACME Server"] -->|"HTTP-01 Challenge"| L4["Layer 4 Ingress Load Balancer"]
+    L4 --> P1["proxy-01 (Primary)"]
+    L4 --> P2["proxy-02 (Standby)"]
+    L4 --> P3["proxy-03 (Standby)"]
+    P1 --> ACME["proxy-01 (or Active Standby in Succession): Local acme.sh Standalone Challenge Server"]
+    P2 -->|"Routes challenge"| ACME
+    P3 -->|"Routes challenge"| ACME
 ```
 
 ---

@@ -6,25 +6,11 @@ This suite includes a dedicated centralized log aggregation role (`roles/central
 
 ## 1. Architecture Overview
 
-```
- ┌────────────────┐          ┌────────────────┐          ┌────────────────┐
- │    proxy-01    │          │     web-01     │          │  teleport-01   │
- │ (Log Shipper)  │          │ (Log Shipper)  │          │ (Log Shipper)  │
- └───────┬────────┘          └───────┬────────┘          └───────┬────────┘
-         │                           │                           │
-         │ TCP Port 5140             │ TCP Port 5140             │ TCP Port 5140
-         └───────────────────────────┼───────────────────────────┘
-                                     │
-                                     ▼
-                      ┌─────────────────────────────┐
-                      │        monitoring-01        │
-                      │ (Central Log Server / Port) │
-                      │                             │
-                      │ Stores in:                  │
-                      │ /var/log/remote/<hostname>/ │
-                      │                             │
-                      │ Logrotate: 60-Day Retention │
-                      └─────────────────────────────┘
+```mermaid
+flowchart TD
+    P1["proxy-01 (Log Shipper)"] -->|"Syslog TLS :6514 / TCP :5140"| LogSrv["monitoring-01: Central Rsyslog Collector (/var/log/remote/HOSTNAME/, 60-Day Retention)"]
+    W1["web-01 (Log Shipper)"] -->|"Syslog TLS :6514 / TCP :5140"| LogSrv
+    T1["teleport-01 (Log Shipper)"] -->|"Syslog TLS :6514 / TCP :5140"| LogSrv
 ```
 
 ### Features:

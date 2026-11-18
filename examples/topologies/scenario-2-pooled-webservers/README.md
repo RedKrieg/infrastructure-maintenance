@@ -4,38 +4,21 @@
 
 In this topology, multiple webservers in the `[webservers]` inventory group share the same `external_fqdn` (e.g., `app.example.com`).
 
-```
-                         Internet
-                            │
-                  ┌─────────▼─────────┐
-                  │   Floating VIP    │ (Keepalived VRRP)
-                  │  192.168.10.100   │
-                  └─────────┬─────────┘
-                            │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-        ┌───────────────┐       ┌───────────────┐
-        │   proxy-01    │       │   proxy-02    │
-        │   (Master)    │       │   (Backup)    │
-        └───────┬───────┘       └───────┬───────┘
-                │                       │
-                └───────────┬───────────┘
-                            ▼
-             ┌─────────────────────────────┐
-             │ Host Header Routing (N:1)   │
-             │   Host: app.example.com     │
-             └──────────────┬──────────────┘
-                            │
-                            ▼
-┌───────────────────────────────────────────────────────┐
-│        HAProxy Backend Pool: be_app_example_com       │
-│        Algorithm: Round-Robin                         │
-│                                                       │
-│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ │
-│ │    web-01     │ │    web-02     │ │    web-03     │ │
-│ │ 192.168.10.21 │ │ 192.168.10.22 │ │ 192.168.10.23 │ │
-│ └───────────────┘ └───────────────┘ └───────────────┘ │
-└───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"] --> VIP["Floating VIP (Keepalived VRRP, 192.168.10.100)"]
+    VIP --> P1["proxy-01 (Master)"]
+    VIP --> P2["proxy-02 (Backup)"]
+    P1 -->|"Host: app.example.com"| Pool["HAProxy Backend Pool: be_app_example_com (Round-Robin)"]
+    P2 -->|"Host: app.example.com"| Pool
+
+    subgraph PoolMembers["Pooled Webserver Nodes"]
+        W1["web-01 (192.168.10.21)"]
+        W2["web-02 (192.168.10.22)"]
+        W3["web-03 (192.168.10.23)"]
+    end
+
+    Pool --> PoolMembers
 ```
 
 ## How It Works in HAProxy
@@ -64,23 +47,12 @@ backend be_app_example_com
 
 In Scenario 2, all pooled webservers (`web-01`, `web-02`, `web-03`) connect to a **centralized database tier** to share state:
 
-```
-┌────────────────────────────────────────────────────────┐
-│          Pooled Webservers (web-01, web-02, web-03)    │
-└──────────────┬──────────────────────────┬──────────────┘
-               │ Write Queries            │ Read Queries
-               │ (Port 6432)              │ (Port 5432)
-               ▼                          ▼
-┌──────────────────────────────┐   ┌──────────────────────────────┐
-│  PgBouncer Connection Pool   │   │  db-replica-1 (192.168.10.52)│
-│  Port 6432 (Transaction Mode)│   │  Streaming Read Replica      │
-└──────────────┬───────────────┘   └──────────────▲───────────────┘
-               │                                  │
-               ▼                                  │ Streaming WAL
-┌──────────────────────────────┐                  │ Replication
-│  db-primary (192.168.10.51)  │──────────────────┘
-│  Primary Write Master (5432) │
-└──────────────────────────────┘
+```mermaid
+flowchart TD
+    Webs["Pooled Webservers (web-01, web-02, web-03)"] -->|"Write Queries (:6432)"| PgBouncer["PgBouncer Connection Pool (Transaction Mode, :6432)"]
+    Webs -->|"Read Queries (:5432)"| Replica["db-replica-1 (192.168.10.52, Streaming Read Replica)"]
+    PgBouncer --> Primary["db-primary (192.168.10.51, Primary Write Master :5432)"]
+    Primary -->|"Streaming WAL Replication"| Replica
 ```
 
 1. **Self-Hosted Single-Primary with Read Replica & PgBouncer**:

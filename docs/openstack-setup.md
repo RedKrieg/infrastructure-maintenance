@@ -8,43 +8,32 @@ This step-by-step guide is designed for new users deploying this high-availabili
 
 On OpenStack, the architecture isolates frontend proxies across separate physical hypervisors using a Nova `anti-affinity` server group behind an Octavia Load Balancer (or Keepalived VIP):
 
-```
-                        Internet / Visitors
-                                 │
-                                 ▼
-           ┌───────────────────────────────────────────┐
-           │       Octavia TCP Load Balancer (Amphora) │
-           │         (TCP Ports 80 and 443 VIP)        │
-           └─────────────────────┬─────────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     proxy-01      │  │     proxy-02      │  │     proxy-03      │
-│   Hypervisor 1    │  │   Hypervisor 2    │  │   Hypervisor 3    │
-│  192.168.100.10   │  │  192.168.100.20   │  │  192.168.100.30   │
-│  (Anti-Affinity)  │  │  (Anti-Affinity)  │  │  (Anti-Affinity)  │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │ (Subnet 192.168.100.0/24)
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│      web-01       │  │      web-02       │  │      web-03       │
-│  192.168.100.11   │  │  192.168.100.12   │  │  192.168.100.13   │
-│ web1.example.com  │  │ web2.example.com  │  │ web3.example.com  │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-          ┌───────────────────┐     ┌───────────────────┐
-          │   monitoring-01   │     │    teleport-01    │
-          │  192.168.100.50   │     │  192.168.100.60   │
-          │   (Prometheus)    │     │  (Auth & Proxy)   │
-          └───────────────────┘     └───────────────────┘
+```mermaid
+flowchart TD
+    Visitors["Internet / Visitors"] -->|"TCP Port 80 / 443"| LB["Octavia TCP Load Balancer (Amphora VIP)"]
+
+    subgraph Proxies["HAProxy Ingress Tier (Nova Anti-Affinity)"]
+        P1["proxy-01 (Hypervisor 1, 192.168.100.10)"]
+        P2["proxy-02 (Hypervisor 2, 192.168.100.20)"]
+        P3["proxy-03 (Hypervisor 3, 192.168.100.30)"]
+    end
+
+    LB --> Proxies
+    Proxies -->|"Subnet 192.168.100.0/24"| Webservers
+
+    subgraph Webservers["Backend Webserver Tier"]
+        W1["web-01 (192.168.100.11, web1.example.com)"]
+        W2["web-02 (192.168.100.12, web2.example.com)"]
+        W3["web-03 (192.168.100.13, web3.example.com)"]
+    end
+
+    subgraph Support["Observability & Access Tier"]
+        Mon["monitoring-01 (192.168.100.50, Prometheus)"]
+        TP["teleport-01 (192.168.100.60, Auth & Proxy)"]
+    end
+
+    Proxies --> Support
+    Webservers --> Support
 ```
 
 ---

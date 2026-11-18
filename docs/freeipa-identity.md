@@ -63,15 +63,13 @@ When building a self-contained private cluster, you can provision a dedicated Fr
 
 The FreeIPA server requires the following ports opened across internal cluster subnets (`freeipa_trusted_subnets`):
 
-```
-+-----------------------------------------------------------------------------------+
-| FreeIPA Server (ipa.example.com)                                                  |
-|   • HTTP / HTTPS (Ports 80, 443 TCP)        -> Web UI & ACME Enrollment           |
-|   • LDAP / LDAPS (Ports 389, 636 TCP)       -> User, Group & Host Directory       |
-|   • Kerberos KDC (Port 88 TCP/UDP)          -> Ticket Granting Service            |
-|   • Kerberos kpasswd (Port 464 TCP/UDP)     -> Password & Keytab Changes          |
-|   • BIND9 DNS (Port 53 TCP/UDP)             -> Optional Integrated DNS            |
-+-----------------------------------------------------------------------------------+
+```mermaid
+flowchart LR
+    Clients["Cluster Nodes & Admin Clients"] -->|"HTTP / HTTPS (80, 443 TCP): Web UI & ACME"| IPA["FreeIPA Server (ipa.example.com)"]
+    Clients -->|"LDAP / LDAPS (389, 636 TCP): Directory"| IPA
+    Clients -->|"Kerberos KDC (88 TCP/UDP): Tickets"| IPA
+    Clients -->|"Kerberos kpasswd (464 TCP/UDP): Keys"| IPA
+    Clients -->|"BIND9 DNS (53 TCP/UDP): Optional DNS"| IPA
 ```
 
 - **UFW Firewall**: Configured automatically by `roles/freeipa_server/tasks/firewall.yml`.

@@ -17,37 +17,14 @@ To satisfy strict Zero-Trust and compliance mandates (e.g., **NIST SP 800-207**,
 
 ## Traffic Flow & Cryptographic Verification
 
-```
-                           [Public Internet Client]
-                                       │ HTTPS :443 (Public Let's Encrypt Cert)
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Ingress Proxies (proxy-01, proxy-02, proxy-03)                              │
-│   • Terminates Public TLS                                                   │
-│   • Evaluates Rate Limiting, WAF (Coraza), and Admin ACL                    │
-│   • Hosts Replicated Internal Root CA (/etc/ssl/internal/ca/)               │
-│   • Runs Internal CA Signer Service (:8444, restricted to VPC subnets)      │
-│   • Re-encrypts outbound traffic to upstream backends (Port 443)            │
-│   • Validates backend identity: `ssl verify required ca-file ...`           │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ HTTPS :443 (Internal CA-Signed)
-                  ┌────────────────────┴────────────────────┐
-                  ▼                                         ▼
-┌───────────────────────────────────┐     ┌───────────────────────────────────┐
-│ Backend Webservers (webservers)   │     │ Observability & Identity Tiers    │
-│   • Nginx on 443 with CA cert     │     │   • Rsyslog TLS Ingestion (:6514) │
-│   • Automated renewal timer       │     │   • Node Exporter HTTPS (:9100)   │
-│   • Zero-Trust Client Cert Auth   │     │   • Grafana HTTPS UI (:3000)      │
-└─────────────────┬─────────────────┘     └───────────────────────────────────┘
-                  │
-            ┌─────┴────────────────────┬──────────────────────────┐
-            │ SQL SSL :5432            │ TLS :6379                │ AMQP TLS :5671
-            ▼                          ▼                          ▼
-┌───────────────────────┐  ┌───────────────────────┐  ┌───────────────────────┐
-│ Database (PostgreSQL) │  │ In-Memory (Redis)     │  │ Broker (RabbitMQ)     │
-│   • ssl = on          │  │   • tls-port 6379     │  │   • listeners.ssl     │
-│   • CA peer verify    │  │   • CA peer verify    │  │   • CA peer verify    │
-└───────────────────────┘  └───────────────────────┘  └───────────────────────┘
+```mermaid
+flowchart TD
+    Client["Public Internet Client"] -->|"HTTPS :443 (Public Let's Encrypt Cert)"| Proxies["Ingress Proxies (proxy-01..03): Public TLS, WAF, Internal Root CA & Signer :8444"]
+    Proxies -->|"HTTPS :443 (Internal CA-Signed & Verified)"| Web["Backend Webservers (Nginx :443, Auto-Renewal Timer)"]
+    Proxies -->|"Internal CA Trust & Signer"| Obs["Observability & Identity (Rsyslog TLS :6514, Node Exporter HTTPS :9100, Grafana HTTPS :3000)"]
+    Web -->|"SQL SSL :5432"| DB["PostgreSQL (ssl = on, CA peer verify)"]
+    Web -->|"TLS :6379"| Redis["Redis (tls-port 6379, CA peer verify)"]
+    Web -->|"AMQP TLS :5671"| RMQ["RabbitMQ (listeners.ssl, CA peer verify)"]
 ```
 
 ---

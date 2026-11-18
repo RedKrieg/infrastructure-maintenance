@@ -11,26 +11,12 @@ The cluster incorporates an end-to-end telemetry stack featuring:
 
 ## Architecture & Data Flow
 
-```
-   ┌─────────────┐     ┌─────────────┐     ┌─────────────────────┐
-   │  proxy-01   │     │   web-01    │     │   teleport-01       │
-   │ Node Exp    │     │ Node Exp    │     │ Node Exp (Port 9100)│
-   │ (Port 9100) │     │ (Port 9100) │     │                     │
-   └──────┬──────┘     └──────┬──────┘     └──────────┬──────────┘
-          │                   │                       │
-          └───────────────────┼───────────────────────┘
-                              │ Scraped every 15s
-                              ▼
-                 ┌─────────────────────────┐
-                 │    Prometheus Server    │
-                 │       (Port 9090)       │
-                 └────────────┬────────────┘
-                              │ PromQL Queries
-                              ▼
-                 ┌─────────────────────────┐
-                 │     Grafana UI          │
-                 │       (Port 3000)       │
-                 └─────────────────────────┘
+```mermaid
+flowchart TD
+    P1["proxy-01 (Node Exporter :9100)"] -->|"Scraped every 15s"| Prom["Prometheus Server (Port 9090)"]
+    W1["web-01 (Node Exporter :9100)"] -->|"Scraped every 15s"| Prom
+    T1["teleport-01 (Node Exporter :9100)"] -->|"Scraped every 15s"| Prom
+    Prom -->|"PromQL Queries"| Grafana["Grafana UI (Port 3000)"]
 ```
 
 ---

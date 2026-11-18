@@ -4,35 +4,16 @@
 
 In this topology, each webserver in the `[webservers]` inventory group is dedicated to a distinct client or application tenant with its own unique `external_fqdn`.
 
-```
-                         Internet
-                            │
-                  ┌─────────▼─────────┐
-                  │   Floating VIP    │ (Keepalived VRRP)
-                  │  192.168.10.100   │
-                  └─────────┬─────────┘
-                            │
-                ┌───────────┴───────────┐
-                ▼                       ▼
-        ┌───────────────┐       ┌───────────────┐
-        │   proxy-01    │       │   proxy-02    │
-        │   (Master)    │       │   (Backup)    │
-        └───────┬───────┘       └───────┬───────┘
-                │                       │
-                └───────────┬───────────┘
-                            ▼
-             ┌─────────────────────────────┐
-             │  Host Header Routing (1:1)  │
-             └──────────────┬──────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│   web-alpha   │   │   web-beta    │   │   web-gamma   │
-│  (Client A)   │   │  (Client B)   │   │  (Client C)   │
-│    alpha.     │   │     beta.     │   │    gamma.     │
-│  example.com  │   │  example.com  │   │  example.com  │
-└───────────────┘   └───────────────┘   └───────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"] --> VIP["Floating VIP (Keepalived VRRP, 192.168.10.100)"]
+    VIP --> P1["proxy-01 (Master)"]
+    VIP --> P2["proxy-02 (Backup)"]
+    P1 --> Route["Host Header Routing (1:1)"]
+    P2 --> Route
+    Route -->|"alpha.example.com"| WA["web-alpha (Client A)"]
+    Route -->|"beta.example.com"| WB["web-beta (Client B)"]
+    Route -->|"gamma.example.com"| WC["web-gamma (Client C)"]
 ```
 
 ## How It Works in HAProxy

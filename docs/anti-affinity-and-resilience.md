@@ -10,18 +10,26 @@ This guide provides a comprehensive audit of **Anti-Affinity enforcement** acros
 
 ## 1. Anti-Affinity Matrix by Infrastructure Tier
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        PHYSICAL FAILURE DOMAINS                        │
-│                                                                        │
-│   Domain A (AZ-1 / Rack 1)      Domain B (AZ-2 / Rack 2)      Domain C │
-│   ┌───────────────────────┐     ┌───────────────────────┐     ┌──────┐ │
-│   │ proxy-01 (Master)     │     │ proxy-02 (Standby)    │     │ ...  │ │
-│   │ web-01 (Backend Pool) │     │ web-02 (Backend Pool) │     │      │ │
-│   │ db-primary (Write)    │     │ db-replica-1 (Read)   │     │      │ │
-│   │ redis-01 (Cache)      │     │ mq-01 (Broker)        │     │      │ │
-│   └───────────────────────┘     └───────────────────────┘     └──────┘ │
-└────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph DomainA["Domain A (AZ-1 / Rack 1)"]
+        A1["proxy-01 (Master)"]
+        A2["web-01 (Backend Pool)"]
+        A3["db-primary (Write)"]
+        A4["redis-01 (Cache)"]
+    end
+
+    subgraph DomainB["Domain B (AZ-2 / Rack 2)"]
+        B1["proxy-02 (Standby Rank 1)"]
+        B2["web-02 (Backend Pool)"]
+        B3["db-replica-1 (Read)"]
+        B4["mq-01 (Broker)"]
+    end
+
+    subgraph DomainC["Domain C (AZ-3 / Rack 3)"]
+        C1["proxy-03 (Standby Rank 2)"]
+        C2["web-03 (Backend Pool)"]
+    end
 ```
 
 | Infrastructure Tier | Minimum Nodes | Failure Isolation Strategy | Impact if Anti-Affinity is Absent |

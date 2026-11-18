@@ -10,23 +10,20 @@ The `rolling_maintenance.yml` playbook automates zero-downtime maintenance by co
 
 ## Maintenance Workflow
 
-```
-                    [1. Ingress HAProxy Fleet]                 [2. Target Webserver Node]
-                                 │                                         │
- 1. `set server ... state drain` │                                         │
-    Stop new, finish active      │                                         │
- 2. Wait drain interval (10s)    │                                         │
- 3. `set server ... state maint` │                                         │
-    Remove node from active pool │                                         │
-                                 │ ───────── 4. Apply Updates ───────────> │
-                                 │   apt-get upgrade (force-confold)       │
-                                 │   Reboot if kernel changed              │
-                                 │   Wait for SSH & Nginx to respond       │
-                                 │ <───────── 5. Health Check OK ───────── │
- 6. `set server ... state ready` │                                         │
-    Reintroduce node into pool   │                                         │
- 7. Confirm HTTP 200 healthy     │                                         │
- 8. Repeat for next (serial: 1)  │                                         │
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Playbook as Ansible Controller
+    participant Proxy as Ingress HAProxy Fleet
+    participant Node as Target Cluster Node
+
+    Playbook->>Proxy: set server ... state drain (stop new sessions, finish active)
+    Note over Playbook,Proxy: Wait drain interval (10s)
+    Playbook->>Proxy: set server ... state maint (remove node from active pool)
+    Playbook->>Node: Apply APT security updates (force-confold) & conditional reboot
+    Node-->>Playbook: Wait for SSH & local health endpoints to respond
+    Playbook->>Proxy: set server ... state ready (reintroduce node into active pool)
+    Playbook->>Node: Confirm HTTP 200 / service health checks pass (repeat serial 1)
 ```
 
 ---

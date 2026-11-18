@@ -6,41 +6,23 @@ In enterprise environments, organizations frequently require both architectures 
 1. **A mission-critical clustered application** requiring high availability, horizontal scaling, and zero-downtime rolling updates (`app.example.com`).
 2. **Dedicated, isolated virtual hosts** for specific customers, internal portals, or legacy stateful applications (`tenant-a.example.com`, `tenant-b.example.com`).
 
-```
-                                 Internet
-                                    │
-                          ┌─────────▼─────────┐
-                          │   Floating VIP    │ (Keepalived VRRP)
-                          │  192.168.10.100   │
-                          └─────────┬─────────┘
-                                    │
-                      ┌─────────────┴─────────────┐
-                      ▼                           ▼
-              ┌───────────────┐           ┌───────────────┐
-              │   proxy-01    │           │   proxy-02    │
-              │   (Master)    │           │   (Backup)    │
-              └───────┬───────┘           └───────┬───────┘
-                      │                           │
-                      └─────────────┬─────────────┘
-                                    ▼
-                        ┌───────────────────────┐
-                        │    L7 Host Routing    │
-                        └───────────┬───────────┘
-                                    │
-                 ┌──────────────────┴──────────────────┐
-                 ▼                                     ▼
-        ┌─────────────────┐                  ┌───────────────────┐
-        │   Host: app.*   │                  │  Host: tenant-*   │
-        └────────┬────────┘                  └─────────┬─────────┘
-                 │                            ┌────────┴────────┐
-                 ▼                            ▼                 ▼
-┌─────────────────────────────────┐  ┌───────────────┐ ┌───────────────┐
-│ HA Pool: be_app_example_com     │  │ web-tenant-a  │ │ web-tenant-b  │
-│ (Round-Robin Load Balanced)     │  │ (1:1 Tenant)  │ │ (1:1 Tenant)  │
-│ ┌─────────────┐ ┌─────────────┐ │  │   tenant-a.   │ │   tenant-b.   │
-│ │ web-pool-01 │ │ web-pool-02 │ │  │  example.com  │ │  example.com  │
-│ └─────────────┘ └─────────────┘ │  └───────────────┘ └───────────────┘
-└─────────────────────────────────┘
+```mermaid
+flowchart TD
+    Internet["Internet"] --> VIP["Floating VIP (Keepalived VRRP, 192.168.10.100)"]
+    VIP --> P1["proxy-01 (Master)"]
+    VIP --> P2["proxy-02 (Backup)"]
+    P1 --> L7["L7 Host Header Routing"]
+    P2 --> L7
+
+    L7 -->|"Host: app.example.com"| HAPool["HA Pool: be_app_example_com (Round-Robin)"]
+    subgraph PooledCluster["Clustered Site Pool"]
+        WP1["web-pool-01"]
+        WP2["web-pool-02"]
+    end
+    HAPool --> PooledCluster
+
+    L7 -->|"Host: tenant-a.example.com"| TA["web-tenant-a (1:1 Tenant)"]
+    L7 -->|"Host: tenant-b.example.com"| TB["web-tenant-b (1:1 Tenant)"]
 ```
 
 ## How It Works in HAProxy

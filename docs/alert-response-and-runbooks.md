@@ -169,23 +169,19 @@ sudo ncdu -x /
 
 Examine the following 11 common culprits in order of frequency:
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   COMMON DISK SPACE CONSUMERS & LOCATIONS              │
-│                                                                        │
-│ 1. Journald Logs     (/var/log/journal/)       -> vacuum logs          │
-│ 2. Web Access Logs   (/var/log/nginx/, /haproxy) -> force logrotate    │
-│ 3. Remote Syslog     (/var/log/remote/<host>/) -> prune retention      │
-│ 4. Database WAL      (/var/lib/postgresql/pg_wal/) -> drop dead slots  │
-│ 5. RabbitMQ Mnesia   (/var/lib/rabbitmq/mnesia/) -> purge dead queues  │
-│ 6. Redis AOF         (/var/lib/redis/appendonly) -> bgrewriteaof       │
-│ 7. Package Cache     (/var/cache/apt/archives/) -> apt-get clean       │
-│ 8. Core Dumps        (/var/crash/)             -> remove crash dumps   │
-│ 9. Prometheus TSDB   (/var/lib/prometheus/)    -> adjust retention     │
-│ 10. Backup Staging   (/var/backups/, /tmp/)    -> clear stale tarballs │
-│ 11. Ghost Files      (Deleted but held open)   -> lsof +L1 & restart   │
-└────────────────────────────────────────────────────────────────────────┘
-```
+| # | Consumer | Path | Remediation Action |
+| :--- | :--- | :--- | :--- |
+| 1 | **Journald Logs** | `/var/log/journal/` | Vacuum older logs |
+| 2 | **Web Access Logs** | `/var/log/nginx/`, `/var/log/haproxy*` | Force logrotate |
+| 3 | **Remote Syslog** | `/var/log/remote/<host>/` | Prune beyond 60-day retention |
+| 4 | **Database WAL** | `/var/lib/postgresql/*/pg_wal/` | Drop dead replication slots |
+| 5 | **RabbitMQ Mnesia** | `/var/lib/rabbitmq/mnesia/` | Purge dead/unconsumed queues |
+| 6 | **Redis AOF** | `/var/lib/redis/appendonly*` | Trigger `BGREWRITEAOF` |
+| 7 | **Package Cache** | `/var/cache/apt/archives/` | Run `apt-get clean` |
+| 8 | **Core Dumps** | `/var/crash/` | Remove stale crash dumps |
+| 9 | **Prometheus TSDB** | `/var/lib/prometheus/` | Adjust retention period |
+| 10 | **Backup Staging** | `/var/backups/`, `/tmp/` | Clear stale staging tarballs |
+| 11 | **Ghost Files** | Deleted but held open | Inspect with `lsof +L1` & restart owner service |
 
 #### 1. Systemd Journal Logs (`/var/log/journal/`)
 * **Check Usage**:

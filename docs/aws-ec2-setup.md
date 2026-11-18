@@ -8,43 +8,32 @@ This step-by-step guide is designed for new users deploying this high-availabili
 
 On AWS, the architecture distributes frontend HAProxy nodes across distinct Availability Zones (`us-east-1a`, `us-east-1b`, `us-east-1c`) behind an AWS Network Load Balancer (NLB) with cross-zone load balancing enabled:
 
-```
-                        Internet / Visitors
-                                 │
-                                 ▼
-           ┌───────────────────────────────────────────┐
-           │         AWS Network Load Balancer         │
-           │     (TCP 80 and 443 Cross-Zone NLB)       │
-           └─────────────────────┬─────────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     proxy-01      │  │     proxy-02      │  │     proxy-03      │
-│   (us-east-1a)    │  │   (us-east-1b)    │  │   (us-east-1c)    │
-│   172.31.10.10    │  │   172.31.20.10    │  │   172.31.30.10    │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │ (VPC Subnets 172.31.0.0/16)
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│      web-01       │  │      web-02       │  │      web-03       │
-│   (us-east-1a)    │  │   (us-east-1b)    │  │   (us-east-1c)    │
-│   172.31.10.11    │  │   172.31.20.11    │  │   172.31.30.11    │
-│ web1.example.com  │  │ web2.example.com  │  │ web3.example.com  │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-          ┌───────────────────┐     ┌───────────────────┐
-          │   monitoring-01   │     │    teleport-01    │
-          │   172.31.10.50    │     │   172.31.10.60    │
-          │   (Prometheus)    │     │  (Auth & Proxy)   │
-          └───────────────────┘     └───────────────────┘
+```mermaid
+flowchart TD
+    Visitors["Internet / Visitors"] -->|"TCP Port 80 / 443"| NLB["AWS Network Load Balancer (Cross-Zone NLB)"]
+
+    subgraph Proxies["HAProxy Ingress Tier"]
+        P1["proxy-01 (us-east-1a, 172.31.10.10)"]
+        P2["proxy-02 (us-east-1b, 172.31.20.10)"]
+        P3["proxy-03 (us-east-1c, 172.31.30.10)"]
+    end
+
+    NLB --> Proxies
+    Proxies -->|"VPC Subnets 172.31.0.0/16"| Webservers
+
+    subgraph Webservers["Backend Webserver Tier"]
+        W1["web-01 (us-east-1a, 172.31.10.11, web1.example.com)"]
+        W2["web-02 (us-east-1b, 172.31.20.11, web2.example.com)"]
+        W3["web-03 (us-east-1c, 172.31.30.11, web3.example.com)"]
+    end
+
+    subgraph Support["Observability & Access Tier"]
+        Mon["monitoring-01 (172.31.10.50, Prometheus)"]
+        TP["teleport-01 (172.31.10.60, Auth & Proxy)"]
+    end
+
+    Proxies --> Support
+    Webservers --> Support
 ```
 
 ---

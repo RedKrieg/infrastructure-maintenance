@@ -8,43 +8,32 @@ This step-by-step guide is designed for new users deploying this high-availabili
 
 On GCP, the architecture spans multiple Compute Engine zones within a single region (e.g., `us-central1-a`, `us-central1-b`, `us-central1-c`) to ensure cross-zone fault tolerance:
 
-```
-                        Internet / Visitors
-                                 │
-                                 ▼
-           ┌───────────────────────────────────────────┐
-           │   Regional External TCP Passthrough NLB   │
-           │         (Ports 80 and 443 Forwarding)     │
-           └─────────────────────┬─────────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│     proxy-01      │  │     proxy-02      │  │     proxy-03      │
-│  (us-central1-a)  │  │  (us-central1-b)  │  │  (us-central1-c)  │
-│    10.128.0.10    │  │    10.128.0.20    │  │    10.128.0.30    │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │ (Internal Subnet 10.128.0.0/20)
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│      web-01       │  │      web-02       │  │      web-03       │
-│  (us-central1-a)  │  │  (us-central1-b)  │  │  (us-central1-c)  │
-│    10.128.0.11    │  │    10.128.0.21    │  │    10.128.0.31    │
-│ web1.example.com  │  │ web2.example.com  │  │ web3.example.com  │
-└─────────┬─────────┘  └─────────┬─────────┘  └─────────┬─────────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌────────────┴────────────┐
-                    ▼                         ▼
-          ┌───────────────────┐     ┌───────────────────┐
-          │   monitoring-01   │     │    teleport-01    │
-          │   10.128.0.50     │     │   10.128.0.60     │
-          │   (Prometheus)    │     │  (Auth & Proxy)   │
-          └───────────────────┘     └───────────────────┘
+```mermaid
+flowchart TD
+    Visitors["Internet / Visitors"] -->|"TCP Port 80 / 443"| NLB["Regional External TCP Passthrough NLB"]
+
+    subgraph Proxies["HAProxy Ingress Tier"]
+        P1["proxy-01 (us-central1-a, 10.128.0.10)"]
+        P2["proxy-02 (us-central1-b, 10.128.0.20)"]
+        P3["proxy-03 (us-central1-c, 10.128.0.30)"]
+    end
+
+    NLB --> Proxies
+    Proxies -->|"Internal Subnet 10.128.0.0/20"| Webservers
+
+    subgraph Webservers["Backend Webserver Tier"]
+        W1["web-01 (us-central1-a, 10.128.0.11, web1.example.com)"]
+        W2["web-02 (us-central1-b, 10.128.0.21, web2.example.com)"]
+        W3["web-03 (us-central1-c, 10.128.0.31, web3.example.com)"]
+    end
+
+    subgraph Support["Observability & Access Tier"]
+        Mon["monitoring-01 (10.128.0.50, Prometheus)"]
+        TP["teleport-01 (10.128.0.60, Auth & Proxy)"]
+    end
+
+    Proxies --> Support
+    Webservers --> Support
 ```
 
 ---

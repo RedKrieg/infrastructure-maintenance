@@ -81,23 +81,12 @@ pgbouncer_port=6432
 pgbouncer_pool_mode=transaction
 ```
 
-```
-┌────────────────────────────────────────────────────────┐
-│          Pooled Webservers (web-01, web-02, web-03)    │
-└──────────────┬──────────────────────────┬──────────────┘
-               │ Write Queries            │ Read Queries
-               │ (Port 6432)              │ (Port 5432)
-               ▼                          ▼
-┌──────────────────────────────┐   ┌──────────────────────────────┐
-│  PgBouncer Connection Pool   │   │  db-replica-1 (192.168.10.52)│
-│  Port 6432 (Transaction Mode)│   │  Streaming Read Replica      │
-└──────────────┬───────────────┘   └──────────────▲───────────────┘
-               │                                  │
-               ▼                                  │ Streaming WAL
-┌──────────────────────────────┐                  │ Replication
-│  db-primary (192.168.10.51)  │──────────────────┘
-│  Primary Write Master (5432) │
-└──────────────────────────────┘
+```mermaid
+flowchart TD
+    Webs["Pooled Webservers (web-01, web-02, web-03)"] -->|"Write Queries (:6432)"| PgBouncer["PgBouncer Connection Pool (Transaction Mode, :6432)"]
+    Webs -->|"Read Queries (:5432)"| Replica["db-replica-1 (192.168.10.52, Streaming Read Replica)"]
+    PgBouncer --> Primary["db-primary (192.168.10.51, Primary Write Master :5432)"]
+    Primary -->|"Streaming WAL Replication"| Replica
 ```
 
 ##### Architectural Mechanics:
@@ -141,25 +130,19 @@ For production deployments in public clouds, cloud-native managed database servi
 
 On AWS, deploy a Multi-AZ **AWS RDS for PostgreSQL** instance inside the cluster VPC's private subnets:
 
-```
-                            AWS VPC (172.31.0.0/16)
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │  ┌───────────────────────┐  ┌───────────────────────┐                       │
- │  │      web-01 (AZ-1a)   │  │      web-02 (AZ-1b)   │                       │
- │  │       172.31.10.11    │  │       172.31.20.11    │                       │
- │  └───────────┬───────────┘  └───────────┬───────────┘                       │
- │              │                          │                                   │
- │              └────────────┬─────────────┘                                   │
- │                           │ TCP Port 5432 (Private RDS Endpoint)            │
- │                           ▼                                                 │
- │      ┌──────────────────────────────────────────────┐                       │
- │      │       AWS RDS PostgreSQL (Multi-AZ)          │                       │
- │      │  cluster-postgres-db.xxxxxx.us-east-1.rds... │                       │
- │      │       ┌──────────────┐  ┌──────────────┐     │                       │
- │      │       │Primary(AZ-1a)│──│Standby(AZ-1b)│     │                       │
- │      │       └──────────────┘  └──────────────┘     │                       │
- │      └──────────────────────────────────────────────┘                       │
- └─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph VPC["AWS VPC (172.31.0.0/16)"]
+        W1["web-01 (AZ-1a, 172.31.10.11)"]
+        W2["web-02 (AZ-1b, 172.31.20.11)"]
+
+        subgraph RDS["AWS RDS PostgreSQL Multi-AZ (cluster-postgres-db.xxxxxx.us-east-1.rds.amazonaws.com)"]
+            Primary["Primary (AZ-1a)"] ---|"Synchronous Replication"| Standby["Standby (AZ-1b)"]
+        end
+
+        W1 -->|"TCP :5432 (Private RDS Endpoint)"| Primary
+        W2 -->|"TCP :5432 (Private RDS Endpoint)"| Primary
+    end
 ```
 
 #### Automated Provisioning Playbook
